@@ -1,0 +1,266 @@
+package com.huynqb.laundrylocker.payment.service;
+
+import com.huynqb.laundrylocker.common.event.DomainEvent;
+import com.huynqb.laundrylocker.common.event.DomainEventNames;
+import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.payment.dto.CreatePaymentRequest;
+import com.huynqb.laundrylocker.payment.dto.PaymentResponse;
+import com.huynqb.laundrylocker.payment.dto.RefundRequest;
+import com.huynqb.laundrylocker.payment.dto.RefundResponse;
+import com.huynqb.laundrylocker.payment.dto.UpdatePaymentStatusRequest;
+import com.huynqb.laundrylocker.payment.model.PaymentRecord;
+import com.huynqb.laundrylocker.payment.model.RefundRecord;
+import com.huynqb.laundrylocker.payment.repository.PaymentRepository;
+import com.huynqb.laundrylocker.payment.repository.RefundRepository;
+import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PaymentService {
+
+  private static final SecureRandom RANDOM = new SecureRandom();
+
+  private final PaymentRepository repository;
+  private final RefundRepository refundRepository;
+  private final RabbitTemplate rabbitTemplate;
+
+  @Value("${vnpay.pay-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
+  private String vnpayPayUrl;
+
+  @Value("${vnpay.tmn-code:DEMO}")
+  private String vnpayTmnCode;
+
+  @Value("${vnpay.hash-secret:demo-secret}")
+  private String vnpayHashSecret;
+
+  @Value("${vnpay.return-url:http://localhost:8080/api/payments/vnpay/return}")
+  private String vnpayReturnUrl;
+
+  @Value("${momo.redirect-url:http://localhost:8080/api/payments/momo/return}")
+  private String momoRedirectUrl;
+
+  @Transactional
+  public PaymentResponse create(CreatePaymentRequest request) {
+    PaymentRecord payment = new PaymentRecord();
+    payment.setOrderId(request.orderId());
+    payment.setUserId(request.userId());
+    payment.setAmount(request.amount());
+    payment.setMethod(StringUtils.hasText(request.method()) ? request.method().toUpperCase() : "CASH");
+    payment.setReferenceId(StringUtils.hasText(request.referenceId()) ? request.referenceId() : generateReference(request.orderId()));
+    payment.setDescription(request.description());
+    payment.setContent("Payment for order " + request.orderId());
+    if ("VNPAY".equals(payment.getMethod())) {
+      payment.setUrl(buildVnPayUrl(payment, request.bankCode(), request.language()));
+    } else if ("MOMO".equals(payment.getMethod())) {
+      payment.setUrl(momoRedirectUrl + "?orderId=" + payment.getReferenceId());
+      payment.setDeeplink(payment.getUrl());
+    } else if ("CASH".equals(payment.getMethod())) {
+      payment.setStatus("COMPLETED");
+    }
+    PaymentRecord saved = repository.save(payment);
+    if ("COMPLETED".equals(saved.getStatus())) {
+      publish(DomainEventNames.PAYMENT_COMPLETED, saved);
+    }
+    return toResponse(saved);
+  }
+
+  @Transactional
+  public PaymentResponse updateStatus(Long id, UpdatePaymentStatusRequest request) {
+    PaymentRecord payment = find(id);
+    payment.setStatus(request.status().toUpperCase());
+    PaymentResponse response = toResponse(repository.save(payment));
+    if ("COMPLETED".equals(payment.getStatus())) {
+      publish(DomainEventNames.PAYMENT_COMPLETED, payment);
+    } else if ("FAILED".equals(payment.getStatus())) {
+      publish(DomainEventNames.PAYMENT_FAILED, payment);
+    }
+    return response;
+  }
+
+  @Transactional
+  public PaymentResponse handleVnPayReturn(Map<String, String> params) {
+    String txnRef = params.get("vnp_TxnRef");
+    PaymentRecord payment =
+        repository.findAll().stream()
+            .filter(p -> txnRef != null && txnRef.equals(p.getReferenceId()))
+            .findFirst()
+            .orElseThrow(() -> new NotFoundException("Payment", -1L));
+    payment.setReferenceTransactionId(params.get("vnp_TransactionNo"));
+    boolean success = verifyVnPay(params) && "00".equals(params.get("vnp_ResponseCode"));
+    payment.setStatus(success ? "COMPLETED" : "FAILED");
+    PaymentRecord saved = repository.save(payment);
+    publish(success ? DomainEventNames.PAYMENT_COMPLETED : DomainEventNames.PAYMENT_FAILED, saved);
+    return toResponse(saved);
+  }
+
+  @Transactional
+  public RefundResponse refund(Long paymentId, RefundRequest request, Long processedByUserId) {
+    PaymentRecord payment = find(paymentId);
+    RefundRecord refund = new RefundRecord();
+    refund.setPaymentId(payment.getId());
+    refund.setOrderId(payment.getOrderId());
+    refund.setAmount(request.amount());
+    refund.setReason(request.reason());
+    refund.setProcessedByUserId(processedByUserId);
+    refund.setStatus("COMPLETED");
+    refund.setProcessedAt(LocalDateTime.now());
+    refund.setTransactionId("RF-" + payment.getReferenceId() + "-" + RANDOM.nextInt(1_000_000));
+    return toRefund(refundRepository.save(refund));
+  }
+
+  @Transactional(readOnly = true)
+  public PaymentResponse get(Long id) {
+    return toResponse(find(id));
+  }
+
+  @Transactional(readOnly = true)
+  public List<PaymentResponse> listByOrder(Long orderId) {
+    return repository.findByOrderId(orderId).stream().map(this::toResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<PaymentResponse> listAll() {
+    return repository.findAll().stream().map(this::toResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<RefundResponse> refundsByOrder(Long orderId) {
+    return refundRepository.findByOrderId(orderId).stream().map(this::toRefund).toList();
+  }
+
+  private PaymentRecord find(Long id) {
+    return repository.findById(id).orElseThrow(() -> new NotFoundException("Payment", id));
+  }
+
+  private PaymentResponse toResponse(PaymentRecord payment) {
+    return new PaymentResponse(
+        payment.getId(),
+        payment.getOrderId(),
+        payment.getUserId(),
+        payment.getAmount(),
+        payment.getMethod(),
+        payment.getStatus(),
+        payment.getReferenceId(),
+        payment.getReferenceTransactionId(),
+        payment.getUrl(),
+        payment.getQr(),
+        payment.getDeeplink(),
+        payment.getDescription());
+  }
+
+  private RefundResponse toRefund(RefundRecord refund) {
+    return new RefundResponse(
+        refund.getId(),
+        refund.getPaymentId(),
+        refund.getOrderId(),
+        refund.getAmount(),
+        refund.getStatus(),
+        refund.getReason(),
+        refund.getTransactionId(),
+        refund.getProcessedByUserId(),
+        refund.getRequestedAt(),
+        refund.getProcessedAt());
+  }
+
+  private String buildVnPayUrl(PaymentRecord payment, String bankCode, String language) {
+    Map<String, String> params = new TreeMap<>();
+    params.put("vnp_Version", "2.1.0");
+    params.put("vnp_Command", "pay");
+    params.put("vnp_TmnCode", vnpayTmnCode);
+    params.put("vnp_Amount", payment.getAmount().multiply(BigDecimal.valueOf(100)).toBigInteger().toString());
+    params.put("vnp_CurrCode", "VND");
+    params.put("vnp_TxnRef", payment.getReferenceId());
+    params.put("vnp_OrderInfo", "Thanh toan don hang " + payment.getOrderId());
+    params.put("vnp_OrderType", "other");
+    params.put("vnp_Locale", StringUtils.hasText(language) ? language : "vn");
+    params.put("vnp_ReturnUrl", vnpayReturnUrl);
+    params.put("vnp_IpAddr", "127.0.0.1");
+    params.put("vnp_CreateDate", DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
+    if (StringUtils.hasText(bankCode)) {
+      params.put("vnp_BankCode", bankCode);
+    }
+    String hashData = query(params);
+    params.put("vnp_SecureHash", hmac("HmacSHA512", vnpayHashSecret, hashData));
+    return vnpayPayUrl + "?" + query(params);
+  }
+
+  private boolean verifyVnPay(Map<String, String> params) {
+    String received = params.get("vnp_SecureHash");
+    Map<String, String> verify = new TreeMap<>(params);
+    verify.remove("vnp_SecureHash");
+    verify.remove("vnp_SecureHashType");
+    return received != null && received.equalsIgnoreCase(hmac("HmacSHA512", vnpayHashSecret, query(verify)));
+  }
+
+  private String query(Map<String, String> params) {
+    return params.entrySet().stream()
+        .filter(e -> e.getValue() != null)
+        .map(e -> url(e.getKey()) + "=" + url(e.getValue()))
+        .reduce((a, b) -> a + "&" + b)
+        .orElse("");
+  }
+
+  private String hmac(String algorithm, String secret, String data) {
+    try {
+      Mac mac = Mac.getInstance(algorithm);
+      mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), algorithm));
+      byte[] bytes = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+      StringBuilder result = new StringBuilder();
+      for (byte b : bytes) {
+        result.append(String.format("%02x", b));
+      }
+      return result.toString();
+    } catch (Exception ex) {
+      throw new IllegalStateException("Could not sign payment payload", ex);
+    }
+  }
+
+  private String url(String value) {
+    return URLEncoder.encode(value, StandardCharsets.UTF_8);
+  }
+
+  private String generateReference(Long orderId) {
+    return "PAY-" + orderId + "-" + System.currentTimeMillis();
+  }
+
+  private void publish(String eventName, PaymentRecord payment) {
+    try {
+      rabbitTemplate.convertAndSend(
+          DomainEventNames.EXCHANGE,
+          eventName,
+          DomainEvent.of(eventName, "payment-service", eventPayload(payment)));
+    } catch (AmqpException ex) {
+      log.warn("Could not publish {} for payment {}: {}", eventName, payment.getId(), ex.getMessage());
+    }
+  }
+
+  private Map<String, Object> eventPayload(PaymentRecord payment) {
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("paymentId", payment.getId());
+    payload.put("orderId", payment.getOrderId());
+    payload.put("userId", payment.getUserId());
+    payload.put("amount", payment.getAmount());
+    payload.put("status", payment.getStatus());
+    return payload;
+  }
+}

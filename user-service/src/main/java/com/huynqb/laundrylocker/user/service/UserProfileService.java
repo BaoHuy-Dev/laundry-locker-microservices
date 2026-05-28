@@ -1,0 +1,90 @@
+package com.huynqb.laundrylocker.user.service;
+
+import com.huynqb.laundrylocker.common.dto.UserSummary;
+import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.user.dto.UserProfileRequest;
+import com.huynqb.laundrylocker.user.model.UserProfile;
+import com.huynqb.laundrylocker.user.repository.UserProfileRepository;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+@Service
+@RequiredArgsConstructor
+public class UserProfileService {
+
+  private final UserProfileRepository userProfileRepository;
+
+  @Transactional
+  public UserSummary create(UserProfileRequest request) {
+    UserProfile user = new UserProfile();
+    apply(user, request);
+    return toSummary(userProfileRepository.save(user));
+  }
+
+  @Transactional
+  public UserSummary update(Long id, UserProfileRequest request) {
+    UserProfile user = find(id);
+    apply(user, request);
+    return toSummary(userProfileRepository.save(user));
+  }
+
+  @Transactional(readOnly = true)
+  public UserSummary get(Long id) {
+    return toSummary(find(id));
+  }
+
+  @Transactional(readOnly = true)
+  public List<UserSummary> list() {
+    return userProfileRepository.findAll().stream().map(this::toSummary).toList();
+  }
+
+  private UserProfile find(Long id) {
+    return userProfileRepository.findById(id).orElseThrow(() -> new NotFoundException("User", id));
+  }
+
+  private void apply(UserProfile user, UserProfileRequest request) {
+    user.setEmail(request.email());
+    user.setPhoneNumber(request.phoneNumber());
+    user.setFirstName(request.firstName());
+    user.setLastName(request.lastName());
+    user.setBirthday(request.birthday());
+    user.setImageUrl(request.imageUrl());
+    user.setStatus(StringUtils.hasText(request.status()) ? request.status() : "ACTIVE");
+    if (request.roles() != null && !request.roles().isEmpty()) {
+      user.setRoles(request.roles().stream().map(String::toUpperCase).collect(Collectors.joining(",")));
+    } else if (!StringUtils.hasText(user.getRoles())) {
+      user.setRoles("USER");
+    }
+  }
+
+  private UserSummary toSummary(UserProfile user) {
+    String fullName =
+        ((user.getFirstName() == null ? "" : user.getFirstName())
+                + " "
+                + (user.getLastName() == null ? "" : user.getLastName()))
+            .trim();
+    return new UserSummary(
+        user.getId(),
+        user.getEmail(),
+        user.getPhoneNumber(),
+        fullName,
+        user.getStatus(),
+        parseRoles(user.getRoles()));
+  }
+
+  private Set<String> parseRoles(String roles) {
+    if (!StringUtils.hasText(roles)) {
+      return Set.of("USER");
+    }
+    return List.of(roles.split(",")).stream()
+        .map(String::trim)
+        .filter(StringUtils::hasText)
+        .map(String::toUpperCase)
+        .collect(Collectors.toSet());
+  }
+}

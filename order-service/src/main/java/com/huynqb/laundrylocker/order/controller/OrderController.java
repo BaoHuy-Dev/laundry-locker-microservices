@@ -1,0 +1,206 @@
+package com.huynqb.laundrylocker.order.controller;
+
+import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.common.dto.OrderSummary;
+import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.OrderComplaintRequest;
+import com.huynqb.laundrylocker.order.dto.OrderComplaintResponse;
+import com.huynqb.laundrylocker.order.dto.OrderRatingRequest;
+import com.huynqb.laundrylocker.order.dto.OrderRatingResponse;
+import com.huynqb.laundrylocker.order.dto.OrderResponse;
+import com.huynqb.laundrylocker.order.dto.OrderStatusResponse;
+import com.huynqb.laundrylocker.order.dto.OrderTimelineEvent;
+import com.huynqb.laundrylocker.order.dto.PromotionRequest;
+import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
+import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
+import com.huynqb.laundrylocker.order.model.Promotion;
+import com.huynqb.laundrylocker.order.service.OrderService;
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+public class OrderController {
+
+  private final OrderService orderService;
+
+  @PostMapping("/api/orders")
+  public ApiResponse<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request) {
+    return ApiResponse.ok("ORDER_CREATED", "Order created", orderService.create(request));
+  }
+
+  @PatchMapping("/api/orders/{id}/status")
+  public ApiResponse<OrderResponse> updateStatus(
+      @PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
+    return ApiResponse.ok("ORDER_STATUS_UPDATED", "Order status updated", orderService.updateStatus(id, request));
+  }
+
+  @PutMapping("/api/orders/{orderId}/confirm")
+  public ApiResponse<OrderResponse> confirm(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_CONFIRMED", "Order confirmed", orderService.confirm(orderId, userId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/collect")
+  public ApiResponse<OrderResponse> collect(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
+    return ApiResponse.ok("ORDER_COLLECTED", "Order collected", orderService.collect(orderId, staffId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/weight")
+  public ApiResponse<OrderResponse> updateWeight(
+      @PathVariable Long orderId,
+      @Valid @RequestBody UpdateOrderWeightRequest request,
+      @RequestHeader("X-User-Id") Long staffId) {
+    return ApiResponse.ok("ORDER_WEIGHT_UPDATED", "Order weight updated", orderService.updateWeight(orderId, request, staffId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/process")
+  public ApiResponse<OrderResponse> process(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
+    return ApiResponse.ok("ORDER_PROCESSING", "Order processing", orderService.process(orderId, staffId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/ready")
+  public ApiResponse<OrderResponse> ready(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
+    return ApiResponse.ok("ORDER_READY", "Order ready", orderService.ready(orderId, staffId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/return")
+  public ApiResponse<OrderResponse> returnOrder(
+      @PathVariable Long orderId, @RequestParam Long boxId, @RequestHeader("X-User-Id") Long staffId) {
+    return ApiResponse.ok("ORDER_RETURNED", "Order returned", orderService.returnOrder(orderId, boxId, staffId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/complete")
+  public ApiResponse<OrderResponse> complete(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_COMPLETED", "Order completed", orderService.complete(orderId, userId));
+  }
+
+  @PutMapping("/api/orders/{orderId}/cancel")
+  public ApiResponse<OrderResponse> cancel(
+      @PathVariable Long orderId,
+      @RequestParam(required = false) Integer reason,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok("ORDER_CANCELED", "Order canceled", orderService.cancel(orderId, reason, userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/reset-pin")
+  public ApiResponse<OrderResponse> resetPin(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_PIN_RESET", "Order PIN reset", orderService.resetPin(orderId, userId));
+  }
+
+  @GetMapping("/api/orders/{id}")
+  public ApiResponse<OrderResponse> get(@PathVariable Long id) {
+    return ApiResponse.ok(orderService.get(id));
+  }
+
+  @GetMapping("/api/orders/{orderId}/status")
+  public ApiResponse<OrderStatusResponse> status(@PathVariable Long orderId) {
+    return ApiResponse.ok(orderService.status(orderId));
+  }
+
+  @GetMapping("/api/orders/code/{orderCode}")
+  public ApiResponse<OrderResponse> getByCode(@PathVariable String orderCode) {
+    return ApiResponse.ok(orderService.getByCode(orderCode));
+  }
+
+  @GetMapping("/api/orders/pin/{pinCode}")
+  public ApiResponse<OrderResponse> getByPin(@PathVariable String pinCode) {
+    return ApiResponse.ok(orderService.getByPin(pinCode));
+  }
+
+  @GetMapping("/api/orders")
+  public ApiResponse<List<OrderResponse>> list(
+      @RequestParam(required = false) Long userId,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long staffId) {
+    return ApiResponse.ok(userId == null ? orderService.list(status, staffId) : orderService.listByUser(userId));
+  }
+
+  @GetMapping("/api/orders/my-orders")
+  public ApiResponse<List<OrderResponse>> myOrders(@RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(orderService.listByUser(userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/rate")
+  public ApiResponse<OrderRatingResponse> rate(
+      @PathVariable Long orderId,
+      @Valid @RequestBody OrderRatingRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_RATED", "Order rated", orderService.rate(orderId, request, userId));
+  }
+
+  @GetMapping("/api/orders/{orderId}/rating")
+  public ApiResponse<OrderRatingResponse> rating(@PathVariable Long orderId) {
+    return ApiResponse.ok(orderService.rating(orderId));
+  }
+
+  @GetMapping("/api/orders/my-ratings")
+  public ApiResponse<List<OrderRatingResponse>> myRatings(@RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(orderService.myRatings(userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/complaint")
+  public ApiResponse<OrderComplaintResponse> complaint(
+      @PathVariable Long orderId,
+      @Valid @RequestBody OrderComplaintRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("COMPLAINT_CREATED", "Complaint created", orderService.complain(orderId, request, userId));
+  }
+
+  @GetMapping("/api/orders/{orderId}/complaints")
+  public ApiResponse<List<OrderComplaintResponse>> complaints(@PathVariable Long orderId) {
+    return ApiResponse.ok(orderService.complaints(orderId));
+  }
+
+  @GetMapping("/api/orders/my-complaints")
+  public ApiResponse<List<OrderComplaintResponse>> myComplaints(@RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(orderService.myComplaints(userId));
+  }
+
+  @GetMapping("/api/orders/{orderId}/timeline")
+  public ApiResponse<List<OrderTimelineEvent>> timeline(@PathVariable Long orderId) {
+    return ApiResponse.ok(orderService.timeline(orderId));
+  }
+
+  @GetMapping("/internal/orders/{id}")
+  public ApiResponse<OrderSummary> getInternal(@PathVariable Long id) {
+    return ApiResponse.ok(orderService.getSummary(id));
+  }
+
+  @GetMapping("/api/admin/orders")
+  public ApiResponse<List<OrderResponse>> adminOrders(@RequestParam(required = false) String status) {
+    return ApiResponse.ok(orderService.list(status, null));
+  }
+
+  @PutMapping("/api/admin/orders/{id}/status")
+  public ApiResponse<OrderResponse> adminStatus(@PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
+    return updateStatus(id, request);
+  }
+
+  @GetMapping("/api/admin/dashboard/overview")
+  public ApiResponse<java.util.Map<String, Object>> dashboard() {
+    List<OrderResponse> orders = orderService.list(null, null);
+    return ApiResponse.ok(java.util.Map.of("totalOrders", orders.size()));
+  }
+
+  @PostMapping("/api/admin/promotions")
+  public ApiResponse<Promotion> createPromotion(
+      @Valid @RequestBody PromotionRequest request,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok("PROMOTION_CREATED", "Promotion created", orderService.createPromotion(request, userId));
+  }
+
+  @GetMapping("/api/promotions/active")
+  public ApiResponse<List<Promotion>> activePromotions() {
+    return ApiResponse.ok(orderService.activePromotions());
+  }
+}

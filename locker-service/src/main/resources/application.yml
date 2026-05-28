@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8084}
+spring:
+  application:
+    name: locker-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:15432/locker_db}
+    username: ${SPRING_DATASOURCE_USERNAME:locker_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:locker_pass}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: locker_schema
+  flyway:
+    enabled: true
+    create-schemas: true
+    schemas: locker_schema
+    default-schema: locker_schema
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

@@ -1,0 +1,91 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          routes:
+            - id: auth-service
+              uri: lb://auth-service
+              predicates:
+                - Path=/api/auth/**,/internal/auth/**
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/api/user/**,/api/users/**,/api/admin/users/**,/internal/users/**
+            - id: order-service
+              uri: lb://order-service
+              predicates:
+                - Path=/api/orders/**,/api/admin/orders/**,/internal/orders/**
+            - id: locker-service
+              uri: lb://locker-service
+              predicates:
+                - Path=/api/lockers/**,/api/boxes/**,/api/admin/lockers/**,/internal/lockers/**,/internal/boxes/**
+            - id: laundry-service
+              uri: lb://laundry-service
+              predicates:
+                - Path=/api/services/**,/api/laundry-services/**,/api/admin/services/**,/internal/laundry-services/**
+            - id: payment-service
+              uri: lb://payment-service
+              predicates:
+                - Path=/api/payments/**,/api/admin/payments/**,/internal/payments/**
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/notifications/**,/api/admin/notifications/**,/internal/notifications/**,/internal/fcm-tokens/**
+            - id: iot-service
+              uri: lb://iot-service
+              predicates:
+                - Path=/api/iot/**,/internal/iot/**
+            - id: store-service
+              uri: lb://store-service
+              predicates:
+                - Path=/api/stores/**,/api/admin/stores/**,/internal/stores/**
+            - id: staff-service
+              uri: lb://staff-service
+              predicates:
+                - Path=/api/staff/**,/internal/staff/**
+            - id: partner-service
+              uri: lb://partner-service
+              predicates:
+                - Path=/api/partner/**,/api/partners/**,/api/admin/partners/**,/internal/partners/**
+            - id: loyalty-service
+              uri: lb://loyalty-service
+              predicates:
+                - Path=/api/loyalty/**,/api/admin/loyalty/**,/internal/loyalty/**
+            - id: promotions
+              uri: lb://order-service
+              predicates:
+                - Path=/api/promotions/**,/api/admin/promotions/**
+            - id: admin-dashboard
+              uri: lb://order-service
+              predicates:
+                - Path=/api/admin/dashboard/**
+
+app:
+  security:
+    jwt:
+      secret: ${APP_SECURITY_JWT_SECRET:laundry-locker-microservices-secret-key-change-me-please-32chars}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      probes:
+        enabled: true
