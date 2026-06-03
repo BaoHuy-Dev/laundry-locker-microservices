@@ -9,6 +9,7 @@ import com.huynqb.laundrylocker.loyalty.dto.RedeemStampRequest;
 import com.huynqb.laundrylocker.loyalty.service.LoyaltyService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,6 +53,35 @@ public class LoyaltyController {
     return ApiResponse.ok("STAMP_REDEEMED", "Stamp redeemed", loyaltyService.redeemStamp(request));
   }
 
+  @GetMapping("/api/loyalty/stamps")
+  public ApiResponse<List<Map<String, Object>>> stamps(@org.springframework.web.bind.annotation.RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(loyaltyService.stampCards(userId));
+  }
+
+  @GetMapping("/api/loyalty/stamps/{stampCardId}")
+  public ApiResponse<Map<String, Object>> stamp(
+      @PathVariable Long stampCardId,
+      @org.springframework.web.bind.annotation.RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(loyaltyService.stampCard(userId, stampCardId));
+  }
+
+  @GetMapping("/api/loyalty/rewards")
+  public ApiResponse<List<Map<String, Object>>> rewards() {
+    return ApiResponse.ok(loyaltyService.rewards());
+  }
+
+  @PostMapping("/api/loyalty/rewards/{rewardId}/redeem")
+  public ApiResponse<LoyaltyAccountResponse> redeemReward(
+      @PathVariable Long rewardId,
+      @org.springframework.web.bind.annotation.RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("REWARD_REDEEMED", "Reward redeemed", loyaltyService.redeemReward(userId, rewardId));
+  }
+
+  @GetMapping("/api/loyalty/points/expiring")
+  public ApiResponse<List<Map<String, Object>>> expiringPoints(@org.springframework.web.bind.annotation.RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(loyaltyService.expiringPoints(userId));
+  }
+
   @PostMapping("/api/loyalty/points")
   public ApiResponse<LoyaltyAccountResponse> adjustPoints(@Valid @RequestBody AdjustPointsRequest request) {
     return ApiResponse.ok("LOYALTY_POINTS_ADJUSTED", "Loyalty points adjusted", loyaltyService.adjustPoints(request));
@@ -68,6 +98,21 @@ public class LoyaltyController {
   @GetMapping("/api/admin/loyalty/users/{userId}/history")
   public ApiResponse<List<PointTransactionResponse>> adminHistory(@PathVariable Long userId) {
     return ApiResponse.ok(loyaltyService.history(userId));
+  }
+
+  @GetMapping("/api/admin/loyalty/users/{userId}")
+  public ApiResponse<LoyaltyAccountResponse> adminByUser(@PathVariable Long userId) {
+    return ApiResponse.ok(loyaltyService.getByUser(userId));
+  }
+
+  @GetMapping("/api/admin/loyalty")
+  public ApiResponse<LoyaltyAccountResponse> adminByUserQuery(@org.springframework.web.bind.annotation.RequestParam Long userId) {
+    return adminByUser(userId);
+  }
+
+  @GetMapping("/api/admin/loyalty/statistics")
+  public ApiResponse<Map<String, Object>> adminStatistics() {
+    return ApiResponse.ok(loyaltyService.statistics());
   }
 
   @GetMapping("/internal/loyalty/users/{userId}")

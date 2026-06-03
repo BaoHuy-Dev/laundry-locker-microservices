@@ -1,11 +1,13 @@
 package com.huynqb.laundrylocker.store.service;
 
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.store.client.OrderClient;
 import com.huynqb.laundrylocker.store.dto.StoreRequest;
 import com.huynqb.laundrylocker.store.dto.StoreResponse;
 import com.huynqb.laundrylocker.store.model.StoreLocation;
 import com.huynqb.laundrylocker.store.repository.StoreRepository;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,7 @@ import org.springframework.util.StringUtils;
 public class StoreService {
 
   private final StoreRepository repository;
+  private final OrderClient orderClient;
 
   @Transactional
   public StoreResponse create(StoreRequest request) {
@@ -56,6 +59,27 @@ public class StoreService {
     store.setStatus(status);
     store.setActive("ACTIVE".equalsIgnoreCase(status));
     return toResponse(repository.save(store));
+  }
+
+  @Transactional
+  public void delete(Long id) {
+    repository.delete(repository.findById(id).orElseThrow(() -> new NotFoundException("Store", id)));
+  }
+
+  @Transactional
+  public StoreResponse updateImage(Long id, String imageUrl) {
+    StoreLocation store = repository.findById(id).orElseThrow(() -> new NotFoundException("Store", id));
+    store.setImage(imageUrl);
+    return toResponse(repository.save(store));
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> ratings(Long storeId) {
+    try {
+      return orderClient.storeRatings(storeId).data();
+    } catch (Exception ex) {
+      return List.of();
+    }
   }
 
   private void apply(StoreLocation store, StoreRequest request) {

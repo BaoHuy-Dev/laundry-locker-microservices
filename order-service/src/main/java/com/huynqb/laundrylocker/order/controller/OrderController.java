@@ -16,8 +16,10 @@ import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
 import com.huynqb.laundrylocker.order.service.OrderService;
 import jakarta.validation.Valid;
+import java.util.Map;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -95,6 +97,26 @@ public class OrderController {
   @PostMapping("/api/orders/{orderId}/reset-pin")
   public ApiResponse<OrderResponse> resetPin(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("ORDER_PIN_RESET", "Order PIN reset", orderService.resetPin(orderId, userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/checkout")
+  public ApiResponse<OrderResponse> checkout(
+      @PathVariable Long orderId,
+      @RequestBody(required = false) Map<String, Object> request,
+      @RequestHeader(value = "X-User-Id", required = false) Long staffId) {
+    String note = request == null || request.get("note") == null ? null : String.valueOf(request.get("note"));
+    return ApiResponse.ok("ORDER_CHECKED_OUT", "Order checked out", orderService.checkout(orderId, staffId, note));
+  }
+
+  @PostMapping("/api/orders/{orderId}/pickup-storage")
+  public ApiResponse<OrderResponse> pickupStorage(
+      @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_PICKUP_STORAGE_OK", "Storage order picked up", orderService.pickupStorage(orderId, userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/reorder")
+  public ApiResponse<OrderResponse> reorder(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_REORDERED", "Reorder created", orderService.reorder(orderId, userId));
   }
 
   @GetMapping("/api/orders/{id}")
@@ -181,6 +203,11 @@ public class OrderController {
     return ApiResponse.ok(orderService.list(status, null));
   }
 
+  @GetMapping("/api/admin/orders/{id}")
+  public ApiResponse<OrderResponse> adminOrder(@PathVariable Long id) {
+    return get(id);
+  }
+
   @PutMapping("/api/admin/orders/{id}/status")
   public ApiResponse<OrderResponse> adminStatus(@PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
     return updateStatus(id, request);
@@ -188,8 +215,17 @@ public class OrderController {
 
   @GetMapping("/api/admin/dashboard/overview")
   public ApiResponse<java.util.Map<String, Object>> dashboard() {
-    List<OrderResponse> orders = orderService.list(null, null);
-    return ApiResponse.ok(java.util.Map.of("totalOrders", orders.size()));
+    return ApiResponse.ok(orderService.statistics());
+  }
+
+  @GetMapping("/api/admin/orders/statistics")
+  public ApiResponse<Map<String, Object>> orderStatistics() {
+    return ApiResponse.ok(orderService.statistics());
+  }
+
+  @GetMapping("/api/admin/orders/revenue")
+  public ApiResponse<Map<String, Object>> revenue() {
+    return ApiResponse.ok(orderService.revenue());
   }
 
   @PostMapping("/api/admin/promotions")
@@ -199,8 +235,80 @@ public class OrderController {
     return ApiResponse.ok("PROMOTION_CREATED", "Promotion created", orderService.createPromotion(request, userId));
   }
 
+  @GetMapping("/api/admin/promotions")
+  public ApiResponse<List<Promotion>> promotions() {
+    return ApiResponse.ok(orderService.promotions());
+  }
+
+  @GetMapping("/api/admin/promotions/{promotionId}")
+  public ApiResponse<Promotion> promotion(@PathVariable Long promotionId) {
+    return ApiResponse.ok(orderService.promotion(promotionId));
+  }
+
+  @PutMapping("/api/admin/promotions/{promotionId}")
+  public ApiResponse<Promotion> updatePromotion(
+      @PathVariable Long promotionId, @Valid @RequestBody PromotionRequest request) {
+    return ApiResponse.ok("PROMOTION_UPDATED", "Promotion updated", orderService.updatePromotion(promotionId, request));
+  }
+
+  @DeleteMapping("/api/admin/promotions/{promotionId}")
+  public ApiResponse<Void> deletePromotion(@PathVariable Long promotionId) {
+    orderService.deletePromotion(promotionId);
+    return ApiResponse.ok("PROMOTION_DELETED", "Promotion deleted");
+  }
+
+  @GetMapping("/api/admin/promotions/status/{status}")
+  public ApiResponse<List<Promotion>> promotionsByStatus(@PathVariable String status) {
+    return ApiResponse.ok(orderService.promotionsByStatus(status));
+  }
+
+  @GetMapping("/api/admin/promotions/search")
+  public ApiResponse<List<Promotion>> searchPromotions(@RequestParam(required = false) String keyword) {
+    return ApiResponse.ok(orderService.searchPromotions(keyword));
+  }
+
+  @GetMapping("/api/admin/promotions/validate/{code}")
+  public ApiResponse<Map<String, Object>> adminValidatePromotion(@PathVariable String code) {
+    return ApiResponse.ok(orderService.validatePromotion(code));
+  }
+
   @GetMapping("/api/promotions/active")
   public ApiResponse<List<Promotion>> activePromotions() {
     return ApiResponse.ok(orderService.activePromotions());
+  }
+
+  @GetMapping("/api/admin/promotions/active")
+  public ApiResponse<List<Promotion>> adminActivePromotions() {
+    return activePromotions();
+  }
+
+  @GetMapping("/api/promotions/validate/{code}")
+  public ApiResponse<Map<String, Object>> validatePromotion(@PathVariable String code) {
+    return ApiResponse.ok(orderService.validatePromotion(code));
+  }
+
+  @GetMapping("/internal/orders/stores/{storeId}/ratings")
+  public ApiResponse<List<Map<String, Object>>> storeRatings(@PathVariable Long storeId) {
+    return ApiResponse.ok(orderService.storeRatings(storeId));
+  }
+
+  @PostMapping("/api/admin/scheduler/auto-cancel")
+  public ApiResponse<Map<String, Object>> autoCancel() {
+    return ApiResponse.ok("SCHEDULER_AUTO_CANCEL_OK", "Auto cancel job completed", orderService.autoCancelUnconfirmedOrders());
+  }
+
+  @PostMapping("/api/admin/scheduler/release-boxes")
+  public ApiResponse<Map<String, Object>> releaseBoxes() {
+    return ApiResponse.ok("SCHEDULER_RELEASE_BOXES_OK", "Box release job completed", orderService.releaseBoxesAfterCompletion());
+  }
+
+  @PostMapping("/api/admin/scheduler/pickup-reminders")
+  public ApiResponse<Map<String, Object>> pickupReminders() {
+    return ApiResponse.ok("SCHEDULER_PICKUP_REMINDERS_OK", "Pickup reminder job completed", orderService.pickupReminders());
+  }
+
+  @GetMapping("/api/admin/scheduler/status")
+  public ApiResponse<Map<String, Object>> schedulerStatus() {
+    return ApiResponse.ok(Map.of("enabled", true, "owner", "order-service"));
   }
 }

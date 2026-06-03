@@ -1,6 +1,9 @@
 package com.huynqb.laundrylocker.partner.service;
 
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.partner.client.LockerClient;
+import com.huynqb.laundrylocker.partner.client.OrderClient;
+import com.huynqb.laundrylocker.partner.client.StoreClient;
 import com.huynqb.laundrylocker.partner.dto.AccessCodeRequest;
 import com.huynqb.laundrylocker.partner.dto.AccessCodeResponse;
 import com.huynqb.laundrylocker.partner.dto.PartnerRequest;
@@ -10,8 +13,10 @@ import com.huynqb.laundrylocker.partner.model.StaffAccessCode;
 import com.huynqb.laundrylocker.partner.repository.PartnerRepository;
 import com.huynqb.laundrylocker.partner.repository.StaffAccessCodeRepository;
 import java.security.SecureRandom;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +30,9 @@ public class PartnerService {
 
   private final PartnerRepository partnerRepository;
   private final StaffAccessCodeRepository codeRepository;
+  private final OrderClient orderClient;
+  private final StoreClient storeClient;
+  private final LockerClient lockerClient;
 
   @Transactional
   public PartnerResponse create(PartnerRequest request) {
@@ -60,6 +68,19 @@ public class PartnerService {
     return toResponse(partnerRepository.save(partner));
   }
 
+  @Transactional
+  public PartnerResponse updateByUser(Long userId, PartnerRequest request) {
+    PartnerProfile partner =
+        partnerRepository.findByUserId(userId).orElseThrow(() -> new NotFoundException("Partner", userId));
+    partner.setBusinessName(request.businessName());
+    partner.setContactPhone(request.contactPhone());
+    partner.setContactEmail(request.contactEmail());
+    if (StringUtils.hasText(request.status())) {
+      partner.setStatus(request.status());
+    }
+    return toResponse(partnerRepository.save(partner));
+  }
+
   @Transactional(readOnly = true)
   public List<PartnerResponse> list() {
     return partnerRepository.findAll().stream().map(this::toResponse).toList();
@@ -76,6 +97,103 @@ public class PartnerService {
       codes = codeRepository.findAll();
     }
     return codes.stream().map(this::toResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public PartnerResponse getByUser(Long userId) {
+    return partnerRepository.findByUserId(userId).map(this::toResponse).orElseThrow(() -> new NotFoundException("Partner", userId));
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> dashboard(Long userId) {
+    Long partnerId = getByUser(userId).id();
+    return Map.of(
+        "partnerId", partnerId,
+        "pendingOrders", safeOrders("INITIALIZED").size(),
+        "activeAccessCodes", accessCodes(partnerId, null).size());
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> orders(String status) {
+    return safeOrders(status);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> order(Long orderId) {
+    return orderClient.order(orderId).data();
+  }
+
+  @Transactional
+  public Map<String, Object> acceptOrder(Long orderId, Long userId) {
+    PartnerResponse partner = getByUser(userId);
+    Map<String, Object> response =
+        orderClient.updateStatus(orderId, Map.of("status", "WAITING", "staffId", userId)).data();
+    generateAccessCode(new AccessCodeRequest(partner.id(), orderId, "COLLECT", 24));
+    return response;
+  }
+
+  @Transactional
+  public Map<String, Object> collectOrder(Long orderId, Long userId) {
+    return orderClient.collect(orderId, userId).data();
+  }
+
+  @Transactional
+  public Map<String, Object> processOrder(Long orderId, Long userId) {
+    return orderClient.process(orderId, userId).data();
+  }
+
+  @Transactional
+  public Map<String, Object> readyOrder(Long orderId, Long userId) {
+    Map<String, Object> response = orderClient.ready(orderId, userId).data();
+    generateAccessCode(new AccessCodeRequest(getByUser(userId).id(), orderId, "PICKUP", 24));
+    return response;
+  }
+
+  @Transactional
+  public Map<String, Object> updateOrderWeight(Long orderId, Map<String, Object> request, Long userId) {
+    return orderClient.updateWeight(orderId, request, userId).data();
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> stores() {
+    try {
+      return storeClient.stores().data();
+    } catch (Exception ex) {
+      return List.of();
+    }
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> lockers() {
+    try {
+      return lockerClient.lockers().data();
+    } catch (Exception ex) {
+      return List.of();
+    }
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> availableBoxes(Long lockerId) {
+    try {
+      return lockerClient.availableBoxes(lockerId).data();
+    } catch (Exception ex) {
+      return List.of();
+    }
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> orderStatistics() {
+    return Map.of("totalOrders", safeOrders(null).size(), "pendingOrders", safeOrders("INITIALIZED").size());
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> revenue() {
+    BigDecimal totalRevenue =
+        safeOrders(null).stream()
+            .filter(order -> "COMPLETED".equalsIgnoreCase(String.valueOf(order.get("status"))))
+            .map(order -> decimal(order.get("totalPrice")))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    return Map.of("totalRevenue", totalRevenue);
   }
 
   @Transactional
@@ -95,6 +213,25 @@ public class PartnerService {
       throw new com.huynqb.laundrylocker.common.exception.BusinessException("ACCESS_CODE_EXPIRED", "Access code expired");
     }
     return toResponse(code);
+  }
+
+  private List<Map<String, Object>> safeOrders(String status) {
+    try {
+      return orderClient.orders(status).data();
+    } catch (Exception ex) {
+      return List.of();
+    }
+  }
+
+  private BigDecimal decimal(Object value) {
+    if (value == null) {
+      return BigDecimal.ZERO;
+    }
+    try {
+      return new BigDecimal(String.valueOf(value));
+    } catch (NumberFormatException ex) {
+      return BigDecimal.ZERO;
+    }
   }
 
   private PartnerResponse toResponse(PartnerProfile partner) {

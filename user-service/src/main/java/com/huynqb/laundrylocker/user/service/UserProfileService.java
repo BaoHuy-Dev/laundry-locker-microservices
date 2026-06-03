@@ -6,6 +6,7 @@ import com.huynqb.laundrylocker.user.dto.UserProfileRequest;
 import com.huynqb.laundrylocker.user.model.UserProfile;
 import com.huynqb.laundrylocker.user.repository.UserProfileRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,40 @@ public class UserProfileService {
   @Transactional(readOnly = true)
   public List<UserSummary> list() {
     return userProfileRepository.findAll().stream().map(this::toSummary).toList();
+  }
+
+  @Transactional
+  public void delete(Long id) {
+    userProfileRepository.delete(find(id));
+  }
+
+  @Transactional
+  public UserSummary updateStatus(Long id, String status) {
+    UserProfile user = find(id);
+    user.setStatus(status);
+    return toSummary(userProfileRepository.save(user));
+  }
+
+  @Transactional
+  public UserSummary updateRoles(Long id, Set<String> roles) {
+    UserProfile user = find(id);
+    user.setRoles(
+        roles == null || roles.isEmpty()
+            ? "USER"
+            : roles.stream().map(String::toUpperCase).collect(Collectors.joining(",")));
+    return toSummary(userProfileRepository.save(user));
+  }
+
+  @Transactional
+  public UserSummary updateAvatar(Long id, String imageUrl) {
+    UserProfile user = find(id);
+    user.setImageUrl(imageUrl);
+    return toSummary(userProfileRepository.save(user));
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> statistics(Long userId) {
+    return Map.of("userId", userId, "profileComplete", true);
   }
 
   private UserProfile find(Long id) {

@@ -29,6 +29,7 @@ public class NotificationService {
   private final FcmTokenRepository fcmTokenRepository;
   private final RabbitTemplate rabbitTemplate;
   private final FcmPushNotificationService fcmPushNotificationService;
+  private final WebSocketNotificationService webSocketNotificationService;
 
   @Transactional
   public NotificationResponse create(NotificationRequest request) {
@@ -53,6 +54,7 @@ public class NotificationService {
             saved.getReferenceType() == null ? "" : saved.getReferenceType(),
             "referenceId",
             saved.getReferenceId() == null ? "" : String.valueOf(saved.getReferenceId())));
+    webSocketNotificationService.sendToUser(saved.getUserId(), toResponse(saved));
     publishNotificationRequested(saved);
     return toResponse(saved);
   }
@@ -65,6 +67,7 @@ public class NotificationService {
             .map(userId -> create(new NotificationRequest(userId, request.title(), request.message(), request.type(), request.referenceId(), request.referenceType())))
             .toList();
     fcmPushNotificationService.broadcast(request.title(), request.message(), Map.of("type", request.type() == null ? "SYSTEM" : request.type()));
+    responses.forEach(webSocketNotificationService::broadcast);
     return responses;
   }
 
@@ -91,6 +94,11 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
+  public List<NotificationResponse> all() {
+    return notificationRepository.findAll().stream().map(this::toResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
   public List<NotificationResponse> getUnreadByUser(Long userId) {
     return notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId).stream().map(this::toResponse).toList();
   }
@@ -108,6 +116,11 @@ public class NotificationService {
     notification.setStatus("READ");
     notification.setReadAt(java.time.LocalDateTime.now());
     return toResponse(notificationRepository.save(notification));
+  }
+
+  @Transactional
+  public List<NotificationResponse> markBatchRead(List<Long> ids) {
+    return ids.stream().map(this::markRead).toList();
   }
 
   @Transactional

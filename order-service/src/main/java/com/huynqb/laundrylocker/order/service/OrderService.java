@@ -228,6 +228,66 @@ public class OrderService {
     return toResponse(orderRepository.save(order));
   }
 
+  @Transactional
+  public OrderResponse checkout(Long id, Long staffId, String note) {
+    LaundryOrder order = find(id);
+    validateStatus(order, Set.of("RETURNED", "READY", "WAITING", "INITIALIZED"));
+    releaseBoxes(order);
+    order.setStaffId(staffId);
+    order.setCompletedAt(LocalDateTime.now());
+    order.setPinCode(null);
+    return transition(order, "COMPLETED", staffId, order.getReceiveBoxId(), note);
+  }
+
+  @Transactional
+  public OrderResponse pickupStorage(Long id, Long userId) {
+    LaundryOrder order = find(id);
+    assertOwner(order, userId);
+    if (!"STORAGE".equalsIgnoreCase(order.getType())
+        && !"STORAGE".equalsIgnoreCase(order.getServiceCategory())) {
+      throw new BusinessException("ORDER_STATUS_INVALID", "Only storage orders can use pickup-storage");
+    }
+    validateStatus(order, Set.of("WAITING", "INITIALIZED", "RETURNED"));
+    releaseBoxes(order);
+    order.setCompletedAt(LocalDateTime.now());
+    order.setPinCode(null);
+    return transition(order, "COMPLETED", userId, order.getReceiveBoxId(), "Storage order picked up");
+  }
+
+  @Transactional
+  public OrderResponse reorder(Long originalOrderId, Long userId) {
+    LaundryOrder original = find(originalOrderId);
+    assertOwner(original, userId);
+    if (!Set.of("COMPLETED", "CANCELED").contains(original.getStatus())) {
+      throw new BusinessException("ORDER_STATUS_INVALID", "Only completed or canceled orders can be reordered");
+    }
+    List<OrderItemRequest> items =
+        detailRepository.findByOrderId(originalOrderId).stream()
+            .map(d -> new OrderItemRequest(d.getServiceId(), d.getQuantity(), d.getDescription()))
+            .toList();
+    return create(
+        new CreateOrderRequest(
+            original.getUserId(),
+            original.getLockerId(),
+            null,
+            null,
+            original.getStoreId(),
+            original.getType(),
+            original.getServiceCategory(),
+            original.getReceiverId(),
+            original.getReceiverPhone(),
+            original.getReceiverName(),
+            original.getIntendedReceiveAt(),
+            original.getActualWeight(),
+            original.getCustomerNote(),
+            original.getDeliveryAddress(),
+            null,
+            items,
+            null,
+            null,
+            null));
+  }
+
   @Transactional(readOnly = true)
   public OrderResponse get(Long id) {
     return toResponse(find(id));
@@ -283,6 +343,30 @@ public class OrderService {
       return orderRepository.findByStatusOrderByCreatedAtDesc(status.toUpperCase()).stream().map(this::toResponse).toList();
     }
     return orderRepository.findAll().stream().map(this::toResponse).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> statistics() {
+    Map<String, Object> result = new HashMap<>();
+    List<LaundryOrder> orders = orderRepository.findAll();
+    result.put("totalOrders", orders.size());
+    result.put(
+        "byStatus",
+        orders.stream()
+            .collect(
+                java.util.stream.Collectors.groupingBy(
+                    LaundryOrder::getStatus, java.util.stream.Collectors.counting())));
+    return result;
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> revenue() {
+    BigDecimal total =
+        orderRepository.findAll().stream()
+            .filter(order -> "COMPLETED".equalsIgnoreCase(order.getStatus()))
+            .map(LaundryOrder::getTotalPrice)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    return Map.of("totalRevenue", total);
   }
 
   @Transactional
@@ -355,8 +439,106 @@ public class OrderService {
   }
 
   @Transactional(readOnly = true)
+  public List<Promotion> promotions() {
+    return promotionRepository.findAll();
+  }
+
+  @Transactional(readOnly = true)
+  public Promotion promotion(Long id) {
+    return promotionRepository.findById(id).orElseThrow(() -> new NotFoundException("Promotion", id));
+  }
+
+  @Transactional
+  public Promotion updatePromotion(Long id, PromotionRequest request) {
+    Promotion promotion = promotion(id);
+    promotion.setCode(request.code().toUpperCase());
+    promotion.setName(request.name());
+    promotion.setDiscountType(StringUtils.hasText(request.discountType()) ? request.discountType().toUpperCase() : promotion.getDiscountType());
+    promotion.setDiscountValue(request.discountValue() == null ? BigDecimal.ZERO : request.discountValue());
+    promotion.setMaxDiscountAmount(request.maxDiscountAmount());
+    promotion.setMinOrderAmount(request.minOrderAmount());
+    promotion.setStackable(Boolean.TRUE.equals(request.stackable()));
+    promotion.setStatus(StringUtils.hasText(request.status()) ? request.status().toUpperCase() : promotion.getStatus());
+    promotion.setStartAt(request.startAt());
+    promotion.setEndAt(request.endAt());
+    return promotionRepository.save(promotion);
+  }
+
+  @Transactional
+  public void deletePromotion(Long id) {
+    promotionRepository.delete(promotion(id));
+  }
+
+  @Transactional(readOnly = true)
+  public List<Promotion> promotionsByStatus(String status) {
+    return promotionRepository.findByStatus(status.toUpperCase());
+  }
+
+  @Transactional(readOnly = true)
+  public List<Promotion> searchPromotions(String keyword) {
+    String lower = keyword == null ? "" : keyword.toLowerCase();
+    return promotionRepository.findAll().stream()
+        .filter(p -> p.getCode().toLowerCase().contains(lower) || p.getName().toLowerCase().contains(lower))
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> validatePromotion(String code) {
+    Promotion promotion = promotionRepository.findByCodeIgnoreCase(code).orElse(null);
+    boolean valid = promotion != null && promotion.activeNow();
+    Map<String, Object> result = new HashMap<>();
+    result.put("code", code);
+    result.put("valid", valid);
+    result.put("promotion", promotion);
+    return result;
+  }
+
+  @Transactional(readOnly = true)
   public List<Promotion> activePromotions() {
     return promotionRepository.findByStatus("ACTIVE").stream().filter(Promotion::activeNow).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> storeRatings(Long storeId) {
+    return ratingRepository.findAll().stream()
+        .filter(rating -> find(rating.getOrderId()).getStoreId().equals(storeId))
+        .map(
+            rating -> {
+              Map<String, Object> result = new HashMap<>();
+              result.put("id", rating.getId());
+              result.put("orderId", rating.getOrderId());
+              result.put("userId", rating.getUserId());
+              result.put("rating", rating.getRating());
+              result.put("comment", rating.getComment());
+              result.put("createdAt", rating.getCreatedAt());
+              return result;
+            })
+        .toList();
+  }
+
+  @Transactional
+  public Map<String, Object> autoCancelUnconfirmedOrders() {
+    List<LaundryOrder> canceled =
+        orderRepository.findByStatusOrderByCreatedAtDesc("INITIALIZED").stream()
+            .filter(order -> order.getCreatedAt().isBefore(LocalDateTime.now().minusHours(24)))
+            .peek(order -> order.setStatus("CANCELED"))
+            .toList();
+    return Map.of("canceledOrders", canceled.size());
+  }
+
+  @Transactional
+  public Map<String, Object> releaseBoxesAfterCompletion() {
+    orderRepository.findByStatusOrderByCreatedAtDesc("COMPLETED").forEach(this::releaseBoxes);
+    return Map.of("status", "completed");
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> pickupReminders() {
+    long count =
+        orderRepository.findByStatusOrderByCreatedAtDesc("RETURNED").stream()
+            .filter(order -> order.getPickupDeadline() != null)
+            .count();
+    return Map.of("reminders", count);
   }
 
   private OrderResponse transition(

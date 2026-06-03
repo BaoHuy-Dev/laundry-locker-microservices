@@ -4,6 +4,7 @@ import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.iot.client.LockerClient;
 import com.huynqb.laundrylocker.iot.client.OrderClient;
+import com.huynqb.laundrylocker.iot.client.PartnerClient;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusResponse;
@@ -34,6 +35,7 @@ public class IotService {
   private final OrderClient orderClient;
   private final LockerClient lockerClient;
   private final LockerMqttService lockerMqttService;
+  private final PartnerClient partnerClient;
 
   @Transactional
   public DeviceStatusResponse updateStatus(DeviceStatusRequest request) {
@@ -77,6 +79,21 @@ public class IotService {
   public PickupResponse pickup(PickupRequest request, Long userId) {
     OrderLookupResponse response = orderClient.complete(request.orderId(), userId).data();
     return new PickupResponse(response.id(), response.status(), response.completedAt(), "Pickup confirmed");
+  }
+
+  public Map<String, Object> unlockWithCode(Map<String, Object> request) {
+    String code = String.valueOf(request.get("code"));
+    Long boxId = Long.valueOf(String.valueOf(request.get("boxId")));
+    Map<String, Object> accessCode = partnerClient.verifyCode(code).data();
+    lockerClient.openBox(boxId);
+    Long lockerId = request.get("lockerId") == null ? null : Long.valueOf(String.valueOf(request.get("lockerId")));
+    if (lockerId != null) {
+      lockerMqttService.sendUnlockCommand(lockerId, boxId);
+    }
+    java.util.HashMap<String, Object> response = new java.util.HashMap<>(accessCode);
+    response.put("accepted", true);
+    response.put("boxId", boxId);
+    return response;
   }
 
   @Transactional

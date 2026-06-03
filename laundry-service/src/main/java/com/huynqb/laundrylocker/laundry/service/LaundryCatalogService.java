@@ -1,6 +1,7 @@
 package com.huynqb.laundrylocker.laundry.service;
 
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.laundry.client.LockerClient;
 import com.huynqb.laundrylocker.laundry.dto.LaundryCatalogRequest;
 import com.huynqb.laundrylocker.laundry.dto.LaundryCatalogResponse;
 import com.huynqb.laundrylocker.laundry.model.LaundryCatalogItem;
@@ -17,6 +18,7 @@ import org.springframework.util.StringUtils;
 public class LaundryCatalogService {
 
   private final LaundryCatalogRepository repository;
+  private final LockerClient lockerClient;
 
   @Transactional
   public LaundryCatalogResponse create(LaundryCatalogRequest request) {
@@ -47,10 +49,43 @@ public class LaundryCatalogService {
     return list(storeId);
   }
 
+  @Transactional(readOnly = true)
+  public List<LaundryCatalogResponse> listByLocker(Long lockerId, String category) {
+    Long storeId = lockerClient.getLocker(lockerId).data().storeId();
+    return list(storeId, category);
+  }
+
   @Transactional
   public LaundryCatalogResponse update(Long id, LaundryCatalogRequest request) {
     LaundryCatalogItem item = find(id);
     apply(item, request);
+    return toResponse(repository.save(item));
+  }
+
+  @Transactional
+  public void delete(Long id) {
+    repository.delete(find(id));
+  }
+
+  @Transactional
+  public LaundryCatalogResponse updatePrice(Long id, BigDecimal unitPrice, BigDecimal maxPrice) {
+    LaundryCatalogItem item = find(id);
+    item.setUnitPrice(unitPrice == null ? BigDecimal.ZERO : unitPrice);
+    item.setMaxPrice(maxPrice);
+    return toResponse(repository.save(item));
+  }
+
+  @Transactional
+  public LaundryCatalogResponse updateStatus(Long id, String status) {
+    LaundryCatalogItem item = find(id);
+    item.setStatus(status);
+    return toResponse(repository.save(item));
+  }
+
+  @Transactional
+  public LaundryCatalogResponse updateImage(Long id, String imageUrl) {
+    LaundryCatalogItem item = find(id);
+    item.setImage(imageUrl);
     return toResponse(repository.save(item));
   }
 

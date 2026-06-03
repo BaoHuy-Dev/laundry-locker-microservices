@@ -34,6 +34,11 @@ public class IotController {
     return ApiResponse.ok("IOT_UNLOCK_ACCEPTED", "Unlock command accepted", iotService.unlock(request));
   }
 
+  @PostMapping("/api/iot/unlock-with-code")
+  public ApiResponse<Map<String, Object>> unlockWithCode(@RequestBody Map<String, Object> request) {
+    return ApiResponse.ok("IOT_UNLOCK_ACCEPTED", "Unlock command accepted", iotService.unlockWithCode(request));
+  }
+
   @PostMapping("/api/iot/verify-pin")
   public ApiResponse<VerifyPinResponse> verifyPin(@Valid @RequestBody VerifyPinRequest request) {
     return ApiResponse.ok(iotService.verifyPin(request));

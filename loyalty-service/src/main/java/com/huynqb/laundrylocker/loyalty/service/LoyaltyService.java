@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -81,6 +83,46 @@ public class LoyaltyService {
   @Transactional(readOnly = true)
   public java.util.List<PointTransactionResponse> history(Long userId) {
     return transactionRepository.findByUserIdOrderByCreatedAtDesc(userId).stream().map(this::toTransaction).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> stampCards(Long userId) {
+    LoyaltyAccount account = accountRepository.findByUserId(userId).orElseGet(() -> {
+      LoyaltyAccount created = new LoyaltyAccount();
+      created.setUserId(userId);
+      return created;
+    });
+    return List.of(Map.of("userId", userId, "stamps", account.getStamps(), "rewardAvailable", account.getStamps() >= 10));
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> stampCard(Long userId, Long stampCardId) {
+    return Map.of("id", stampCardId, "userId", userId, "stamps", getByUser(userId).stamps());
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> rewards() {
+    return List.of(
+        Map.of("id", 1L, "name", "Free basic wash", "requiredPoints", 1000),
+        Map.of("id", 2L, "name", "Ten-stamp reward", "requiredStamps", 10));
+  }
+
+  @Transactional
+  public LoyaltyAccountResponse redeemReward(Long userId, Long rewardId) {
+    if (rewardId == 2L) {
+      return redeemStamp(new RedeemStampRequest(userId, 10, "Ten-stamp reward"));
+    }
+    return redeemPoints(new RedeemPointsRequest(userId, 1000, "Reward redemption"));
+  }
+
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> expiringPoints(Long userId) {
+    return List.of();
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> statistics() {
+    return Map.of("accounts", accountRepository.count(), "transactions", transactionRepository.count());
   }
 
   private String resolveTier(int points) {

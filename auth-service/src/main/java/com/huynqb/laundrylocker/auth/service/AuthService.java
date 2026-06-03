@@ -20,7 +20,11 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,11 +35,14 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AuthService {
 
+  private static final Map<String, TempToken> TEMP_TOKENS = new ConcurrentHashMap<>();
+
   private final AuthAccountRepository authAccountRepository;
   private final RefreshTokenRepository refreshTokenRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final UserClient userClient;
+  private final EmailOtpService emailOtpService;
 
   @Transactional
   public AuthResponse register(RegisterRequest request) {
@@ -66,10 +73,7 @@ public class AuthService {
   @Transactional
   public AuthResponse login(LoginRequest request) {
     AuthAccount account =
-        authAccountRepository
-            .findByEmail(request.identifier())
-            .or(() -> authAccountRepository.findByPhoneNumber(request.identifier()))
-            .orElseThrow(() -> new BusinessException("AUTH_INVALID", "Invalid credentials"));
+        findByIdentifier(request.identifier());
     if (!"ACTIVE".equalsIgnoreCase(account.getStatus())
         || !passwordEncoder.matches(request.password(), account.getPasswordHash())) {
       throw new BusinessException("AUTH_INVALID", "Invalid credentials");
@@ -111,8 +115,210 @@ public class AuthService {
     return new AuthResponse(account.getId(), account.getUserId(), null, null, "Bearer", null, user.roles());
   }
 
+  @Transactional
+  public Map<String, Object> phoneLogin(Map<String, Object> request) {
+    String phoneNumber = firstText(request, "phoneNumber", "phone", "idToken");
+    if (!StringUtils.hasText(phoneNumber)) {
+      throw new BusinessException("AUTH_PHONE_REQUIRED", "phoneNumber or idToken is required");
+    }
+    return authAccountRepository
+        .findByPhoneNumber(phoneNumber)
+        .map(
+            account -> {
+              account.setPhoneVerified(true);
+              account.setLastLoginAt(LocalDateTime.now());
+              UserSummary user = userClient.getUser(account.getUserId()).data();
+              return authMap(issue(account, user.roles()), false, phoneNumber, null);
+            })
+        .orElseGet(
+            () -> {
+              String tempToken = createTempToken(phoneNumber, "PHONE_REGISTRATION", null);
+              Map<String, Object> response = new HashMap<>();
+              response.put("isNewUser", true);
+              response.put("phoneNumber", phoneNumber);
+              response.put("tempToken", tempToken);
+              response.put("expiresIn", 600L);
+              return response;
+            });
+  }
+
+  @Transactional
+  public AuthResponse completeRegistration(Map<String, Object> request) {
+    String tempToken = text(request, "tempToken");
+    String phoneNumber =
+        StringUtils.hasText(tempToken)
+            ? consumeTempToken(tempToken, "PHONE_REGISTRATION").identifier()
+            : firstText(request, "phoneNumber", "idToken");
+    return register(
+        new RegisterRequest(
+            null,
+            text(request, "email"),
+            phoneNumber,
+            textOrDefault(request, "firstName", "Customer"),
+            textOrDefault(request, "lastName", ""),
+            Set.of("USER"),
+            textOrDefault(request, "password", UUID.randomUUID().toString())));
+  }
+
+  @Transactional
+  public AuthResponse kioskQuickRegister(Map<String, Object> request) {
+    TempToken token = consumeTempToken(text(request, "tempToken"), null);
+    boolean email = token.identifier().contains("@");
+    return register(
+        new RegisterRequest(
+            null,
+            email ? token.identifier() : null,
+            email ? null : token.identifier(),
+            textOrDefault(request, "firstName", "Khach"),
+            textOrDefault(request, "lastName", ""),
+            Set.of("USER"),
+            textOrDefault(request, "password", UUID.randomUUID().toString())));
+  }
+
+  @Transactional
+  public boolean sendEmailOtp(Map<String, Object> request) {
+    return emailOtpService.sendOtp(text(request, "email"), "EMAIL_LOGIN");
+  }
+
+  @Transactional
+  public Map<String, Object> verifyEmailOtp(Map<String, Object> request) {
+    String email = normalizeEmail(text(request, "email"));
+    if (!emailOtpService.verifyOtp(email, "EMAIL_LOGIN", text(request, "otp"))) {
+      throw new BusinessException("AUTH_OTP_INVALID", "OTP is invalid or expired");
+    }
+    return authAccountRepository
+        .findByEmail(email)
+        .map(
+            account -> {
+              account.setEmailVerified(true);
+              account.setLastLoginAt(LocalDateTime.now());
+              UserSummary user = userClient.getUser(account.getUserId()).data();
+              return authMap(issue(account, user.roles()), false, null, null);
+            })
+        .orElseGet(
+            () -> {
+              String tempToken = createTempToken(email, "EMAIL_REGISTRATION", null);
+              Map<String, Object> response = new HashMap<>();
+              response.put("isNewUser", true);
+              response.put("tempToken", tempToken);
+              response.put("expiresIn", 600L);
+              return response;
+            });
+  }
+
+  @Transactional
+  public AuthResponse emailCompleteRegistration(Map<String, Object> request) {
+    String email = consumeTempToken(text(request, "tempToken"), "EMAIL_REGISTRATION").identifier();
+    return register(
+        new RegisterRequest(
+            null,
+            email,
+            text(request, "phoneNumber"),
+            textOrDefault(request, "firstName", "Customer"),
+            textOrDefault(request, "lastName", ""),
+            Set.of("USER"),
+            textOrDefault(request, "password", UUID.randomUUID().toString())));
+  }
+
+  @Transactional
+  public void sendPasswordResetOtp(Map<String, Object> request) {
+    String email = normalizeEmail(text(request, "email"));
+    authAccountRepository
+        .findByEmail(email)
+        .orElseThrow(() -> new BusinessException("AUTH_USER_NOT_FOUND", "User not found"));
+    emailOtpService.sendOtp(email, "PASSWORD_RESET");
+  }
+
+  @Transactional
+  public void resetPassword(Map<String, Object> request) {
+    String email = normalizeEmail(text(request, "email"));
+    String password = text(request, "newPassword");
+    if (!password.equals(text(request, "confirmPassword"))) {
+      throw new BusinessException("AUTH_PASSWORD_MISMATCH", "Passwords do not match");
+    }
+    if (!emailOtpService.verifyOtp(email, "PASSWORD_RESET", text(request, "otp"))) {
+      throw new BusinessException("AUTH_OTP_INVALID", "OTP is invalid or expired");
+    }
+    AuthAccount account =
+        authAccountRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new BusinessException("AUTH_USER_NOT_FOUND", "User not found"));
+    account.setPasswordHash(passwordEncoder.encode(password));
+    refreshTokenRepository.findAll().stream()
+        .filter(token -> token.getAccountId().equals(account.getId()))
+        .forEach(token -> token.setRevoked(true));
+  }
+
+  @Transactional
+  public void changePassword(Long userId, Map<String, Object> request) {
+    AuthAccount account =
+        authAccountRepository
+            .findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("AUTH_USER_NOT_FOUND", "User not found"));
+    String oldPassword = firstText(request, "oldPassword", "currentPassword");
+    if (StringUtils.hasText(oldPassword) && !passwordEncoder.matches(oldPassword, account.getPasswordHash())) {
+      throw new BusinessException("AUTH_INVALID_PASSWORD", "Current password is invalid");
+    }
+    String newPassword = firstText(request, "newPassword", "password");
+    account.setPasswordHash(passwordEncoder.encode(newPassword));
+    refreshTokenRepository.findAll().stream()
+        .filter(token -> token.getAccountId().equals(account.getId()))
+        .forEach(token -> token.setRevoked(true));
+  }
+
+  @Transactional
+  public Map<String, Object> adminLogin(Map<String, Object> request) {
+    AuthAccount account = findByIdentifier(text(request, "email"));
+    if (!passwordEncoder.matches(text(request, "password"), account.getPasswordHash())) {
+      throw new BusinessException("AUTH_INVALID", "Invalid credentials");
+    }
+    UserSummary user = userClient.getUser(account.getUserId()).data();
+    if (!user.roles().contains("ADMIN")) {
+      throw new BusinessException("ADMIN_AUTH_NOT_ADMIN", "User is not an admin");
+    }
+    emailOtpService.sendOtp(account.getEmail(), "ADMIN_2FA");
+    String tempToken = createTempToken(account.getEmail(), "ADMIN_2FA", account.getId());
+    Map<String, Object> response = new HashMap<>();
+    response.put("requiresTwoFactor", true);
+    response.put("tempToken", tempToken);
+    response.put("expiresIn", 600L);
+    response.put("maskedEmail", maskEmail(account.getEmail()));
+    response.put("message", "OTP has been sent to your email");
+    return response;
+  }
+
+  @Transactional
+  public Map<String, Object> verifyAdmin2fa(Map<String, Object> request) {
+    TempToken token = consumeTempToken(text(request, "tempToken"), "ADMIN_2FA");
+    AuthAccount account = findAccount(token.accountId());
+    if (!emailOtpService.verifyOtp(account.getEmail(), "ADMIN_2FA", firstText(request, "otpCode", "otp"))) {
+      throw new BusinessException("ADMIN_AUTH_OTP_INVALID", "OTP is invalid or expired");
+    }
+    UserSummary user = userClient.getUser(account.getUserId()).data();
+    if (!user.roles().contains("ADMIN")) {
+      throw new BusinessException("ADMIN_AUTH_NOT_ADMIN", "User is not an admin");
+    }
+    return authMap(issue(account, user.roles()), false, null, user.fullName());
+  }
+
+  @Transactional
+  public AuthResponse adminRefresh(RefreshTokenRequest request) {
+    AuthResponse response = refresh(request);
+    if (!response.roles().contains("ADMIN")) {
+      throw new BusinessException("ADMIN_AUTH_NOT_ADMIN", "User is not an admin");
+    }
+    return response;
+  }
+
   private AuthAccount findAccount(Long id) {
     return authAccountRepository.findById(id).orElseThrow(() -> new NotFoundException("AuthAccount", id));
+  }
+
+  private AuthAccount findByIdentifier(String identifier) {
+    return authAccountRepository
+        .findByEmail(identifier)
+        .or(() -> authAccountRepository.findByPhoneNumber(identifier))
+        .orElseThrow(() -> new BusinessException("AUTH_INVALID", "Invalid credentials"));
   }
 
   private AuthResponse issue(AuthAccount account, Set<String> roles) {
@@ -137,6 +343,75 @@ public class AuthService {
     return roles == null || roles.isEmpty() ? Set.of("USER") : roles;
   }
 
+  private Map<String, Object> authMap(
+      AuthResponse auth, boolean newUser, String phoneNumber, String displayName) {
+    Map<String, Object> response = new HashMap<>();
+    response.put("accountId", auth.accountId());
+    response.put("userId", auth.userId());
+    response.put("accessToken", auth.accessToken());
+    response.put("refreshToken", auth.refreshToken());
+    response.put("tokenType", auth.tokenType());
+    response.put("expiresAt", auth.expiresAt());
+    response.put("roles", auth.roles());
+    response.put("isNewUser", newUser);
+    if (StringUtils.hasText(phoneNumber)) {
+      response.put("phoneNumber", phoneNumber);
+    }
+    if (StringUtils.hasText(displayName)) {
+      response.put("name", displayName);
+    }
+    return response;
+  }
+
+  private String createTempToken(String identifier, String purpose, Long accountId) {
+    String token = purpose.toLowerCase() + "_" + UUID.randomUUID();
+    TEMP_TOKENS.put(token, new TempToken(identifier, purpose, accountId, Instant.now().plusSeconds(600)));
+    return token;
+  }
+
+  private TempToken consumeTempToken(String token, String expectedPurpose) {
+    TempToken temp = TEMP_TOKENS.remove(token);
+    if (temp == null || temp.expiresAt().isBefore(Instant.now())) {
+      throw new BusinessException("AUTH_TEMP_TOKEN_INVALID", "Temporary token is invalid or expired");
+    }
+    if (StringUtils.hasText(expectedPurpose) && !expectedPurpose.equals(temp.purpose())) {
+      throw new BusinessException("AUTH_TEMP_TOKEN_INVALID", "Temporary token purpose is invalid");
+    }
+    return temp;
+  }
+
+  private String text(Map<String, Object> request, String key) {
+    Object value = request == null ? null : request.get(key);
+    return value == null ? "" : String.valueOf(value).trim();
+  }
+
+  private String firstText(Map<String, Object> request, String... keys) {
+    for (String key : keys) {
+      String value = text(request, key);
+      if (StringUtils.hasText(value)) {
+        return value;
+      }
+    }
+    return "";
+  }
+
+  private String textOrDefault(Map<String, Object> request, String key, String defaultValue) {
+    String value = text(request, key);
+    return StringUtils.hasText(value) ? value : defaultValue;
+  }
+
+  private String normalizeEmail(String email) {
+    return email == null ? "" : email.trim().toLowerCase();
+  }
+
+  private String maskEmail(String email) {
+    if (!StringUtils.hasText(email) || !email.contains("@")) {
+      return "***";
+    }
+    int at = email.indexOf('@');
+    return (at <= 2 ? "***" : email.substring(0, 2) + "***") + email.substring(at);
+  }
+
   private String hash(String value) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -145,4 +420,6 @@ public class AuthService {
       throw new IllegalStateException("Could not hash token", ex);
     }
   }
+
+  private record TempToken(String identifier, String purpose, Long accountId, Instant expiresAt) {}
 }

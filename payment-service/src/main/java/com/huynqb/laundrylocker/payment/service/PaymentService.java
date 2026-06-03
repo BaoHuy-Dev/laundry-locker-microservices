@@ -148,6 +148,14 @@ public class PaymentService {
     return refundRepository.findByOrderId(orderId).stream().map(this::toRefund).toList();
   }
 
+  @Transactional(readOnly = true)
+  public RefundResponse getRefund(Long refundId) {
+    return refundRepository
+        .findById(refundId)
+        .map(this::toRefund)
+        .orElseThrow(() -> new NotFoundException("Refund", refundId));
+  }
+
   private PaymentRecord find(Long id) {
     return repository.findById(id).orElseThrow(() -> new NotFoundException("Payment", id));
   }

@@ -7,12 +7,14 @@ import com.huynqb.laundrylocker.notification.dto.NotificationResponse;
 import com.huynqb.laundrylocker.notification.service.NotificationService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -46,7 +48,14 @@ public class NotificationController {
   }
 
   @DeleteMapping("/internal/fcm-tokens")
-  public ApiResponse<Void> deleteFcmToken(@RequestParam Long userId, @RequestParam String token) {
+  public ApiResponse<Void> deleteFcmToken(
+      @RequestParam(required = false) Long userId,
+      @RequestParam(required = false) String token,
+      @RequestBody(required = false) Map<String, Object> body) {
+    if (body != null) {
+      userId = body.get("userId") == null ? userId : Long.valueOf(String.valueOf(body.get("userId")));
+      token = body.get("token") == null ? token : String.valueOf(body.get("token"));
+    }
     notificationService.deleteFcmToken(userId, token);
     return ApiResponse.ok("FCM_TOKEN_DELETED", "FCM token deleted");
   }
@@ -81,9 +90,24 @@ public class NotificationController {
     return ApiResponse.ok(notificationService.markRead(id));
   }
 
+  @PutMapping("/api/notifications/{id}/read")
+  public ApiResponse<NotificationResponse> markReadLegacy(@PathVariable Long id) {
+    return markRead(id);
+  }
+
   @PatchMapping("/api/notifications/read-all")
   public ApiResponse<Integer> markAllRead(@RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok(notificationService.markAllRead(userId));
+  }
+
+  @PutMapping("/api/notifications/read-all")
+  public ApiResponse<Integer> markAllReadLegacy(@RequestHeader("X-User-Id") Long userId) {
+    return markAllRead(userId);
+  }
+
+  @PutMapping("/api/notifications/read-batch")
+  public ApiResponse<List<NotificationResponse>> markBatchRead(@RequestBody Map<String, List<Long>> request) {
+    return ApiResponse.ok(notificationService.markBatchRead(request.getOrDefault("ids", List.of())));
   }
 
   @DeleteMapping("/api/notifications/{id}")
@@ -99,8 +123,8 @@ public class NotificationController {
   }
 
   @GetMapping("/api/admin/notifications")
-  public ApiResponse<List<NotificationResponse>> adminByUser(@RequestParam Long userId) {
-    return ApiResponse.ok(notificationService.getByUser(userId));
+  public ApiResponse<List<NotificationResponse>> adminByUser(@RequestParam(required = false) Long userId) {
+    return ApiResponse.ok(userId == null ? notificationService.all() : notificationService.getByUser(userId));
   }
 
   @PostMapping("/api/admin/notifications/send")

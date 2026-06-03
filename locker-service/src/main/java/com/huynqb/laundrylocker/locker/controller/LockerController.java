@@ -10,7 +10,9 @@ import com.huynqb.laundrylocker.locker.dto.LockerResponse;
 import com.huynqb.laundrylocker.locker.service.LockerService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -87,12 +89,59 @@ public class LockerController {
   }
 
   @GetMapping("/api/admin/lockers/reports")
-  public ApiResponse<List<LockerReportResponse>> adminReports(@RequestParam Long userId) {
-    return ApiResponse.ok(lockerService.myReports(userId));
+  public ApiResponse<List<LockerReportResponse>> adminReports(@RequestParam(required = false) Long userId) {
+    return ApiResponse.ok(userId == null ? lockerService.allReports() : lockerService.myReports(userId));
   }
 
   @PutMapping("/api/admin/lockers/reports/{id}/resolve")
   public ApiResponse<LockerReportResponse> resolve(@PathVariable Long id, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("LOCKER_REPORT_RESOLVED", "Locker report resolved", lockerService.resolveReport(id, userId));
+  }
+
+  @GetMapping("/api/admin/lockers")
+  public ApiResponse<List<LockerResponse>> adminList(@RequestParam(required = false) Long storeId) {
+    return listLockers(storeId);
+  }
+
+  @PostMapping("/api/admin/lockers")
+  public ApiResponse<LockerResponse> adminCreate(@Valid @RequestBody LockerRequest request) {
+    return createLocker(request);
+  }
+
+  @GetMapping("/api/admin/lockers/{id}")
+  public ApiResponse<LockerResponse> adminGet(@PathVariable Long id) {
+    return getLocker(id);
+  }
+
+  @GetMapping("/api/admin/lockers/store/{storeId}")
+  public ApiResponse<List<LockerResponse>> adminByStore(@PathVariable Long storeId) {
+    return listLockers(storeId);
+  }
+
+  @PutMapping("/api/admin/lockers/{id}")
+  public ApiResponse<LockerResponse> adminUpdate(@PathVariable Long id, @Valid @RequestBody LockerRequest request) {
+    return ApiResponse.ok("LOCKER_UPDATED", "Locker updated", lockerService.updateLocker(id, request));
+  }
+
+  @DeleteMapping("/api/admin/lockers/{id}")
+  public ApiResponse<Void> adminDelete(@PathVariable Long id) {
+    lockerService.deleteLocker(id);
+    return ApiResponse.ok("LOCKER_DELETED", "Locker deleted");
+  }
+
+  @PutMapping("/api/admin/lockers/{id}/maintenance")
+  public ApiResponse<LockerResponse> maintenance(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+    boolean maintenance = Boolean.parseBoolean(String.valueOf(request.getOrDefault("maintenance", "true")));
+    return ApiResponse.ok("LOCKER_MAINTENANCE_UPDATED", "Locker maintenance updated", lockerService.setMaintenance(id, maintenance));
+  }
+
+  @PostMapping("/api/admin/lockers/{id}/boxes")
+  public ApiResponse<LockerBoxSummary> adminAddBox(@PathVariable Long id, @Valid @RequestBody BoxRequest request) {
+    return createBox(new BoxRequest(id, request.boxNumber(), request.size(), request.status()));
+  }
+
+  @PutMapping("/api/admin/lockers/boxes/{boxId}/status")
+  public ApiResponse<LockerBoxSummary> adminBoxStatus(@PathVariable Long boxId, @RequestBody Map<String, Object> request) {
+    return ApiResponse.ok("BOX_STATUS_UPDATED", "Box status updated", lockerService.updateBoxStatus(boxId, String.valueOf(request.get("status"))));
   }
 }

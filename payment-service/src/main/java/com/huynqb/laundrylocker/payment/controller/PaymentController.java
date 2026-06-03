@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,6 +32,11 @@ public class PaymentController {
     return ApiResponse.ok("PAYMENT_CREATED", "Payment created", paymentService.create(request));
   }
 
+  @PostMapping("/api/payments/create")
+  public ApiResponse<PaymentResponse> createLegacy(@Valid @RequestBody CreatePaymentRequest request) {
+    return create(request);
+  }
+
   @PatchMapping("/api/payments/{id}/status")
   public ApiResponse<PaymentResponse> updateStatus(
       @PathVariable Long id, @Valid @RequestBody UpdatePaymentStatusRequest request) {
@@ -44,6 +50,11 @@ public class PaymentController {
 
   @GetMapping("/api/payments")
   public ApiResponse<List<PaymentResponse>> listByOrder(@RequestParam Long orderId) {
+    return ApiResponse.ok(paymentService.listByOrder(orderId));
+  }
+
+  @GetMapping("/api/payments/order/{orderId}")
+  public ApiResponse<List<PaymentResponse>> listByOrderLegacy(@PathVariable Long orderId) {
     return ApiResponse.ok(paymentService.listByOrder(orderId));
   }
 
@@ -81,6 +92,11 @@ public class PaymentController {
     return ApiResponse.ok(paymentService.refundsByOrder(orderId));
   }
 
+  @GetMapping("/api/payments/refund/{refundId}")
+  public ApiResponse<RefundResponse> refundStatus(@PathVariable Long refundId) {
+    return ApiResponse.ok(paymentService.getRefund(refundId));
+  }
+
   @GetMapping("/api/admin/payments")
   public ApiResponse<List<PaymentResponse>> adminList() {
     return ApiResponse.ok(paymentService.listAll());
@@ -90,6 +106,17 @@ public class PaymentController {
   public ApiResponse<PaymentResponse> adminStatus(
       @PathVariable Long id, @Valid @RequestBody UpdatePaymentStatusRequest request) {
     return updateStatus(id, request);
+  }
+
+  @GetMapping("/api/admin/payments/{paymentId}")
+  public ApiResponse<PaymentResponse> adminGet(@PathVariable Long paymentId) {
+    return get(paymentId);
+  }
+
+  @PutMapping("/api/admin/payments/{paymentId}/status")
+  public ApiResponse<PaymentResponse> adminStatusLegacy(
+      @PathVariable Long paymentId, @Valid @RequestBody UpdatePaymentStatusRequest request) {
+    return updateStatus(paymentId, request);
   }
 
   @GetMapping("/internal/payments/{id}")

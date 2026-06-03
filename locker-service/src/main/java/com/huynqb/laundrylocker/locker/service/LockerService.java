@@ -59,6 +59,41 @@ public class LockerService {
   }
 
   @Transactional
+  public LockerResponse updateLocker(Long id, LockerRequest request) {
+    LockerUnit locker =
+        lockerRepository.findById(id).orElseThrow(() -> new NotFoundException("Locker", id));
+    locker.setStoreId(request.storeId());
+    locker.setCode(request.code());
+    locker.setName(request.name());
+    locker.setStatus(StringUtils.hasText(request.status()) ? request.status() : locker.getStatus());
+    locker.setAddress(request.address());
+    locker.setLatitude(request.latitude());
+    locker.setLongitude(request.longitude());
+    return toResponse(lockerRepository.save(locker));
+  }
+
+  @Transactional
+  public void deleteLocker(Long id) {
+    lockerRepository.delete(
+        lockerRepository.findById(id).orElseThrow(() -> new NotFoundException("Locker", id)));
+  }
+
+  @Transactional
+  public LockerResponse setMaintenance(Long id, boolean maintenance) {
+    LockerUnit locker =
+        lockerRepository.findById(id).orElseThrow(() -> new NotFoundException("Locker", id));
+    locker.setStatus(maintenance ? "MAINTENANCE" : "ACTIVE");
+    return toResponse(lockerRepository.save(locker));
+  }
+
+  @Transactional
+  public LockerBoxSummary updateBoxStatus(Long boxId, String status) {
+    LockerBox box = findBox(boxId);
+    box.setStatus(status);
+    return toSummary(boxRepository.save(box));
+  }
+
+  @Transactional
   public LockerBoxSummary openBox(Long boxId) {
     LockerBox box = findBox(boxId);
     publishBoxOpened(box);
@@ -134,6 +169,11 @@ public class LockerService {
   @Transactional(readOnly = true)
   public List<LockerReportResponse> myReports(Long userId) {
     return reportRepository.findByUserIdOrderByCreatedAtDesc(userId).stream().map(this::toReport).toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<LockerReportResponse> allReports() {
+    return reportRepository.findAll().stream().map(this::toReport).toList();
   }
 
   private LockerBox findBox(Long id) {

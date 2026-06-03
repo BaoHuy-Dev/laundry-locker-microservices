@@ -16,31 +16,35 @@ spring:
             - id: auth-service
               uri: lb://auth-service
               predicates:
-                - Path=/api/auth/**,/internal/auth/**
+                - Path=/api/auth/**,/api/admin/auth/**,/internal/auth/**
             - id: user-service
               uri: lb://user-service
               predicates:
-                - Path=/api/user/**,/api/users/**,/api/admin/users/**,/internal/users/**
+                - Path=/api/user/**,/api/users/**,/api/admin/users,/api/admin/users/**,/api/admin/audit-logs,/api/admin/audit-logs/**,/internal/users/**
             - id: order-service
               uri: lb://order-service
               predicates:
-                - Path=/api/orders/**,/api/admin/orders/**,/internal/orders/**
+                - Path=/api/orders/**,/api/admin/orders,/api/admin/orders/**,/api/admin/scheduler,/api/admin/scheduler/**,/internal/orders/**
             - id: locker-service
               uri: lb://locker-service
               predicates:
-                - Path=/api/lockers/**,/api/boxes/**,/api/admin/lockers/**,/internal/lockers/**,/internal/boxes/**
+                - Path=/api/lockers/**,/api/boxes/**,/api/admin/lockers,/api/admin/lockers/**,/internal/lockers/**,/internal/boxes/**
             - id: laundry-service
               uri: lb://laundry-service
               predicates:
-                - Path=/api/services/**,/api/laundry-services/**,/api/admin/services/**,/internal/laundry-services/**
+                - Path=/api/services/**,/api/laundry-services/**,/api/admin/services,/api/admin/services/**,/internal/laundry-services/**
             - id: payment-service
               uri: lb://payment-service
               predicates:
-                - Path=/api/payments/**,/api/admin/payments/**,/internal/payments/**
+                - Path=/api/payments/**,/api/admin/payments,/api/admin/payments/**,/internal/payments/**
             - id: notification-service
               uri: lb://notification-service
               predicates:
-                - Path=/api/notifications/**,/api/admin/notifications/**,/internal/notifications/**,/internal/fcm-tokens/**
+                - Path=/api/notifications/**,/api/admin/notifications,/api/admin/notifications/**,/internal/notifications/**,/internal/fcm-tokens/**
+            - id: notification-websocket
+              uri: lb:ws://notification-service
+              predicates:
+                - Path=/ws,/ws/**
             - id: iot-service
               uri: lb://iot-service
               predicates:
@@ -48,7 +52,7 @@ spring:
             - id: store-service
               uri: lb://store-service
               predicates:
-                - Path=/api/stores/**,/api/admin/stores/**,/internal/stores/**
+                - Path=/api/stores/**,/api/admin/stores,/api/admin/stores/**,/internal/stores/**
             - id: staff-service
               uri: lb://staff-service
               predicates:
@@ -56,15 +60,15 @@ spring:
             - id: partner-service
               uri: lb://partner-service
               predicates:
-                - Path=/api/partner/**,/api/partners/**,/api/admin/partners/**,/internal/partners/**
+                - Path=/api/partner/**,/api/partners/**,/api/admin/partners,/api/admin/partners/**,/internal/partners/**
             - id: loyalty-service
               uri: lb://loyalty-service
               predicates:
-                - Path=/api/loyalty/**,/api/admin/loyalty/**,/internal/loyalty/**
+                - Path=/api/loyalty/**,/api/admin/loyalty,/api/admin/loyalty/**,/internal/loyalty/**
             - id: promotions
               uri: lb://order-service
               predicates:
-                - Path=/api/promotions/**,/api/admin/promotions/**
+                - Path=/api/promotions/**,/api/admin/promotions,/api/admin/promotions/**
             - id: admin-dashboard
               uri: lb://order-service
               predicates:
