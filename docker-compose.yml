@@ -89,6 +89,7 @@ services:
       SPRING_MAIL_PORT: 1025
       SPRING_MAIL_USERNAME: noreply@laundry.test
       SPRING_MAIL_PASSWORD: ""
+      MANAGEMENT_HEALTH_MAIL_ENABLED: false
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
