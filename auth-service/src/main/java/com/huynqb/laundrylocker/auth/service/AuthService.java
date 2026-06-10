@@ -156,7 +156,7 @@ public class AuthService {
             phoneNumber,
             textOrDefault(request, "firstName", "Customer"),
             textOrDefault(request, "lastName", ""),
-            Set.of("USER"),
+            Set.of("CUSTOMER"),
             textOrDefault(request, "password", UUID.randomUUID().toString())));
   }
 
@@ -171,7 +171,7 @@ public class AuthService {
             email ? null : token.identifier(),
             textOrDefault(request, "firstName", "Khach"),
             textOrDefault(request, "lastName", ""),
-            Set.of("USER"),
+            Set.of("CUSTOMER"),
             textOrDefault(request, "password", UUID.randomUUID().toString())));
   }
 
@@ -216,7 +216,7 @@ public class AuthService {
             text(request, "phoneNumber"),
             textOrDefault(request, "firstName", "Customer"),
             textOrDefault(request, "lastName", ""),
-            Set.of("USER"),
+            Set.of("CUSTOMER"),
             textOrDefault(request, "password", UUID.randomUUID().toString())));
   }
 
@@ -340,7 +340,7 @@ public class AuthService {
   }
 
   private Set<String> defaultRoles(Set<String> roles) {
-    return roles == null || roles.isEmpty() ? Set.of("USER") : roles;
+    return roles == null || roles.isEmpty() ? Set.of("CUSTOMER") : roles;
   }
 
   private Map<String, Object> authMap(

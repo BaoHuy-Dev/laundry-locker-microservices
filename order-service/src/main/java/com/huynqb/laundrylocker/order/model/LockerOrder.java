@@ -17,7 +17,7 @@ import lombok.Setter;
 @Table(name = "orders")
 @Getter
 @Setter
-public class LaundryOrder {
+public class LockerOrder {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -54,10 +54,10 @@ public class LaundryOrder {
   private Long staffId;
 
   @Column(nullable = false, length = 30)
-  private String type = "LAUNDRY";
+  private String type = "STORAGE";
 
   @Column(name = "service_category", length = 30)
-  private String serviceCategory = "LAUNDRY";
+  private String serviceCategory = "STORAGE";
 
   @Column(nullable = false, length = 30)
   private String status = "INITIALIZED";

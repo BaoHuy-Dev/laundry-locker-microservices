@@ -44,7 +44,7 @@ public class UserProfile {
   private String status = "ACTIVE";
 
   @Column(name = "roles", nullable = false, length = 500)
-  private String roles = "USER";
+  private String roles = "CUSTOMER";
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;

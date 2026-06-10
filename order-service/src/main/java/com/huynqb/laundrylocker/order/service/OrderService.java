@@ -6,7 +6,6 @@ import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
-import com.huynqb.laundrylocker.order.client.LaundryClient;
 import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.client.UserClient;
@@ -23,13 +22,13 @@ import com.huynqb.laundrylocker.order.dto.OrderTimelineEvent;
 import com.huynqb.laundrylocker.order.dto.PromotionRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
-import com.huynqb.laundrylocker.order.model.LaundryOrder;
+import com.huynqb.laundrylocker.order.model.LockerOrder;
 import com.huynqb.laundrylocker.order.model.OrderComplaint;
 import com.huynqb.laundrylocker.order.model.OrderDetail;
 import com.huynqb.laundrylocker.order.model.OrderRating;
 import com.huynqb.laundrylocker.order.model.OrderStatusHistory;
 import com.huynqb.laundrylocker.order.model.Promotion;
-import com.huynqb.laundrylocker.order.repository.LaundryOrderRepository;
+import com.huynqb.laundrylocker.order.repository.LockerOrderRepository;
 import com.huynqb.laundrylocker.order.repository.OrderComplaintRepository;
 import com.huynqb.laundrylocker.order.repository.OrderDetailRepository;
 import com.huynqb.laundrylocker.order.repository.OrderRatingRepository;
@@ -63,7 +62,7 @@ public class OrderService {
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final Set<String> CANCELABLE = Set.of("INITIALIZED", "RESERVED", "WAITING");
 
-  private final LaundryOrderRepository orderRepository;
+  private final LockerOrderRepository orderRepository;
   private final OrderDetailRepository detailRepository;
   private final OrderStatusHistoryRepository historyRepository;
   private final OrderRatingRepository ratingRepository;
@@ -72,7 +71,6 @@ public class OrderService {
   private final RabbitTemplate rabbitTemplate;
   private final UserClient userClient;
   private final LockerClient lockerClient;
-  private final LaundryClient laundryClient;
   private final NotificationClient notificationClient;
 
   @Value("${app.order.pickup-hours-limit:24}")
@@ -90,7 +88,7 @@ public class OrderService {
   @Transactional
   public OrderResponse create(CreateOrderRequest request) {
     userClient.getUser(request.userId());
-    LaundryOrder order = new LaundryOrder();
+    LockerOrder order = new LockerOrder();
     order.setOrderCode(generateOrderCode());
     order.setUserId(request.userId());
     order.setReceiverId(request.receiverId());
@@ -99,9 +97,9 @@ public class OrderService {
     order.setLockerId(request.lockerId());
     order.setStoreId(request.storeId());
     order.setSendBoxId(resolveAndReserveSendBox(request));
-    order.setType(StringUtils.hasText(request.type()) ? request.type().toUpperCase() : "LAUNDRY");
+    order.setType(StringUtils.hasText(request.type()) ? request.type().toUpperCase() : "STORAGE");
     order.setServiceCategory(
-        StringUtils.hasText(request.serviceCategory()) ? request.serviceCategory().toUpperCase() : "LAUNDRY");
+        StringUtils.hasText(request.serviceCategory()) ? request.serviceCategory().toUpperCase() : "STORAGE");
     order.setStatus("INITIALIZED");
     order.setPinCode(generatePinCode());
     order.setPinCodeIssuedAt(LocalDateTime.now());
@@ -112,7 +110,7 @@ public class OrderService {
       order.setActualWeight(request.estimatedWeight());
     }
 
-    LaundryOrder saved = orderRepository.save(order);
+    LockerOrder saved = orderRepository.save(order);
     BigDecimal calculatedTotal = saveDetailsAndCalculate(saved.getId(), request);
     saved.setTotalPrice(request.totalPrice() == null ? calculatedTotal : request.totalPrice());
     saved.setOriginalPrice(saved.getTotalPrice());
@@ -125,76 +123,24 @@ public class OrderService {
 
   @Transactional
   public OrderResponse updateStatus(Long id, UpdateOrderStatusRequest request) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     return transition(order, request.status(), request.staffId(), request.receiveBoxId(), null);
   }
 
   @Transactional
   public OrderResponse confirm(Long id, Long userId) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     assertOwner(order, userId);
-    return transition(order, "WAITING", userId, null, "Customer confirmed items dropped");
+    return transition(order, "STORING", userId, null, "Customer confirmed items dropped in locker");
   }
 
-  @Transactional
-  public OrderResponse collect(Long id, Long staffId) {
-    LaundryOrder order = find(id);
-    validateStatus(order, Set.of("WAITING"));
-    if (order.getSendBoxId() != null) {
-      lockerClient.releaseBox(order.getSendBoxId());
-    }
-    return transition(order, "COLLECTED", staffId, null, "Staff collected order");
-  }
 
-  @Transactional
-  public OrderResponse updateWeight(Long id, UpdateOrderWeightRequest request, Long staffId) {
-    LaundryOrder order = find(id);
-    validateStatus(order, Set.of("COLLECTED", "PROCESSING"));
-    order.setActualWeight(request.actualWeight());
-    order.setWeightUnit(StringUtils.hasText(request.weightUnit()) ? request.weightUnit() : "kg");
-    order.setStaffId(staffId);
-    order.setStaffNote(request.staffNote());
-    if (request.items() != null && !request.items().isEmpty()) {
-      detailRepository.deleteByOrderId(id);
-      BigDecimal total = saveItemDetails(id, request.items(), order.getActualWeight());
-      order.setOriginalPrice(total);
-      order.setTotalPrice(total.subtract(order.getDiscount() == null ? BigDecimal.ZERO : order.getDiscount()).max(BigDecimal.ZERO));
-    }
-    return toResponse(orderRepository.save(order));
-  }
-
-  @Transactional
-  public OrderResponse process(Long id, Long staffId) {
-    LaundryOrder order = find(id);
-    validateStatus(order, Set.of("COLLECTED"));
-    return transition(order, "PROCESSING", staffId, null, "Processing started");
-  }
-
-  @Transactional
-  public OrderResponse ready(Long id, Long staffId) {
-    LaundryOrder order = find(id);
-    validateStatus(order, Set.of("PROCESSING"));
-    return transition(order, "READY", staffId, null, "Order is ready");
-  }
-
-  @Transactional
-  public OrderResponse returnOrder(Long id, Long receiveBoxId, Long staffId) {
-    LaundryOrder order = find(id);
-    validateStatus(order, Set.of("READY"));
-    lockerClient.reserveBox(receiveBoxId);
-    order.setReceiveBoxId(receiveBoxId);
-    order.setReturnedAt(LocalDateTime.now());
-    order.setPickupDeadline(order.getReturnedAt().plusHours(pickupHoursLimit));
-    order.setPinCode(generatePinCode());
-    order.setPinCodeIssuedAt(LocalDateTime.now());
-    return transition(order, "RETURNED", staffId, receiveBoxId, "Order returned to locker");
-  }
 
   @Transactional
   public OrderResponse complete(Long id, Long userId) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     assertOwner(order, userId);
-    validateStatus(order, Set.of("RETURNED"));
+    validateStatus(order, Set.of("STORING", "RETURNED"));
     BigDecimal overtime = calculatePickupOvertimeFee(order);
     if (overtime.compareTo(BigDecimal.ZERO) > 0) {
       order.setExtraFee(order.getExtraFee().add(overtime));
@@ -210,7 +156,7 @@ public class OrderService {
 
   @Transactional
   public OrderResponse cancel(Long id, Integer reason, Long userId) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     if (!CANCELABLE.contains(order.getStatus())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Order cannot be canceled at this status");
     }
@@ -221,33 +167,24 @@ public class OrderService {
 
   @Transactional
   public OrderResponse resetPin(Long id, Long userId) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     assertOwner(order, userId);
     order.setPinCode(generatePinCode());
     order.setPinCodeIssuedAt(LocalDateTime.now());
     return toResponse(orderRepository.save(order));
   }
 
-  @Transactional
-  public OrderResponse checkout(Long id, Long staffId, String note) {
-    LaundryOrder order = find(id);
-    validateStatus(order, Set.of("RETURNED", "READY", "WAITING", "INITIALIZED"));
-    releaseBoxes(order);
-    order.setStaffId(staffId);
-    order.setCompletedAt(LocalDateTime.now());
-    order.setPinCode(null);
-    return transition(order, "COMPLETED", staffId, order.getReceiveBoxId(), note);
-  }
+
 
   @Transactional
   public OrderResponse pickupStorage(Long id, Long userId) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     assertOwner(order, userId);
     if (!"STORAGE".equalsIgnoreCase(order.getType())
         && !"STORAGE".equalsIgnoreCase(order.getServiceCategory())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Only storage orders can use pickup-storage");
     }
-    validateStatus(order, Set.of("WAITING", "INITIALIZED", "RETURNED"));
+    validateStatus(order, Set.of("STORING", "INITIALIZED", "RETURNED"));
     releaseBoxes(order);
     order.setCompletedAt(LocalDateTime.now());
     order.setPinCode(null);
@@ -256,7 +193,7 @@ public class OrderService {
 
   @Transactional
   public OrderResponse reorder(Long originalOrderId, Long userId) {
-    LaundryOrder original = find(originalOrderId);
+    LockerOrder original = find(originalOrderId);
     assertOwner(original, userId);
     if (!Set.of("COMPLETED", "CANCELED").contains(original.getStatus())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Only completed or canceled orders can be reordered");
@@ -300,7 +237,7 @@ public class OrderService {
 
   @Transactional(readOnly = true)
   public OrderStatusResponse status(Long id) {
-    LaundryOrder order = find(id);
+    LockerOrder order = find(id);
     return new OrderStatusResponse(
         order.getId(),
         order.getStatus(),
@@ -348,14 +285,14 @@ public class OrderService {
   @Transactional(readOnly = true)
   public Map<String, Object> statistics() {
     Map<String, Object> result = new HashMap<>();
-    List<LaundryOrder> orders = orderRepository.findAll();
+    List<LockerOrder> orders = orderRepository.findAll();
     result.put("totalOrders", orders.size());
     result.put(
         "byStatus",
         orders.stream()
             .collect(
                 java.util.stream.Collectors.groupingBy(
-                    LaundryOrder::getStatus, java.util.stream.Collectors.counting())));
+                    LockerOrder::getStatus, java.util.stream.Collectors.counting())));
     return result;
   }
 
@@ -364,14 +301,14 @@ public class OrderService {
     BigDecimal total =
         orderRepository.findAll().stream()
             .filter(order -> "COMPLETED".equalsIgnoreCase(order.getStatus()))
-            .map(LaundryOrder::getTotalPrice)
+            .map(LockerOrder::getTotalPrice)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     return Map.of("totalRevenue", total);
   }
 
   @Transactional
   public OrderRatingResponse rate(Long orderId, OrderRatingRequest request, Long userId) {
-    LaundryOrder order = find(orderId);
+    LockerOrder order = find(orderId);
     assertOwner(order, userId);
     validateStatus(order, Set.of("COMPLETED"));
     OrderRating rating = ratingRepository.findByOrderId(orderId).orElseGet(OrderRating::new);
@@ -394,7 +331,7 @@ public class OrderService {
 
   @Transactional
   public OrderComplaintResponse complain(Long orderId, OrderComplaintRequest request, Long userId) {
-    LaundryOrder order = find(orderId);
+    LockerOrder order = find(orderId);
     assertOwner(order, userId);
     OrderComplaint complaint = new OrderComplaint();
     complaint.setOrderId(orderId);
@@ -518,7 +455,7 @@ public class OrderService {
 
   @Transactional
   public Map<String, Object> autoCancelUnconfirmedOrders() {
-    List<LaundryOrder> canceled =
+    List<LockerOrder> canceled =
         orderRepository.findByStatusOrderByCreatedAtDesc("INITIALIZED").stream()
             .filter(order -> order.getCreatedAt().isBefore(LocalDateTime.now().minusHours(24)))
             .peek(order -> order.setStatus("CANCELED"))
@@ -542,7 +479,7 @@ public class OrderService {
   }
 
   private OrderResponse transition(
-      LaundryOrder order, String newStatus, Long actorId, Long receiveBoxId, String note) {
+      LockerOrder order, String newStatus, Long actorId, Long receiveBoxId, String note) {
     String oldStatus = order.getStatus();
     order.setStatus(newStatus.toUpperCase());
     if (actorId != null && !"COMPLETED".equals(order.getStatus()) && !"CANCELED".equals(order.getStatus())) {
@@ -551,7 +488,7 @@ public class OrderService {
     if (receiveBoxId != null) {
       order.setReceiveBoxId(receiveBoxId);
     }
-    LaundryOrder saved = orderRepository.save(order);
+    LockerOrder saved = orderRepository.save(order);
     addHistory(saved.getId(), oldStatus, saved.getStatus(), actorId, note);
     publishStatusChanged(saved, oldStatus);
     notifyStatus(saved, oldStatus);
@@ -573,23 +510,14 @@ public class OrderService {
     if (request.items() != null && !request.items().isEmpty()) {
       return saveItemDetails(orderId, request.items(), request.estimatedWeight());
     }
-    if (request.serviceIds() == null || request.serviceIds().isEmpty()) {
-      return BigDecimal.ZERO;
-    }
-    BigDecimal estimate =
-        laundryClient
-            .estimate(request.serviceIds(), request.estimatedWeight())
-            .data();
-    BigDecimal perService = request.serviceIds().isEmpty() ? BigDecimal.ZERO : estimate.divide(BigDecimal.valueOf(request.serviceIds().size()), 2, RoundingMode.HALF_UP);
-    request.serviceIds().forEach(serviceId -> saveDetail(orderId, serviceId, BigDecimal.ONE, perService, null));
-    return estimate;
+    return BigDecimal.ZERO;
   }
 
   private BigDecimal saveItemDetails(Long orderId, List<OrderItemRequest> items, BigDecimal defaultQuantity) {
     BigDecimal total = BigDecimal.ZERO;
     for (OrderItemRequest item : items) {
       BigDecimal quantity = item.quantity() == null ? (defaultQuantity == null ? BigDecimal.ONE : defaultQuantity) : item.quantity();
-      BigDecimal price = laundryClient.estimate(List.of(item.serviceId()), quantity).data();
+      BigDecimal price = BigDecimal.valueOf(5000).multiply(quantity); // Base storage fee
       saveDetail(orderId, item.serviceId(), quantity, price, item.description());
       total = total.add(price);
     }
@@ -606,7 +534,7 @@ public class OrderService {
     detailRepository.save(detail);
   }
 
-  private void applyPromotion(LaundryOrder order, String promotionCode, List<String> promotionCodes) {
+  private void applyPromotion(LockerOrder order, String promotionCode, List<String> promotionCodes) {
     List<String> codes = new ArrayList<>();
     if (StringUtils.hasText(promotionCode)) {
       codes.add(promotionCode);
@@ -651,7 +579,7 @@ public class OrderService {
     return discount.min(orderTotal);
   }
 
-  private void releaseBoxes(LaundryOrder order) {
+  private void releaseBoxes(LockerOrder order) {
     if (order.getSendBoxId() != null) {
       lockerClient.releaseBox(order.getSendBoxId());
     }
@@ -660,7 +588,7 @@ public class OrderService {
     }
   }
 
-  private BigDecimal calculatePickupOvertimeFee(LaundryOrder order) {
+  private BigDecimal calculatePickupOvertimeFee(LockerOrder order) {
     if (order.getPickupDeadline() == null || !LocalDateTime.now().isAfter(order.getPickupDeadline())) {
       return BigDecimal.ZERO;
     }
@@ -671,27 +599,27 @@ public class OrderService {
     return raw.min(BigDecimal.valueOf(maxOvertimeFee)).min(percentageCap);
   }
 
-  private void validateStatus(LaundryOrder order, Set<String> statuses) {
+  private void validateStatus(LockerOrder order, Set<String> statuses) {
     if (!statuses.contains(order.getStatus())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Order status does not allow this action");
     }
   }
 
-  private void assertOwner(LaundryOrder order, Long userId) {
+  private void assertOwner(LockerOrder order, Long userId) {
     if (userId != null && !userId.equals(order.getUserId())) {
       throw new BusinessException("ORDER_FORBIDDEN", "Order does not belong to user");
     }
   }
 
-  private LaundryOrder find(Long id) {
+  private LockerOrder find(Long id) {
     return orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order", id));
   }
 
-  private OrderSummary toSummary(LaundryOrder order) {
+  private OrderSummary toSummary(LockerOrder order) {
     return new OrderSummary(order.getId(), order.getUserId(), order.getStatus(), order.getTotalPrice());
   }
 
-  private OrderResponse toResponse(LaundryOrder order) {
+  private OrderResponse toResponse(LockerOrder order) {
     List<OrderDetailResponse> details =
         detailRepository.findByOrderId(order.getId()).stream()
             .map(d -> new OrderDetailResponse(d.getServiceId(), d.getQuantity(), d.getPrice(), d.getDescription()))
@@ -739,47 +667,32 @@ public class OrderService {
         complaint.getId(), complaint.getOrderId(), complaint.getUserId(), complaint.getType(), complaint.getDescription(), complaint.getStatus(), complaint.getCreatedAt());
   }
 
-  private String nextAction(LaundryOrder order) {
+  private String nextAction(LockerOrder order) {
     return switch (order.getStatus()) {
-      case "INITIALIZED" -> "STORAGE".equals(order.getServiceCategory()) ? "PAY_AND_DROP" : "DROP_ITEMS";
-      case "WAITING" -> "WAIT_FOR_STAFF";
-      case "COLLECTED", "PROCESSING" -> "WAIT_FOR_PROCESSING";
-      case "READY" -> "WAIT_FOR_RETURN";
-      case "RETURNED" -> paymentRequired(order) ? "PAY_AND_PICKUP" : "PICKUP";
+      case "INITIALIZED" -> "PAY_AND_DROP";
+      case "STORING" -> "PICKUP";
       case "COMPLETED" -> "DONE";
       case "CANCELED" -> "CANCELED";
       default -> "UNKNOWN";
     };
   }
 
-  private String nextActionMessage(LaundryOrder order) {
+  private String nextActionMessage(LockerOrder order) {
     return switch (nextAction(order)) {
-      case "DROP_ITEMS" -> "Place items in locker and confirm the order.";
       case "PAY_AND_DROP" -> "Pay and place storage items in locker.";
-      case "WAIT_FOR_STAFF" -> "Waiting for staff to collect items.";
-      case "WAIT_FOR_PROCESSING" -> "Items are being processed.";
-      case "WAIT_FOR_RETURN" -> "Waiting for staff to return items to locker.";
-      case "PAY_AND_PICKUP" -> "Pay the order and pick up items.";
       case "PICKUP" -> "Pick up items from locker.";
       default -> order.getStatus();
     };
   }
 
-  private boolean paymentRequired(LaundryOrder order) {
-    if ("STORAGE".equals(order.getServiceCategory())) {
-      return "INITIALIZED".equals(order.getStatus());
-    }
-    return "RETURNED".equals(order.getStatus());
+  private boolean paymentRequired(LockerOrder order) {
+    return "INITIALIZED".equals(order.getStatus());
   }
 
   private String statusDescription(String status) {
     return switch (status) {
       case "INITIALIZED" -> "Order created";
-      case "WAITING" -> "Waiting for staff collection";
-      case "COLLECTED" -> "Collected by staff";
-      case "PROCESSING" -> "Processing";
-      case "READY" -> "Ready to return";
-      case "RETURNED" -> "Returned to locker";
+      case "STORING" -> "Items stored in locker";
       case "COMPLETED" -> "Completed";
       case "CANCELED" -> "Canceled";
       default -> status;
@@ -796,7 +709,7 @@ public class OrderService {
     historyRepository.save(history);
   }
 
-  private void publishStatusChanged(LaundryOrder order, String oldStatus) {
+  private void publishStatusChanged(LockerOrder order, String oldStatus) {
     Map<String, Object> payload = new HashMap<>();
     payload.put("orderId", order.getId());
     payload.put("userId", order.getUserId());
@@ -805,7 +718,7 @@ public class OrderService {
     publish(DomainEventNames.ORDER_STATUS_CHANGED, order, payload);
   }
 
-  private void notifyStatus(LaundryOrder order, String oldStatus) {
+  private void notifyStatus(LockerOrder order, String oldStatus) {
     try {
       notificationClient.requestNotification(
           new NotificationRequest(
@@ -820,7 +733,7 @@ public class OrderService {
     }
   }
 
-  private void publish(String eventName, LaundryOrder order, Map<String, Object> payload) {
+  private void publish(String eventName, LockerOrder order, Map<String, Object> payload) {
     try {
       rabbitTemplate.convertAndSend(
           DomainEventNames.EXCHANGE,

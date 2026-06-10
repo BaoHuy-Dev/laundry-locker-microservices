@@ -29,10 +29,7 @@ spring:
               uri: lb://locker-service
               predicates:
                 - Path=/api/lockers/**,/api/boxes/**,/api/admin/lockers,/api/admin/lockers/**,/internal/lockers/**,/internal/boxes/**
-            - id: laundry-service
-              uri: lb://laundry-service
-              predicates:
-                - Path=/api/services/**,/api/laundry-services/**,/api/admin/services,/api/admin/services/**,/internal/laundry-services/**
+
             - id: payment-service
               uri: lb://payment-service
               predicates:
@@ -57,12 +54,7 @@ spring:
               uri: lb://staff-service
               predicates:
                 - Path=/api/staff/**,/internal/staff/**
-            - id: partner-service
-              uri: lb://partner-service
-              predicates:
-                - Path=/api/partner/**,/api/partners/**,/api/admin/partners,/api/admin/partners/**,/internal/partners/**
             - id: loyalty-service
-              uri: lb://loyalty-service
               predicates:
                 - Path=/api/loyalty/**,/api/admin/loyalty,/api/admin/loyalty/**,/internal/loyalty/**
             - id: promotions
