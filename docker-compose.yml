@@ -32,10 +32,11 @@ services:
       - "5672:5672"
       - "15672:15672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 20s
+      retries: 20
+      start_period: 60s
     networks:
       - laundry-ms-network
 
@@ -47,7 +48,7 @@ services:
     restart: unless-stopped
     environment:
       SERVER_PORT: 8761
-      JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=70.0"
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8761:8761"
     networks:
@@ -63,7 +64,7 @@ services:
       SERVER_PORT: 8080
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
-      JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=70.0"
+      JAVA_OPTS: "-Xms64m -Xmx320m -XX:+UseContainerSupport"
     ports:
       - "8080:8080"
     depends_on:
@@ -82,9 +83,17 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
       SPRING_DATASOURCE_USERNAME: auth_user
       SPRING_DATASOURCE_PASSWORD: auth_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+      SPRING_MAIL_HOST: localhost
+      SPRING_MAIL_PORT: 1025
+      SPRING_MAIL_USERNAME: noreply@laundry.test
+      SPRING_MAIL_PASSWORD: ""
+      MANAGEMENT_HEALTH_MAIL_ENABLED: false
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8081:8081"
     depends_on:
@@ -108,8 +117,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
       SPRING_DATASOURCE_USERNAME: user_user
       SPRING_DATASOURCE_PASSWORD: user_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8082:8082"
     depends_on:
@@ -133,8 +145,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/order_db
       SPRING_DATASOURCE_USERNAME: order_user
       SPRING_DATASOURCE_PASSWORD: order_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8083:8083"
     depends_on:
@@ -158,8 +173,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/locker_db
       SPRING_DATASOURCE_USERNAME: locker_user
       SPRING_DATASOURCE_PASSWORD: locker_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8084:8084"
     depends_on:
@@ -172,7 +190,33 @@ services:
     networks:
       - laundry-ms-network
 
-
+  laundry-service:
+    build:
+      context: .
+      dockerfile: laundry-service/Dockerfile
+    container_name: ll-ms-laundry-service
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/laundry_db
+      SPRING_DATASOURCE_USERNAME: laundry_user
+      SPRING_DATASOURCE_PASSWORD: laundry_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+      SPRING_RABBITMQ_HOST: rabbitmq
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    networks:
+      - laundry-ms-network
 
   payment-service:
     build:
@@ -185,8 +229,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment_db
       SPRING_DATASOURCE_USERNAME: payment_user
       SPRING_DATASOURCE_PASSWORD: payment_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8086:8086"
     depends_on:
@@ -210,8 +257,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
       SPRING_DATASOURCE_USERNAME: notification_user
       SPRING_DATASOURCE_PASSWORD: notification_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8087:8087"
     depends_on:
@@ -235,8 +285,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/iot_db
       SPRING_DATASOURCE_USERNAME: iot_user
       SPRING_DATASOURCE_PASSWORD: iot_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8088:8088"
     depends_on:
@@ -260,8 +313,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/store_db
       SPRING_DATASOURCE_USERNAME: store_user
       SPRING_DATASOURCE_PASSWORD: store_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8089:8089"
     depends_on:
@@ -285,8 +341,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/staff_db
       SPRING_DATASOURCE_USERNAME: staff_user
       SPRING_DATASOURCE_PASSWORD: staff_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8090:8090"
     depends_on:
@@ -299,6 +358,33 @@ services:
     networks:
       - laundry-ms-network
 
+  partner-service:
+    build:
+      context: .
+      dockerfile: partner-service/Dockerfile
+    container_name: ll-ms-partner-service
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8091
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/partner_db
+      SPRING_DATASOURCE_USERNAME: partner_user
+      SPRING_DATASOURCE_PASSWORD: partner_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+      SPRING_RABBITMQ_HOST: rabbitmq
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
+    ports:
+      - "8091:8091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    networks:
+      - laundry-ms-network
 
   loyalty-service:
     build:
@@ -311,8 +397,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/loyalty_db
       SPRING_DATASOURCE_USERNAME: loyalty_user
       SPRING_DATASOURCE_PASSWORD: loyalty_pass
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
     ports:
       - "8092:8092"
     depends_on:
