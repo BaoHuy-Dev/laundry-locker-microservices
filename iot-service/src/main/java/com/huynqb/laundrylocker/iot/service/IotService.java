@@ -4,7 +4,7 @@ import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.iot.client.LockerClient;
 import com.huynqb.laundrylocker.iot.client.OrderClient;
-import com.huynqb.laundrylocker.iot.client.PartnerClient;
+
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusResponse;
@@ -35,7 +35,7 @@ public class IotService {
   private final OrderClient orderClient;
   private final LockerClient lockerClient;
   private final LockerMqttService lockerMqttService;
-  private final PartnerClient partnerClient;
+
 
   @Transactional
   public DeviceStatusResponse updateStatus(DeviceStatusRequest request) {
@@ -54,9 +54,19 @@ public class IotService {
     if (!Boolean.TRUE.equals(verification.valid())) {
       return Map.of("accepted", false, "boxId", request.boxId(), "message", verification.message());
     }
-    lockerClient.openBox(request.boxId());
-    lockerMqttService.sendUnlockCommand(request.lockerId(), request.boxId());
-    return Map.of("accepted", true, "lockerId", request.lockerId(), "boxId", request.boxId(), "message", "Unlock command accepted");
+    try {
+      com.fasterxml.jackson.databind.JsonNode node = lockerMqttService.sendUnlockCommandAsync(request.lockerId(), request.boxId())
+          .get(20, java.util.concurrent.TimeUnit.SECONDS);
+      
+      if (node.has("status") && "FAILED".equals(node.get("status").asText())) {
+          return Map.of("accepted", false, "lockerId", request.lockerId(), "boxId", request.boxId(), "message", "Hardware failed to open");
+      }
+      lockerClient.openBox(request.boxId());
+      return Map.of("accepted", true, "lockerId", request.lockerId(), "boxId", request.boxId(), "message", "Unlock command accepted");
+    } catch (Exception e) {
+      log.error("Timeout or error waiting for IoT device", e);
+      return Map.of("accepted", false, "lockerId", request.lockerId(), "boxId", request.boxId(), "message", "IoT device timeout");
+    }
   }
 
   public VerifyPinResponse verifyPin(VerifyPinRequest request) {
@@ -81,20 +91,7 @@ public class IotService {
     return new PickupResponse(response.id(), response.status(), response.completedAt(), "Pickup confirmed");
   }
 
-  public Map<String, Object> unlockWithCode(Map<String, Object> request) {
-    String code = String.valueOf(request.get("code"));
-    Long boxId = Long.valueOf(String.valueOf(request.get("boxId")));
-    Map<String, Object> accessCode = partnerClient.verifyCode(code).data();
-    lockerClient.openBox(boxId);
-    Long lockerId = request.get("lockerId") == null ? null : Long.valueOf(String.valueOf(request.get("lockerId")));
-    if (lockerId != null) {
-      lockerMqttService.sendUnlockCommand(lockerId, boxId);
-    }
-    java.util.HashMap<String, Object> response = new java.util.HashMap<>(accessCode);
-    response.put("accepted", true);
-    response.put("boxId", boxId);
-    return response;
-  }
+
 
   @Transactional
   public void updateBoxStatus(BoxStatusUpdateRequest request) {
