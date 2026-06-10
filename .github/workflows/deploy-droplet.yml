@@ -1,0 +1,74 @@
+name: Deploy to Droplet
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: laundry-locker-microservices-droplet
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build services
+        run: mvn -B clean package -DskipTests
+
+      - name: Package deploy artifact
+        run: |
+          tar \
+            --exclude='./.git' \
+            --exclude='./laundry-ms.zip' \
+            -czf /tmp/laundry-locker-microservices.tar.gz .
+
+      - name: Configure SSH
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+        run: |
+          test -n "$DROPLET_HOST"
+          test -n "$DROPLET_SSH_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DROPLET_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DROPLET_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload artifact
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+          DROPLET_PORT: ${{ secrets.DROPLET_PORT }}
+        run: |
+          test -n "$DROPLET_HOST"
+          test -n "$DROPLET_USER"
+          PORT="${DROPLET_PORT:-22}"
+          scp -P "$PORT" -i ~/.ssh/deploy_key \
+            /tmp/laundry-locker-microservices.tar.gz \
+            "$DROPLET_USER@$DROPLET_HOST:/tmp/laundry-locker-microservices.tar.gz"
+
+      - name: Deploy on Droplet
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+          DROPLET_PORT: ${{ secrets.DROPLET_PORT }}
+        run: |
+          PORT="${DROPLET_PORT:-22}"
+          ssh -p "$PORT" -i ~/.ssh/deploy_key "$DROPLET_USER@$DROPLET_HOST" \
+            'bash -s' < scripts/deploy-from-artifact.sh
