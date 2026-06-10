@@ -9,7 +9,7 @@ CREATE TABLE user_schema.user_profiles (
     birthday DATE,
     image_url VARCHAR(1000),
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
-    roles VARCHAR(500) NOT NULL DEFAULT 'USER',
+    roles VARCHAR(500) NOT NULL DEFAULT 'CUSTOMER',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
 );
@@ -33,5 +33,5 @@ CREATE TABLE user_schema.role_permissions (
 );
 
 INSERT INTO user_schema.roles(name, description)
-VALUES ('USER', 'Customer role'), ('STAFF', 'Staff role'), ('PARTNER', 'Partner role'), ('ADMIN', 'Administrator role')
+VALUES ('CUSTOMER', 'Customer role'), ('TECHNICIAN', 'Technician role'), ('COURIER', 'Courier role'), ('ADMIN', 'Administrator role')
 ON CONFLICT (name) DO NOTHING;

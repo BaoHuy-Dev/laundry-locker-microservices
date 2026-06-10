@@ -25,13 +25,12 @@
         <module>user-service</module>
         <module>order-service</module>
         <module>locker-service</module>
-        <module>laundry-service</module>
+
         <module>payment-service</module>
         <module>notification-service</module>
         <module>iot-service</module>
         <module>store-service</module>
         <module>staff-service</module>
-        <module>partner-service</module>
         <module>loyalty-service</module>
     </modules>
 
