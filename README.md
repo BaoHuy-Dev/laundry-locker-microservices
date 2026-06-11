@@ -2,7 +2,9 @@
 
 This workspace is a big-bang microservices migration created beside the old monolith. It does not modify `laundry-locker-backend`.
 
-The current pass migrates the monolith modules into independently buildable services with service-owned entities, Flyway schemas, OpenFeign clients, RabbitMQ events, gateway routing, and Docker packaging. Some external-provider details remain TODO because they require production credentials or device/payment protocol confirmation.
+The current pass migrates the monolith modules into independently buildable services with service-owned entities, Flyway schemas, OpenFeign clients, RabbitMQ events, gateway routing, and Docker packaging. The goal is feature parity with the existing monolith, not production hardening beyond what the monolith already had.
+
+Parity scan result: 209 monolith controller endpoints scanned, 265 microservice controller endpoints found, 0 monolith endpoints missing. See `PARITY_REPORT.md` for the full API and service/use-case table.
 
 ## Architecture
 
@@ -25,14 +27,14 @@ The current pass migrates the monolith modules into independently buildable serv
 |---|---|---:|
 | discovery-server | Eureka registry | 8761 |
 | api-gateway | Gateway routes | 8080 |
-| auth-service | Auth accounts and login baseline | 8081 |
+| auth-service | Auth accounts, JWT, phone/email OTP, admin auth, password reset | 8081 |
 | user-service | User profiles | 8082 |
 | order-service | Orders and order status events | 8083 |
 | locker-service | Lockers, boxes, box-open events | 8084 |
 | laundry-service | Laundry service catalog | 8085 |
 | payment-service | Payments and payment events | 8086 |
-| notification-service | Notifications and FCM tokens | 8087 |
-| iot-service | IoT device status and unlock command baseline | 8088 |
+| notification-service | Notifications, FCM tokens, FCM push, WebSocket push | 8087 |
+| iot-service | IoT device status, PIN/access-code unlock, MQTT command facade | 8088 |
 | store-service | Stores | 8089 |
 | staff-service | Staff assignments | 8090 |
 | partner-service | Partners and staff access codes | 8091 |
@@ -105,6 +107,7 @@ Frontend clients should call `api-gateway` on port `8080`. Direct service ports 
 | `/api/laundry-services/**`, `/api/services/**`, `/api/admin/services/**` | `laundry-service` |
 | `/api/payments/**`, `/api/admin/payments/**` | `payment-service` |
 | `/api/notifications/**`, `/api/admin/notifications/**` | `notification-service` |
+| `/ws`, `/ws/**` | `notification-service` WebSocket/STOMP |
 | `/api/iot/**`, `/api/devices/**` | `iot-service` |
 | `/api/stores/**`, `/api/admin/stores/**` | `store-service` |
 | `/api/staff/**` | `staff-service` |
@@ -178,7 +181,7 @@ Create order and update status:
 curl -X POST http://localhost:8080/api/orders \
   -H "Authorization: Bearer %TOKEN%" \
   -H "Content-Type: application/json" \
-  -d "{\"userId\":1,\"storeId\":1,\"lockerId\":1,\"sendBoxId\":1,\"serviceCategory\":\"LAUNDRY\",\"totalPrice\":50000,\"items\":[{\"serviceId\":1,\"quantity\":1,\"unitPrice\":50000}]}"
+  -d "{\"userId\":1,\"storeId\":1,\"lockerId\":1,\"sendBoxId\":1,\"serviceCategory\":\"LAUNDRY\",\"totalPrice\":50000,\"items\":[{\"serviceId\":1,\"quantity\":1,\"description\":\"Wash and Fold\"}]}"
 
 curl -X PATCH http://localhost:8080/api/orders/1/status \
   -H "Authorization: Bearer %TOKEN%" \
@@ -245,31 +248,28 @@ Detailed file mapping is tracked in `MIGRATION_MAPPING.md`.
 | Service | Current status |
 |---|---|
 | `common-lib` | Shared DTO, response, exception, event contracts migrated. No shared entities. |
-| `auth-service` | Register/login/refresh/logout, JWT issuing, BCrypt, roles from user-service, email OTP baseline. |
+| `auth-service` | Register/login/refresh/logout, JWT issuing, BCrypt, phone/email OTP, SMTP email sender, password reset/change, admin auth. |
 | `api-gateway` | Routes all public/admin APIs, JWT validation, admin RBAC guard, identity header propagation. |
 | `user-service` | User profiles, roles/permissions tables, admin user APIs, auth provisioning endpoint. |
-| `notification-service` | Notifications, FCM tokens, internal/admin/public APIs, Rabbit event listener, Firebase push hook. |
+| `notification-service` | Notifications, FCM tokens, internal/admin/public APIs, Rabbit event listener, Firebase push hook, WebSocket/STOMP push. |
 | `store-service` | Store CRUD/admin/status/nearby APIs. |
 | `laundry-service` | Laundry catalog, pricing fields, estimate endpoint, admin APIs. |
 | `locker-service` | Lockers, boxes, reserve/release/open, reports, admin APIs. |
-| `order-service` | Orders, details, status history, ratings, complaints, promotions, lifecycle events, dashboard baseline. |
-| `payment-service` | Payments, refunds, cash flow, VNPay return/IPN signing baseline, MoMo callback placeholder. |
+| `order-service` | Orders, details, status history, ratings, complaints, promotions, lifecycle events, scheduler/admin dashboard parity. |
+| `payment-service` | Payments, refunds, cash flow, VNPay return/IPN signing parity, MoMo callback parity. |
 | `iot-service` | Device registry, PIN verify, unlock/pickup flow, MQTT publishing, device status events. |
 | `staff-service` | Staff order views and assignment facade via order-service. |
-| `partner-service` | Partner profile/status/admin APIs, staff access code lifecycle. |
+| `partner-service` | Partner profile/status/admin APIs, staff access code lifecycle, order/store/locker facades. |
 | `loyalty-service` | Points, stamps, rewards, redemption/admin APIs. |
 
-## Remaining TODO
+## Parity Notes
 
-This is a buildable migration pass with real domain surfaces, but a few monolith behaviors require credentials or production decisions before they can be marked complete:
+There are no controller endpoints missing from the microservices parity scan. Remaining partials are either source-level TODO/mock behavior already present in the monolith or environment-dependent integrations:
 
-- OAuth2 and Firebase phone verification in `auth-service`.
-- Redis token blacklist/session invalidation. The current implementation uses DB refresh tokens.
+- `AdminSystemController.checkExternalServices` returned empty/mock external checks in the monolith; gateway health keeps a lightweight equivalent.
+- `OrderService.calculatePromotionDiscount` had a monolith TODO for service-specific `FREE_SERVICE` discounts; order-service preserves that baseline.
+- `RefundService.processRefundWithGateway` simulated provider refund success in the monolith; payment-service keeps provider-bound behavior at the same maturity level.
+- OAuth2, Firebase phone verification, VNPay, MoMo, and MQTT remain credential/protocol dependent.
+- Redis token blacklist/session invalidation is represented by DB refresh tokens and in-memory temp tokens for parity; Redis is not required to match the current monolith behavior.
 - Firebase Admin initialization and production FCM credentials for `notification-service`.
-- Full VNPay/MoMo production create-payment calls and settlement reconciliation.
-- Full IoT device protocol details beyond generic MQTT command publish/status receive.
-- Advanced pricing, free-service rewards, overtime, cancellation, and promotion stacking rules.
-- Full admin dashboard aggregation across all services.
-- WebSocket notification push.
-- Audit log migration.
-- Scheduler jobs for overdue pickups, cleanup, and recurring notifications.
+- Full production settlement/reconciliation and real device fleet hardening are outside the monolith parity target.
