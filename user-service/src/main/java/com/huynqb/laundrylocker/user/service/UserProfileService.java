@@ -40,6 +40,17 @@ public class UserProfileService {
   }
 
   @Transactional(readOnly = true)
+  public UserSummary getByPhone(String phoneNumber) {
+    return userProfileRepository
+        .findFirstByPhoneNumber(phoneNumber)
+        .map(this::toSummary)
+        .orElseThrow(
+            () ->
+                new com.huynqb.laundrylocker.common.exception.BusinessException(
+                    "USER_NOT_FOUND", "No user with phone " + phoneNumber));
+  }
+
+  @Transactional(readOnly = true)
   public List<UserSummary> list() {
     return userProfileRepository.findAll().stream().map(this::toSummary).toList();
   }

@@ -3,6 +3,10 @@ package com.huynqb.laundrylocker.locker.controller;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
+import com.huynqb.laundrylocker.locker.dto.CellResponse;
+import com.huynqb.laundrylocker.locker.dto.FaultCellResponse;
+import com.huynqb.laundrylocker.locker.dto.LockerLayoutResponse;
+import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportResponse;
@@ -69,13 +73,106 @@ public class LockerController {
   }
 
   @PostMapping("/internal/boxes/{id}/reserve")
-  public ApiResponse<LockerBoxSummary> reserveBox(@PathVariable Long id) {
-    return ApiResponse.ok("BOX_RESERVED", "Box reserved", lockerService.reserveBox(id));
+  public ApiResponse<LockerBoxSummary> reserveBox(
+      @PathVariable Long id, @RequestParam(required = false, defaultValue = "CUSTOMER") String channel) {
+    return ApiResponse.ok("BOX_RESERVED", "Box reserved", lockerService.reserveBox(id, channel));
+  }
+
+  @PostMapping("/internal/boxes/{id}/occupy")
+  public ApiResponse<LockerBoxSummary> occupyBox(@PathVariable Long id) {
+    return ApiResponse.ok("BOX_OCCUPIED", "Box occupied", lockerService.occupyBox(id));
   }
 
   @PostMapping("/internal/boxes/{id}/release")
   public ApiResponse<LockerBoxSummary> releaseBox(@PathVariable Long id) {
     return ApiResponse.ok("BOX_RELEASED", "Box released", lockerService.releaseBox(id));
+  }
+
+  @GetMapping("/api/lockers/{id}/layout")
+  public ApiResponse<LockerLayoutResponse> layout(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.layout(id));
+  }
+
+  @PostMapping("/api/boxes/{id}/fault")
+  public ApiResponse<CellResponse> markFault(
+      @PathVariable Long id,
+      @RequestBody(required = false) Map<String, String> body,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    String reason = body == null ? null : body.get("reason");
+    return ApiResponse.ok("BOX_FAULT_REPORTED", "Box marked as faulty", lockerService.markFault(id, reason, userId));
+  }
+
+  @PostMapping("/api/admin/lockers/boxes/{id}/clear-fault")
+  public ApiResponse<CellResponse> clearFault(@PathVariable Long id) {
+    return ApiResponse.ok("BOX_FAULT_CLEARED", "Box fault cleared", lockerService.clearFault(id));
+  }
+
+  // ---- Manager (role MANAGER/ADMIN qua gateway) ----
+
+  @GetMapping("/api/manage/lockers/stats")
+  public ApiResponse<List<LockerStatsResponse>> manageStats(@RequestParam(required = false) Long storeId) {
+    return ApiResponse.ok(lockerService.stats(storeId));
+  }
+
+  @GetMapping("/api/manage/lockers")
+  public ApiResponse<List<LockerResponse>> manageList(@RequestParam(required = false) Long storeId) {
+    return ApiResponse.ok(lockerService.listLockers(storeId));
+  }
+
+  @GetMapping("/api/manage/lockers/{id}/layout")
+  public ApiResponse<LockerLayoutResponse> manageLayout(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.layout(id));
+  }
+
+  @GetMapping("/api/manage/lockers/reports")
+  public ApiResponse<List<LockerReportResponse>> manageReports() {
+    return ApiResponse.ok(lockerService.allReports());
+  }
+
+  // ---- Maintenance (role MAINTENANCE/ADMIN qua gateway) ----
+
+  @GetMapping("/api/maintenance/faults")
+  public ApiResponse<List<FaultCellResponse>> maintenanceFaults() {
+    return ApiResponse.ok(lockerService.openFaults());
+  }
+
+  @GetMapping("/api/maintenance/reports")
+  public ApiResponse<List<LockerReportResponse>> maintenanceReports(
+      @RequestParam(required = false, defaultValue = "false") boolean mine,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok(
+        mine && userId != null ? lockerService.assignedReports(userId) : lockerService.openReports());
+  }
+
+  @PutMapping("/api/maintenance/reports/{id}/claim")
+  public ApiResponse<LockerReportResponse> maintenanceClaim(
+      @PathVariable Long id, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("REPORT_CLAIMED", "Report claimed", lockerService.claimReport(id, userId));
+  }
+
+  @PutMapping("/api/maintenance/reports/{id}/resolve")
+  public ApiResponse<LockerReportResponse> maintenanceResolve(
+      @PathVariable Long id, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(
+        "REPORT_RESOLVED", "Report resolved and cell cleared", lockerService.resolveReportAndClearFault(id, userId));
+  }
+
+  @PostMapping("/api/maintenance/boxes/{id}/clear-fault")
+  public ApiResponse<CellResponse> maintenanceClearFault(@PathVariable Long id) {
+    return ApiResponse.ok("BOX_FAULT_CLEARED", "Box fault cleared", lockerService.clearFault(id));
+  }
+
+  @GetMapping("/internal/lockers/{id}/boxes/find")
+  public ApiResponse<CellResponse> findAvailable(
+      @PathVariable Long id,
+      @RequestParam(required = false) String size,
+      @RequestParam(required = false) String cellType) {
+    return ApiResponse.ok(lockerService.findAvailableBox(id, size, cellType));
+  }
+
+  @GetMapping("/internal/lockers/boxes/{boxId}/cell")
+  public ApiResponse<CellResponse> getCellInternal(@PathVariable Long boxId) {
+    return ApiResponse.ok(lockerService.getCell(boxId));
   }
 
   @PostMapping("/api/lockers/{id}/report")
@@ -137,7 +234,9 @@ public class LockerController {
 
   @PostMapping("/api/admin/lockers/{id}/boxes")
   public ApiResponse<LockerBoxSummary> adminAddBox(@PathVariable Long id, @Valid @RequestBody BoxRequest request) {
-    return createBox(new BoxRequest(id, request.boxNumber(), request.size(), request.status()));
+    return createBox(new BoxRequest(
+        id, request.boxNumber(), request.size(), request.status(),
+        request.cellType(), request.rowIndex(), request.colIndex()));
   }
 
   @PutMapping("/api/admin/lockers/boxes/{boxId}/status")

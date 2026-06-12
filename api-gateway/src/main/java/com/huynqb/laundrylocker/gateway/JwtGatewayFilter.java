@@ -38,7 +38,13 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
     String path = exchange.getRequest().getPath().value();
-    if (isPublic(path)) {
+    // Service-to-service endpoints are reachable only inside the cluster
+    // (Feign via Eureka); never through the public gateway.
+    if (path.startsWith("/internal")) {
+      exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+      return exchange.getResponse().setComplete();
+    }
+    if (isPublic(path, exchange.getRequest().getMethod())) {
       return enrichIfPresent(exchange, chain);
     }
 
@@ -51,7 +57,12 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
     try {
       Claims claims = parse(authHeader.substring(7));
       List<String> roles = claims.get("roles", List.class);
-      if (path.startsWith("/api/admin") && (roles == null || !roles.contains("ADMIN"))) {
+      boolean mutatingLockerStructure =
+          !org.springframework.http.HttpMethod.GET.equals(exchange.getRequest().getMethod())
+              && (path.startsWith("/api/lockers") || path.startsWith("/api/boxes"))
+              && !isCustomerLockerAction(path);
+      if (!hasRequiredRole(path, roles)
+          || (mutatingLockerStructure && !hasAny(roles, "ADMIN", "MANAGER"))) {
         exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
         return exchange.getResponse().setComplete();
       }
@@ -92,20 +103,56 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
     return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
   }
 
-  private boolean isPublic(String path) {
-    return path.startsWith("/api/auth")
+  // Path-prefix RBAC. ADMIN is a superset of every operational role.
+  private boolean hasRequiredRole(String path, List<String> roles) {
+    if (path.startsWith("/api/admin")) {
+      return hasAny(roles, "ADMIN");
+    }
+    if (path.startsWith("/api/manage")) {
+      return hasAny(roles, "MANAGER", "ADMIN");
+    }
+    if (path.startsWith("/api/maintenance")) {
+      return hasAny(roles, "MAINTENANCE", "ADMIN");
+    }
+    return true;
+  }
+
+  // Cabinet/box structure changes are operator work; customers only report
+  // faults, file reports, or trigger an open on their own cell.
+  private boolean isCustomerLockerAction(String path) {
+    return path.endsWith("/fault") || path.endsWith("/report") || path.endsWith("/open");
+  }
+
+  private boolean hasAny(List<String> roles, String... required) {
+    if (roles == null) {
+      return false;
+    }
+    for (String role : required) {
+      if (roles.contains(role)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean isPublic(String path, org.springframework.http.HttpMethod method) {
+    if (path.startsWith("/api/auth")
         || path.startsWith("/api/admin/auth")
         || path.equals("/")
         || path.startsWith("/ws")
         || path.startsWith("/actuator")
-        || path.startsWith("/api/stores")
-        || path.startsWith("/api/lockers")
-        || path.startsWith("/api/services")
-        || path.startsWith("/api/laundry-services")
         || path.startsWith("/api/payments/vnpay")
-        || path.startsWith("/api/payments/momo")
-        || path.startsWith("/api/promotions")
-        || path.startsWith("/internal");
+        || path.startsWith("/api/payments/momo")) {
+      return true;
+    }
+    // Catalogue browsing is anonymous; any mutation requires a JWT.
+    boolean readOnly = org.springframework.http.HttpMethod.GET.equals(method);
+    return readOnly
+        && (path.startsWith("/api/stores")
+            || path.startsWith("/api/lockers")
+            || path.startsWith("/api/services")
+            || path.startsWith("/api/laundry-services")
+            || path.startsWith("/api/promotions"));
   }
 
   @Override

@@ -1,0 +1,10 @@
+# Override tự sinh: laundry-service và partner-service được khai trong
+# docker-compose.yml nhưng source module chưa tồn tại trên đĩa (không có
+# trong pom.xml). Gán profile "missing-source" để compose bỏ qua chúng
+# khi `docker compose up` mặc định. Khi nào hai module này được tạo,
+# xóa file override này đi.
+services:
+  laundry-service:
+    profiles: ["missing-source"]
+  partner-service:
+    profiles: ["missing-source"]

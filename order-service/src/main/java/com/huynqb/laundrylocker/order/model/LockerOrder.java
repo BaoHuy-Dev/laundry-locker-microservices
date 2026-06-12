@@ -116,6 +116,9 @@ public class LockerOrder {
   @Column(name = "pickup_deadline")
   private LocalDateTime pickupDeadline;
 
+  @Column(name = "last_reminder_at")
+  private LocalDateTime lastReminderAt;
+
   @Column(length = 2000)
   private String description;
 

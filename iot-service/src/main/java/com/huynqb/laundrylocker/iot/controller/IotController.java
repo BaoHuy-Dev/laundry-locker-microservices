@@ -40,6 +40,12 @@ public class IotController {
     return ApiResponse.ok(iotService.verifyPin(request));
   }
 
+  // PIN or signed QR token — what the cabinet touchscreen scans/keys in.
+  @PostMapping("/api/iot/verify-access")
+  public ApiResponse<VerifyPinResponse> verifyAccess(@Valid @RequestBody VerifyPinRequest request) {
+    return ApiResponse.ok(iotService.verifyAccess(request.boxId(), request.pinCode()));
+  }
+
   @PostMapping("/api/iot/pickup")
   public ApiResponse<PickupResponse> pickup(@Valid @RequestBody PickupRequest request, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("PICKUP_CONFIRMED", "Pickup confirmed", iotService.pickup(request, userId));

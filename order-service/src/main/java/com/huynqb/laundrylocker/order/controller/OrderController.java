@@ -3,6 +3,7 @@ package com.huynqb.laundrylocker.order.controller;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.OrderSummary;
 import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.DelegateOrderRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintResponse;
 import com.huynqb.laundrylocker.order.dto.OrderRatingRequest;
@@ -11,6 +12,8 @@ import com.huynqb.laundrylocker.order.dto.OrderResponse;
 import com.huynqb.laundrylocker.order.dto.OrderStatusResponse;
 import com.huynqb.laundrylocker.order.dto.OrderTimelineEvent;
 import com.huynqb.laundrylocker.order.dto.PromotionRequest;
+import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
+import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
@@ -39,6 +42,54 @@ public class OrderController {
   @PostMapping("/api/orders")
   public ApiResponse<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request) {
     return ApiResponse.ok("ORDER_CREATED", "Order created", orderService.create(request));
+  }
+
+  @PostMapping("/api/orders/send")
+  public ApiResponse<OrderResponse> createSend(
+      @Valid @RequestBody SendOrderRequest request, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_CREATED", "Send order created", orderService.createSend(request, userId));
+  }
+
+  @PostMapping("/api/orders/rental")
+  public ApiResponse<OrderResponse> createRental(
+      @Valid @RequestBody RentalOrderRequest request, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_CREATED", "Rental order created", orderService.createRental(request, userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/extend-rental")
+  public ApiResponse<OrderResponse> extendRental(
+      @PathVariable Long orderId,
+      @RequestBody Map<String, Object> request,
+      @RequestHeader("X-User-Id") Long userId) {
+    int hours = Integer.parseInt(String.valueOf(request.getOrDefault("hours", "0")));
+    if (hours < 1 || hours > 720) {
+      throw new com.huynqb.laundrylocker.common.exception.BusinessException(
+          "INVALID_REQUEST", "hours must be between 1 and 720");
+    }
+    return ApiResponse.ok("ORDER_RENTAL_EXTENDED", "Rental extended", orderService.extendRental(orderId, userId, hours));
+  }
+
+  @GetMapping("/api/orders/access/{code}")
+  public ApiResponse<OrderResponse> getByAccess(@PathVariable String code) {
+    return ApiResponse.ok(orderService.getByAccess(code));
+  }
+
+  @GetMapping("/internal/orders/by-access")
+  public ApiResponse<OrderResponse> getByAccessInternal(@RequestParam String code) {
+    return ApiResponse.ok(orderService.getByAccess(code));
+  }
+
+  @GetMapping("/api/manage/orders")
+  public ApiResponse<List<OrderResponse>> manageList(
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String type,
+      @RequestParam(required = false) Long lockerId) {
+    return ApiResponse.ok(orderService.manageList(status, type, lockerId));
+  }
+
+  @GetMapping("/api/manage/orders/statistics")
+  public ApiResponse<Map<String, Object>> manageStatistics() {
+    return ApiResponse.ok(orderService.statistics());
   }
 
   @PatchMapping("/api/orders/{id}/status")
@@ -97,6 +148,14 @@ public class OrderController {
   @PostMapping("/api/orders/{orderId}/reset-pin")
   public ApiResponse<OrderResponse> resetPin(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("ORDER_PIN_RESET", "Order PIN reset", orderService.resetPin(orderId, userId));
+  }
+
+  @PostMapping("/api/orders/{orderId}/delegate")
+  public ApiResponse<OrderResponse> delegate(
+      @PathVariable Long orderId,
+      @Valid @RequestBody DelegateOrderRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("ORDER_DELEGATED", "Order pickup delegated", orderService.delegate(orderId, userId, request));
   }
 
   @PostMapping("/api/orders/{orderId}/checkout")

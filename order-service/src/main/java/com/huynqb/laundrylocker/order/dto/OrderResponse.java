@@ -18,6 +18,7 @@ public record OrderResponse(
     String serviceCategory,
     String status,
     String pinCode,
+    String qrToken,
     BigDecimal actualWeight,
     String weightUnit,
     BigDecimal extraFee,

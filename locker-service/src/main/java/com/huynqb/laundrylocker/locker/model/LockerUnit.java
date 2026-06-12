@@ -38,6 +38,12 @@ public class LockerUnit {
   private Double latitude;
   private Double longitude;
 
+  @Column(name = "landing_pad", nullable = false)
+  private Boolean landingPad = false;
+
+  @Column(name = "landing_marker_id", length = 50)
+  private String landingMarkerId;
+
   @Column(length = 2000)
   private String description;
 

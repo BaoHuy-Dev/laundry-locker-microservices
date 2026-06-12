@@ -31,6 +31,19 @@ public class LockerBox {
   @Column(length = 30)
   private String size = "MEDIUM";
 
+  // DRONE: hàng 1 chỉ nhận hàng drone thả; STANDARD: đa dịch vụ; XL: ô vali khu trái
+  @Column(name = "cell_type", nullable = false, length = 30)
+  private String cellType = "STANDARD";
+
+  @Column(name = "row_index")
+  private Integer rowIndex;
+
+  @Column(name = "col_index")
+  private Integer colIndex;
+
+  @Column(name = "fault_reason", length = 500)
+  private String faultReason;
+
   @Column(name = "is_active", nullable = false)
   private Boolean active = true;
 

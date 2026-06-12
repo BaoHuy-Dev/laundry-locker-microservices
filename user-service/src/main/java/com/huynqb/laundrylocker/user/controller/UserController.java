@@ -204,4 +204,9 @@ public class UserController {
   public ApiResponse<UserSummary> getInternal(@PathVariable Long id) {
     return ApiResponse.ok(userProfileService.get(id));
   }
+
+  @GetMapping("/internal/users/by-phone")
+  public ApiResponse<UserSummary> getByPhoneInternal(@org.springframework.web.bind.annotation.RequestParam String phone) {
+    return ApiResponse.ok(userProfileService.getByPhone(phone));
+  }
 }

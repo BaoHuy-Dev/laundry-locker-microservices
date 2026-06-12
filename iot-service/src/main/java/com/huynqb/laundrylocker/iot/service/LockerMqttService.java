@@ -48,12 +48,32 @@ public class LockerMqttService {
       MqttConnectionOptions options = new MqttConnectionOptions();
       options.setAutomaticReconnect(true);
       options.setCleanStart(true);
-      
-      client.connect(options);
-      log.info("Connected to MQTT Broker: {}", brokerUrl);
 
       String resultTopic = "cabinet/+/command/+/result";
-      client.subscribe(new String[]{resultTopic, "cabinet/+/heartbeat", "cabinet/+/locker/+/status"}, new int[]{1, 1, 1}, new IMqttMessageListener() {
+      // Paho mqttv5 1.2.5: subscribe(...) với IMqttMessageListener bị bug đệ quy vô hạn
+      // (StackOverflowError), nên phải nhận message qua setCallback toàn cục.
+      client.setCallback(new org.eclipse.paho.mqttv5.client.MqttCallback() {
+        @Override
+        public void disconnected(org.eclipse.paho.mqttv5.client.MqttDisconnectResponse disconnectResponse) {
+          log.warn("MQTT disconnected: {}", disconnectResponse.getReasonString());
+        }
+
+        @Override
+        public void mqttErrorOccurred(MqttException exception) {
+          log.warn("MQTT error: {}", exception.getMessage());
+        }
+
+        @Override
+        public void deliveryComplete(org.eclipse.paho.mqttv5.client.IMqttToken token) {}
+
+        @Override
+        public void connectComplete(boolean reconnect, String serverURI) {
+          log.info("MQTT connected (reconnect={}) to {}", reconnect, serverURI);
+        }
+
+        @Override
+        public void authPacketArrived(int reasonCode, MqttProperties properties) {}
+
         @Override
         public void messageArrived(String topic, MqttMessage message) {
           try {
@@ -89,6 +109,13 @@ public class LockerMqttService {
           }
         }
       });
+
+      client.connect(options);
+      log.info("Connected to MQTT Broker: {}", brokerUrl);
+
+      client.subscribe(
+          new String[] {resultTopic, "cabinet/+/heartbeat", "cabinet/+/locker/+/status"},
+          new int[] {1, 1, 1});
       log.info("Subscribed to MQTT topics: {}, cabinet/+/heartbeat, cabinet/+/locker/+/status", resultTopic);
 
     } catch (MqttException e) {

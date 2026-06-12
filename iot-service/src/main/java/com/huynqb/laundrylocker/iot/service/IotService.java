@@ -70,19 +70,21 @@ public class IotService {
   }
 
   public VerifyPinResponse verifyPin(VerifyPinRequest request) {
+    return verifyAccess(request.boxId(), request.pinCode());
+  }
+
+  /** Accepts either a 6-digit PIN or a signed QR token (LLQR.*) as credential. */
+  public VerifyPinResponse verifyAccess(Long boxId, String code) {
     try {
-      OrderLookupResponse order = orderClient.getByPin(request.pinCode()).data();
+      OrderLookupResponse order = orderClient.getByAccess(code).data();
       boolean validBox =
-          ("INITIALIZED".equals(order.status()) && request.boxId().equals(order.sendBoxId()))
-              || ("RETURNED".equals(order.status()) && request.boxId().equals(order.receiveBoxId()))
-              || request.boxId().equals(order.sendBoxId())
-              || request.boxId().equals(order.receiveBoxId());
+          boxId.equals(order.sendBoxId()) || boxId.equals(order.receiveBoxId());
       if (!validBox) {
-        return new VerifyPinResponse(false, order.id(), request.boxId(), order.status(), "PIN does not match this box");
+        return new VerifyPinResponse(false, order.id(), boxId, order.status(), "Access code does not match this box");
       }
-      return new VerifyPinResponse(true, order.id(), request.boxId(), order.status(), "PIN verified");
+      return new VerifyPinResponse(true, order.id(), boxId, order.status(), "Access verified");
     } catch (Exception ex) {
-      return new VerifyPinResponse(false, null, request.boxId(), null, "Invalid PIN code");
+      return new VerifyPinResponse(false, null, boxId, null, "Invalid access code");
     }
   }
 
