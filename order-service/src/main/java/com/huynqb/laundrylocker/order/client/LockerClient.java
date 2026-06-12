@@ -16,6 +16,9 @@ public interface LockerClient {
   @PostMapping("/{id}/reserve")
   ApiResponse<LockerBoxSummary> reserveBox(@PathVariable Long id);
 
+  @PostMapping("/{id}/occupy")
+  ApiResponse<LockerBoxSummary> occupyBox(@PathVariable Long id);
+
   @PostMapping("/{id}/release")
   ApiResponse<LockerBoxSummary> releaseBox(@PathVariable Long id);
 }

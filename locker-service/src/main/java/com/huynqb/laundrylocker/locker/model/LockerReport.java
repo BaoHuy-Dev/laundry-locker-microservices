@@ -37,6 +37,15 @@ public class LockerReport {
   @Column(nullable = false, length = 30)
   private String status = "OPEN";
 
+  @Column(name = "box_id")
+  private Long boxId;
+
+  @Column(name = "assigned_to_user_id")
+  private Long assignedToUserId;
+
+  @Column(name = "assigned_at")
+  private LocalDateTime assignedAt;
+
   @Column(name = "resolved_by_user_id")
   private Long resolvedByUserId;
 

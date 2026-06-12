@@ -6,10 +6,15 @@ import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.order.client.LockerCellClient;
 import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.client.UserClient;
+import com.huynqb.laundrylocker.order.dto.CellDto;
 import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.DelegateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
+import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintResponse;
 import com.huynqb.laundrylocker.order.dto.OrderDetailResponse;
@@ -71,7 +76,9 @@ public class OrderService {
   private final RabbitTemplate rabbitTemplate;
   private final UserClient userClient;
   private final LockerClient lockerClient;
+  private final LockerCellClient lockerCellClient;
   private final NotificationClient notificationClient;
+  private final QrTokenService qrTokenService;
 
   @Value("${app.order.pickup-hours-limit:24}")
   private int pickupHoursLimit;
@@ -84,6 +91,21 @@ public class OrderService {
 
   @Value("${app.order.pickup-max-overtime-percent:50}")
   private int maxOvertimePercent;
+
+  @Value("${app.order.send-pickup-hours-limit:48}")
+  private int sendPickupHoursLimit;
+
+  @Value("${app.order.send-base-fee:15000}")
+  private long sendBaseFee;
+
+  @Value("${app.order.rental-rate-standard:5000}")
+  private long rentalRateStandard;
+
+  @Value("${app.order.rental-rate-xl:10000}")
+  private long rentalRateXl;
+
+  @Value("${app.order.reminder-cooldown-minutes:60}")
+  private int reminderCooldownMinutes;
 
   @Transactional
   public OrderResponse create(CreateOrderRequest request) {
@@ -124,6 +146,13 @@ public class OrderService {
   @Transactional
   public OrderResponse updateStatus(Long id, UpdateOrderStatusRequest request) {
     LockerOrder order = find(id);
+    String target = request.status() == null ? "" : request.status().toUpperCase();
+    if ("CANCELED".equals(target) || "COMPLETED".equals(target)) {
+      releaseBoxes(order);
+    }
+    if ("RETURNED".equals(target)) {
+      occupyBoxQuietly(request.receiveBoxId());
+    }
     return transition(order, request.status(), request.staffId(), request.receiveBoxId(), null);
   }
 
@@ -131,24 +160,232 @@ public class OrderService {
   public OrderResponse confirm(Long id, Long userId) {
     LockerOrder order = find(id);
     assertOwner(order, userId);
+    validateStatus(order, Set.of("INITIALIZED"));
+    occupyBoxQuietly(order.getSendBoxId());
+    if ("SEND".equalsIgnoreCase(order.getType())) {
+      // Stage 2 of the SEND flow: the drop PIN dies here, a fresh pickup PIN
+      // goes to the receiver — the sender can no longer open the cell.
+      order.setPinCode(generatePinCode());
+      order.setPinCodeIssuedAt(LocalDateTime.now());
+      order.setPickupDeadline(LocalDateTime.now().plusHours(sendPickupHoursLimit));
+      notifyParcelReadyForReceiver(order);
+      return transition(order, "STORING", userId, null,
+          "Sender dropped parcel; pickup PIN issued to receiver " + order.getReceiverPhone());
+    }
+    if ("RENTAL".equalsIgnoreCase(order.getType())) {
+      return transition(order, "STORING", userId, null, "Renter placed items; multi-use PIN active until deadline");
+    }
     return transition(order, "STORING", userId, null, "Customer confirmed items dropped in locker");
   }
 
+  @Transactional
+  public OrderResponse createSend(SendOrderRequest request, Long userId) {
+    Long boxId = request.boxId();
+    if (boxId == null) {
+      boxId = findAvailableCell(request.lockerId(), request.size(), "STANDARD");
+    }
+    BigDecimal price = request.totalPrice() == null ? BigDecimal.valueOf(sendBaseFee) : request.totalPrice();
+    return create(
+        new CreateOrderRequest(
+            userId, request.lockerId(), boxId, null, null,
+            "SEND", "PARCEL",
+            null, request.receiverPhone(), request.receiverName(),
+            null, null, request.note(), null, null, null, null, null, price));
+  }
 
+  @Transactional
+  public OrderResponse createRental(RentalOrderRequest request, Long userId) {
+    String cellType = StringUtils.hasText(request.cellType()) ? request.cellType().toUpperCase() : "STANDARD";
+    if ("DRONE".equals(cellType)) {
+      throw new BusinessException("DRONE_CELL_RESTRICTED", "Drone cells cannot be rented");
+    }
+    Long boxId = request.boxId();
+    if (boxId == null) {
+      boxId = findAvailableCell(request.lockerId(), null, cellType);
+    }
+    BigDecimal price = rentalRate(cellType).multiply(BigDecimal.valueOf(request.hours()));
+    OrderResponse created =
+        create(
+            new CreateOrderRequest(
+                userId, request.lockerId(), boxId, null, null,
+                "RENTAL", "RENTAL",
+                null, null, null, null, null, request.note(), null, null, null, null, null, price));
+    LockerOrder order = find(created.id());
+    order.setPickupDeadline(LocalDateTime.now().plusHours(request.hours()));
+    return toResponse(orderRepository.save(order));
+  }
+
+  @Transactional
+  public OrderResponse extendRental(Long id, Long userId, int hours) {
+    LockerOrder order = find(id);
+    assertOwner(order, userId);
+    if (!"RENTAL".equalsIgnoreCase(order.getType())) {
+      throw new BusinessException("ORDER_STATUS_INVALID", "Only rental orders can be extended");
+    }
+    validateStatus(order, Set.of("INITIALIZED", "STORING"));
+    LocalDateTime base =
+        order.getPickupDeadline() == null || order.getPickupDeadline().isBefore(LocalDateTime.now())
+            ? LocalDateTime.now()
+            : order.getPickupDeadline();
+    order.setPickupDeadline(base.plusHours(hours));
+    BigDecimal extra = rentalRate(cellTypeOfRental(order)).multiply(BigDecimal.valueOf(hours));
+    order.setTotalPrice(order.getTotalPrice().add(extra));
+    order.setOriginalPrice(order.getOriginalPrice().add(extra));
+    LockerOrder saved = orderRepository.save(order);
+    addHistory(saved.getId(), saved.getStatus(), saved.getStatus(), userId,
+        "Rental extended by " + hours + "h until " + saved.getPickupDeadline());
+    notifyQuietly(saved.getUserId(), "Rental extended",
+        "Rental " + saved.getOrderCode() + " extended until " + saved.getPickupDeadline(),
+        "ORDER_RENTAL_EXTENDED", saved.getId());
+    return toResponse(saved);
+  }
+
+  private String cellTypeOfRental(LockerOrder order) {
+    if (order.getSendBoxId() == null) {
+      return "STANDARD";
+    }
+    try {
+      CellDto cell = lockerCellClient.getCell(order.getSendBoxId()).data();
+      return cell == null || cell.cellType() == null ? "STANDARD" : cell.cellType();
+    } catch (Exception ex) {
+      return "STANDARD";
+    }
+  }
+
+  private BigDecimal rentalRate(String cellType) {
+    return BigDecimal.valueOf("XL".equalsIgnoreCase(cellType) ? rentalRateXl : rentalRateStandard);
+  }
+
+  private Long findAvailableCell(Long lockerId, String size, String cellType) {
+    try {
+      CellDto cell = lockerCellClient.findAvailable(lockerId, size, cellType).data();
+      if (cell == null || cell.id() == null) {
+        throw new BusinessException("BOX_NOT_AVAILABLE", "No available cell of requested type");
+      }
+      return cell.id();
+    } catch (BusinessException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw new BusinessException("BOX_NOT_AVAILABLE", "No available cell of requested type");
+    }
+  }
+
+  private void notifyParcelReadyForReceiver(LockerOrder order) {
+    String message =
+        "Parcel " + order.getOrderCode() + " is waiting in locker " + order.getLockerId()
+            + ". Pickup PIN: " + order.getPinCode()
+            + ". Deadline: " + order.getPickupDeadline();
+    try {
+      var receiver = userClient.getUserByPhone(order.getReceiverPhone()).data();
+      if (receiver != null && receiver.id() != null) {
+        order.setReceiverId(receiver.id());
+        notificationClient.requestNotification(
+            new NotificationRequest(receiver.id(), "Parcel waiting for you", message, "ORDER_PARCEL_READY", order.getId(), "ORDER"));
+      }
+    } catch (Exception ex) {
+      // Receiver has no account (or user-service is down): the sender keeps the
+      // PIN in their order detail and shares it out-of-band (SMS gateway is a
+      // production integration point).
+      log.info("Receiver {} not notified in-app for order {}: {}", order.getReceiverPhone(), order.getId(), ex.getMessage());
+    }
+    notifyQuietly(order.getUserId(), "Parcel stored",
+        "Parcel " + order.getOrderCode() + " stored. Receiver " + order.getReceiverPhone()
+            + " can pick up with PIN " + order.getPinCode() + " before " + order.getPickupDeadline(),
+        "ORDER_PARCEL_STORED", order.getId());
+  }
+
+  private void notifyQuietly(Long userId, String title, String message, String type, Long orderId) {
+    try {
+      notificationClient.requestNotification(new NotificationRequest(userId, title, message, type, orderId, "ORDER"));
+    } catch (Exception ex) {
+      log.warn("Could not notify user {} for order {}: {}", userId, orderId, ex.getMessage());
+    }
+  }
+
+  @Transactional
+  public OrderResponse collect(Long id, Long staffId) {
+    LockerOrder order = find(id);
+    validateStatus(order, Set.of("STORING", "INITIALIZED"));
+    if (order.getSendBoxId() != null) {
+      lockerClient.releaseBox(order.getSendBoxId());
+    }
+    return transition(order, "COLLECTED", staffId, null, "Staff collected items from locker");
+  }
+
+  @Transactional
+  public OrderResponse updateWeight(Long id, UpdateOrderWeightRequest request, Long staffId) {
+    LockerOrder order = find(id);
+    validateStatus(order, Set.of("COLLECTED", "PROCESSING"));
+    order.setActualWeight(request.actualWeight());
+    if (StringUtils.hasText(request.weightUnit())) {
+      order.setWeightUnit(request.weightUnit().toUpperCase());
+    }
+    if (request.items() != null && !request.items().isEmpty()) {
+      detailRepository.deleteByOrderId(order.getId());
+      BigDecimal newTotal = saveItemDetails(order.getId(), request.items(), request.actualWeight());
+      order.setOriginalPrice(newTotal);
+      BigDecimal discount = order.getDiscount() == null ? BigDecimal.ZERO : order.getDiscount();
+      BigDecimal extraFee = order.getExtraFee() == null ? BigDecimal.ZERO : order.getExtraFee();
+      order.setTotalPrice(newTotal.subtract(discount).max(BigDecimal.ZERO).add(extraFee));
+    }
+    order.setStaffId(staffId);
+    LockerOrder saved = orderRepository.save(order);
+    addHistory(saved.getId(), saved.getStatus(), saved.getStatus(), staffId,
+        StringUtils.hasText(request.staffNote()) ? request.staffNote() : "Staff updated order weight");
+    return toResponse(saved);
+  }
+
+  @Transactional
+  public OrderResponse process(Long id, Long staffId) {
+    LockerOrder order = find(id);
+    validateStatus(order, Set.of("COLLECTED"));
+    return transition(order, "PROCESSING", staffId, null, "Staff started processing order");
+  }
+
+  @Transactional
+  public OrderResponse ready(Long id, Long staffId) {
+    LockerOrder order = find(id);
+    validateStatus(order, Set.of("PROCESSING", "COLLECTED"));
+    return transition(order, "READY", staffId, null, "Order is ready for return");
+  }
+
+  @Transactional
+  public OrderResponse returnOrder(Long id, Long boxId, Long staffId) {
+    LockerOrder order = find(id);
+    validateStatus(order, Set.of("READY", "PROCESSING"));
+    if (boxId != null) {
+      lockerClient.reserveBox(boxId);
+      occupyBoxQuietly(boxId);
+    }
+    order.setPinCode(generatePinCode());
+    order.setPinCodeIssuedAt(LocalDateTime.now());
+    order.setReturnedAt(LocalDateTime.now());
+    order.setPickupDeadline(LocalDateTime.now().plusHours(pickupHoursLimit));
+    return transition(order, "RETURNED", staffId, boxId, "Staff returned items to locker");
+  }
+
+  @Transactional
+  public OrderResponse checkout(Long id, Long staffId, String note) {
+    LockerOrder order = find(id);
+    validateStatus(order, Set.of("READY", "RETURNED", "STORING"));
+    releaseBoxes(order);
+    order.setCompletedAt(LocalDateTime.now());
+    order.setPinCode(null);
+    return transition(order, "COMPLETED", staffId, order.getReceiveBoxId(),
+        StringUtils.hasText(note) ? note : "Order checked out by staff");
+  }
 
   @Transactional
   public OrderResponse complete(Long id, Long userId) {
     LockerOrder order = find(id);
-    assertOwner(order, userId);
+    assertOwnerOrReceiver(order, userId);
     validateStatus(order, Set.of("STORING", "RETURNED"));
     BigDecimal overtime = calculatePickupOvertimeFee(order);
     if (overtime.compareTo(BigDecimal.ZERO) > 0) {
       order.setExtraFee(order.getExtraFee().add(overtime));
       order.setTotalPrice(order.getTotalPrice().add(overtime));
     }
-    if (order.getReceiveBoxId() != null) {
-      lockerClient.releaseBox(order.getReceiveBoxId());
-    }
+    releaseBoxes(order);
     order.setCompletedAt(LocalDateTime.now());
     order.setPinCode(null);
     return transition(order, "COMPLETED", userId, order.getReceiveBoxId(), "Customer completed pickup");
@@ -174,21 +411,67 @@ public class OrderService {
     return toResponse(orderRepository.save(order));
   }
 
+  @Transactional
+  public OrderResponse delegate(Long id, Long userId, DelegateOrderRequest request) {
+    LockerOrder order = find(id);
+    assertOwner(order, userId);
+    // Chỉ ủy quyền khi đồ đang nằm trong tủ chờ lấy
+    validateStatus(order, Set.of("STORING", "RETURNED"));
+    order.setPinCode(generatePinCode());
+    order.setPinCodeIssuedAt(LocalDateTime.now());
+    order.setReceiverPhone(request.phone());
+    if (StringUtils.hasText(request.name())) {
+      order.setReceiverName(request.name());
+    }
+    LockerOrder saved = orderRepository.save(order);
+    addHistory(
+        saved.getId(),
+        saved.getStatus(),
+        saved.getStatus(),
+        userId,
+        "Delegated pickup to " + request.phone()
+            + (StringUtils.hasText(request.note()) ? " - " + request.note() : ""));
+    try {
+      notificationClient.requestNotification(
+          new NotificationRequest(
+              saved.getUserId(),
+              "Order delegated",
+              "Order " + saved.getOrderCode() + " pickup delegated to " + request.phone()
+                  + ". New PIN issued.",
+              "ORDER_DELEGATED",
+              saved.getId(),
+              "ORDER"));
+    } catch (Exception ex) {
+      log.warn("Could not notify delegation for order {}: {}", saved.getId(), ex.getMessage());
+    }
+    return toResponse(saved);
+  }
+
 
 
   @Transactional
   public OrderResponse pickupStorage(Long id, Long userId) {
     LockerOrder order = find(id);
     assertOwner(order, userId);
-    if (!"STORAGE".equalsIgnoreCase(order.getType())
-        && !"STORAGE".equalsIgnoreCase(order.getServiceCategory())) {
-      throw new BusinessException("ORDER_STATUS_INVALID", "Only storage orders can use pickup-storage");
+    boolean storageLike =
+        "STORAGE".equalsIgnoreCase(order.getType())
+            || "STORAGE".equalsIgnoreCase(order.getServiceCategory())
+            || "RENTAL".equalsIgnoreCase(order.getType())
+            || "RENTAL".equalsIgnoreCase(order.getServiceCategory());
+    if (!storageLike) {
+      throw new BusinessException("ORDER_STATUS_INVALID", "Only storage/rental orders can use pickup-storage");
     }
     validateStatus(order, Set.of("STORING", "INITIALIZED", "RETURNED"));
+    BigDecimal overtime = calculatePickupOvertimeFee(order);
+    if (overtime.compareTo(BigDecimal.ZERO) > 0) {
+      order.setExtraFee(order.getExtraFee().add(overtime));
+      order.setTotalPrice(order.getTotalPrice().add(overtime));
+    }
     releaseBoxes(order);
     order.setCompletedAt(LocalDateTime.now());
     order.setPinCode(null);
-    return transition(order, "COMPLETED", userId, order.getReceiveBoxId(), "Storage order picked up");
+    return transition(order, "COMPLETED", userId, order.getReceiveBoxId(),
+        "RENTAL".equalsIgnoreCase(order.getType()) ? "Rental ended, cell released" : "Storage order picked up");
   }
 
   @Transactional
@@ -264,6 +547,78 @@ public class OrderService {
         orderRepository
             .findByPinCode(pinCode)
             .orElseThrow(() -> new BusinessException("ORDER_NOT_FOUND", "Order not found for PIN")));
+  }
+
+  // Single entry point for the cabinet screen: a 6-digit PIN or a signed QR
+  // token are interchangeable access credentials.
+  @Transactional(readOnly = true)
+  public OrderResponse getByAccess(String code) {
+    if (!StringUtils.hasText(code)) {
+      throw new BusinessException("INVALID_ACCESS_CODE", "Access code is required");
+    }
+    String trimmed = code.trim();
+    if (trimmed.startsWith(QrTokenService.PREFIX)) {
+      Long orderId = qrTokenService.parseOrderId(trimmed);
+      if (orderId == null) {
+        throw new BusinessException("INVALID_ACCESS_CODE", "Malformed QR token");
+      }
+      LockerOrder order = find(orderId);
+      if (!qrTokenService.matches(trimmed, order.getId(), order.getPinCode())) {
+        throw new BusinessException("INVALID_ACCESS_CODE", "QR token expired or revoked");
+      }
+      return toResponse(order);
+    }
+    return getByPin(trimmed);
+  }
+
+  @Transactional(readOnly = true)
+  public List<OrderResponse> manageList(String status, String type, Long lockerId) {
+    return orderRepository.findAll().stream()
+        .filter(o -> status == null || o.getStatus().equalsIgnoreCase(status))
+        .filter(o -> type == null || o.getType().equalsIgnoreCase(type))
+        .filter(o -> lockerId == null || lockerId.equals(o.getLockerId()))
+        .sorted(java.util.Comparator.comparing(LockerOrder::getCreatedAt).reversed())
+        .limit(500)
+        .map(this::toResponse)
+        .toList();
+  }
+
+  @Transactional
+  public int sendPickupReminders() {
+    LocalDateTime now = LocalDateTime.now();
+    int sent = 0;
+    List<LockerOrder> candidates = new java.util.ArrayList<>();
+    candidates.addAll(orderRepository.findByStatusOrderByCreatedAtDesc("RETURNED"));
+    candidates.addAll(orderRepository.findByStatusOrderByCreatedAtDesc("STORING"));
+    for (LockerOrder order : candidates) {
+      if (order.getPickupDeadline() == null || now.isBefore(order.getPickupDeadline())) {
+        continue;
+      }
+      if (order.getLastReminderAt() != null
+          && order.getLastReminderAt().isAfter(now.minusMinutes(reminderCooldownMinutes))) {
+        continue;
+      }
+      boolean rental = "RENTAL".equalsIgnoreCase(order.getType());
+      notifyQuietly(order.getUserId(),
+          rental ? "Rental expired" : "Pickup overdue",
+          (rental
+                  ? "Rental " + order.getOrderCode() + " expired at " + order.getPickupDeadline()
+                  : "Order " + order.getOrderCode() + " passed its pickup deadline " + order.getPickupDeadline())
+              + ". Overtime fee applies.",
+          "ORDER_PICKUP_OVERDUE", order.getId());
+      if (order.getReceiverId() != null) {
+        notifyQuietly(order.getReceiverId(), "Pickup overdue",
+            "Parcel " + order.getOrderCode() + " is still waiting. Overtime fee applies.",
+            "ORDER_PICKUP_OVERDUE", order.getId());
+      }
+      order.setLastReminderAt(now);
+      orderRepository.save(order);
+      sent++;
+    }
+    if (sent > 0) {
+      log.info("Pickup reminders sent: {}", sent);
+    }
+    return sent;
   }
 
   @Transactional(readOnly = true)
@@ -588,6 +943,19 @@ public class OrderService {
     }
   }
 
+  // Cell state is a best-effort mirror of the physical cabinet: an occupy
+  // failure (e.g. legacy box already OCCUPIED) must not abort the order flow.
+  private void occupyBoxQuietly(Long boxId) {
+    if (boxId == null) {
+      return;
+    }
+    try {
+      lockerClient.occupyBox(boxId);
+    } catch (Exception ex) {
+      log.warn("Could not occupy box {}: {}", boxId, ex.getMessage());
+    }
+  }
+
   private BigDecimal calculatePickupOvertimeFee(LockerOrder order) {
     if (order.getPickupDeadline() == null || !LocalDateTime.now().isAfter(order.getPickupDeadline())) {
       return BigDecimal.ZERO;
@@ -609,6 +977,15 @@ public class OrderService {
     if (userId != null && !userId.equals(order.getUserId())) {
       throw new BusinessException("ORDER_FORBIDDEN", "Order does not belong to user");
     }
+  }
+
+  private void assertOwnerOrReceiver(LockerOrder order, Long userId) {
+    if (userId == null
+        || userId.equals(order.getUserId())
+        || userId.equals(order.getReceiverId())) {
+      return;
+    }
+    throw new BusinessException("ORDER_FORBIDDEN", "Order does not belong to user");
   }
 
   private LockerOrder find(Long id) {
@@ -638,6 +1015,7 @@ public class OrderService {
         order.getServiceCategory(),
         order.getStatus(),
         order.getPinCode(),
+        qrTokenService.issue(order.getId(), order.getPinCode()),
         order.getActualWeight(),
         order.getWeightUnit(),
         order.getExtraFee(),
@@ -749,7 +1127,8 @@ public class OrderService {
   }
 
   private String generateOrderCode() {
-    String randomPart = Integer.toString(RANDOM.nextInt(36 * 36 * 36 * 36 * 36 * 36), 36).toUpperCase();
+    // 36^6 vượt quá Integer.MAX_VALUE nên phải sinh bằng long
+    String randomPart = Long.toString(RANDOM.nextLong(2_176_782_336L), 36).toUpperCase();
     return "ORD-" + LocalDate.now().toString().replace("-", "") + "-" + randomPart;
   }
 }

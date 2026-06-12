@@ -7,14 +7,18 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(name = "order-service", path = "/api/orders")
+@FeignClient(name = "order-service")
 public interface OrderClient {
 
-  @GetMapping("/pin/{pinCode}")
+  @GetMapping("/api/orders/pin/{pinCode}")
   ApiResponse<OrderLookupResponse> getByPin(@PathVariable String pinCode);
 
-  @PutMapping("/{orderId}/complete")
+  @GetMapping("/internal/orders/by-access")
+  ApiResponse<OrderLookupResponse> getByAccess(@RequestParam("code") String code);
+
+  @PutMapping("/api/orders/{orderId}/complete")
   ApiResponse<OrderLookupResponse> complete(
       @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId);
 }

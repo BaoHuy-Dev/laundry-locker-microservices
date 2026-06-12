@@ -1,0 +1,192 @@
+# Smart Laundry Locker Mobile Convention
+
+<!-- CURRENT_STATUS_START -->
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+<!-- CURRENT_STATUS_END -->
+
+This document is the project guide for contributors working on the current Flutter mobile app. Read it before adding features, moving files, or changing UI conventions.
+
+## Project Overview
+
+- App name: `smart_laundry_locker`
+- Product: Smart Laundry Locker mobile application
+- Main target: Android Flutter app
+- Current source shape: migrated Flutter application using feature-based Clean Architecture
+- Package imports must use `package:smart_laundry_locker/...`
+- Do not introduce or keep `package:aisl_app/...` imports
+
+## Tech Stack
+
+- Flutter stable 3.44.0
+- Dart 3.12.0
+- Riverpod 3 for state management
+- GoRouter 17 for navigation
+- Dio for HTTP networking
+- Firebase Core and Firebase Messaging
+- Shadcn UI for shared UI styling
+- `json_serializable`, `envied`, and `build_runner` for generated code
+- `lucide_icons_flutter` for semantic icons
+
+## Folder Structure
+
+Use this top-level structure for new code:
+
+```text
+lib/
+├── core/
+│   ├── config/
+│   ├── constants/
+│   ├── domain/
+│   ├── enums/
+│   ├── errors/
+│   ├── network/
+│   ├── presentation/
+│   ├── routing/
+│   ├── services/
+│   ├── theme/
+│   ├── utils/
+│   └── widgets/
+├── features/
+│   └── <feature_name>/
+│       ├── domain/
+│       ├── application/
+│       ├── infrastructure/
+│       └── presentation/
+├── shared/
+│   ├── icons/
+│   ├── utils/
+│   └── widgets/
+├── firebase_options.dart
+├── injection_container.dart
+└── main.dart
+```
+
+## Layer Rules
+
+- `domain`: entities, value objects, repository contracts, domain-level rules.
+- `application`: use cases, application services, orchestration that belongs to a feature.
+- `infrastructure`: API models, DTOs, data sources, repository implementations, persistence adapters.
+- `presentation`: pages, providers/controllers, view models, and feature-specific widgets.
+- `core`: app-wide concerns such as routing, network clients, token services, config, theme, errors, and constants.
+- `shared`: reusable widgets, icons, and utilities that are not owned by one feature.
+
+Keep feature-specific code inside its feature folder. Move reusable code to `core` or `shared` only when at least two features need it.
+
+## Import Rules
+
+- Prefer package imports for cross-folder imports:
+
+```dart
+import 'package:smart_laundry_locker/features/home/data/models/blog_model.dart';
+```
+
+- Relative imports are acceptable only inside the same small folder or tightly grouped widget files.
+- Never import from another feature's `presentation` layer unless the code has first been moved to `shared`.
+- Avoid circular dependencies between features.
+
+## UI Theme Convention
+
+The app uses a navy blue brand direction. Do not bring back the old orange brand palette.
+
+Preferred brand tokens:
+
+```dart
+static const Color navyPrimary = Color(0xFF0A2342);
+static const Color navySecondary = Color(0xFF12355B);
+static const Color navyAccent = Color(0xFF1E5A8A);
+static const Color navySurface = Color(0xFFF6F8FB);
+```
+
+Rules:
+
+- Prefer centralized theme/constants over hardcoded brand colors.
+- Do not use old brand values like `0xFFfb8520`, `0xFFFF7A00`, `0xFFFFA040`, or `Colors.orange` for brand UI.
+- Keep semantic colors meaningful:
+  - success stays green
+  - error/destructive stays red
+  - warning stays amber/yellow
+  - disabled/neutral stays gray
+- Do not recolor status, validation, or destructive states to navy if that hides meaning.
+
+## Icon Convention
+
+Icons must communicate a real action, status, or destination. Do not use random decorative icons.
+
+Good icon intent examples:
+
+- navigation: back, close, menu, chevron
+- search/filter/sort: search, sliders, filter, sort
+- feedback: check, error, warning, info
+- wallet/payment: wallet, card, receipt, transaction
+- location/locker/order/profile: map pin, package, list, user
+- refresh/sync: refresh, loader, retry
+
+Rules:
+
+- Use existing icon sources first: `lucide_icons_flutter`, Material Icons, or existing SVG assets.
+- Do not add a new icon dependency unless the existing options cannot express the required meaning.
+- If an icon is misleading, replace it with a simpler correct icon or remove it.
+- Text-only UI is better than decorative noise.
+
+## Code Style
+
+- Keep files focused and readable.
+- Prefer small widgets and small services over large mixed-responsibility files.
+- Do not add backward-compatibility code unless there is persisted data, shipped behavior, an external consumer, or an explicit requirement.
+- Prefer explicit names over clever abstractions.
+- Keep generated files generated by the source tool; do not hand-edit `.g.dart` files.
+- Run format after editing Dart files.
+
+## Assets
+
+- Declare asset folders in `pubspec.yaml`.
+- Keep markdown policy files under `assets/markdown/`.
+- Keep image assets under `assets/images/`.
+- Keep SVG/icon assets under `assets/icons/`.
+- Do not commit local build outputs or generated cache folders.
+
+## Local Files To Ignore
+
+The following folders are local tooling state and must not be committed:
+
+```text
+.agent/
+.codegraph/
+.dart_tool/
+build/
+```
+
+## Development Commands
+
+Run these commands before handing work off:
+
+```bash
+flutter pub get
+dart format lib test
+dart run build_runner build --delete-conflicting-outputs
+flutter test
+flutter build apk --debug
+```
+
+Use this command to inspect analyzer debt:
+
+```bash
+flutter analyze
+```
+
+Current status note: the app builds a debug APK and tests pass, but `flutter analyze` still reports warning/info lint debt from the migrated codebase. Treat new analyzer errors as blockers, and reduce existing warning debt when touching nearby files.
+
+## Git Convention
+
+- Keep commits focused and named clearly.
+- Example commit messages:
+  - `feat: migrate mobile app and add project conventions`
+  - `fix: resolve home provider imports`
+  - `docs: update project conventions`
+- Check staged files before committing:
+
+```bash
+git status --short
+```
+
+- Never stage `.agent/`, `.codegraph/`, local cache folders, or build outputs.

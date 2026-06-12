@@ -8,4 +8,6 @@ public record LockerResponse(
     String status,
     String address,
     Double latitude,
-    Double longitude) {}
+    Double longitude,
+    Boolean landingPad,
+    String landingMarkerId) {}

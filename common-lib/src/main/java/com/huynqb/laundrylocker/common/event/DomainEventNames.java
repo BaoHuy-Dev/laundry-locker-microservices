@@ -9,6 +9,7 @@ public final class DomainEventNames {
   public static final String PAYMENT_FAILED = "payment.failed";
   public static final String NOTIFICATION_REQUESTED = "notification.requested";
   public static final String LOCKER_BOX_OPENED = "locker.box.opened";
+  public static final String LOCKER_BOX_FAULT = "locker.box.fault";
   public static final String IOT_DEVICE_STATUS_CHANGED = "iot.device.status.changed";
 
   private DomainEventNames() {}
