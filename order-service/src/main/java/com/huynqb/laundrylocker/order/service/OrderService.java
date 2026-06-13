@@ -107,6 +107,9 @@ public class OrderService {
   @Value("${app.order.reminder-cooldown-minutes:60}")
   private int reminderCooldownMinutes;
 
+  @Value("${app.order.auto-cancel-hours:24}")
+  private int autoCancelHours;
+
   @Transactional
   public OrderResponse create(CreateOrderRequest request) {
     userClient.getUser(request.userId());
@@ -808,14 +811,31 @@ public class OrderService {
         .toList();
   }
 
+  // Reservation TTL: an unconfirmed (INITIALIZED) order keeps its send cell in
+  // RESERVED. If the customer never drops their items within the hold window,
+  // sweep the order to CANCELED *and release the cell* — otherwise the cell
+  // stays stuck RESERVED forever (the old version only flipped the status).
   @Transactional
   public Map<String, Object> autoCancelUnconfirmedOrders() {
-    List<LockerOrder> canceled =
-        orderRepository.findByStatusOrderByCreatedAtDesc("INITIALIZED").stream()
-            .filter(order -> order.getCreatedAt().isBefore(LocalDateTime.now().minusHours(24)))
-            .peek(order -> order.setStatus("CANCELED"))
-            .toList();
-    return Map.of("canceledOrders", canceled.size());
+    LocalDateTime cutoff = LocalDateTime.now().minusHours(autoCancelHours);
+    int canceled = 0;
+    for (LockerOrder order : orderRepository.findByStatusOrderByCreatedAtDesc("INITIALIZED")) {
+      if (order.getCreatedAt() == null || order.getCreatedAt().isAfter(cutoff)) {
+        continue;
+      }
+      releaseBoxes(order);
+      transition(
+          order,
+          "CANCELED",
+          null,
+          null,
+          "Tự hủy: không xác nhận bỏ đồ trong " + autoCancelHours + " giờ; đã nhả ô");
+      canceled++;
+    }
+    if (canceled > 0) {
+      log.info("Auto-canceled unconfirmed orders and released their cells: {}", canceled);
+    }
+    return Map.of("canceledOrders", canceled);
   }
 
   @Transactional
