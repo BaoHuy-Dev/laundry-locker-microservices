@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-13
+> Cập nhật lần cuối: 2026-06-14
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -1036,3 +1036,19 @@ Những phần sau chưa hoàn tất trong sản phẩm đang chạy:
 - Đối soát/thanh quyết toán provider payment cấp production.
 - Cài đặt Firebase/FCM credential cấp production.
 - Full parity các feature mobile legacy với backend hiện tại.
+
+## 25. Phân Tích Luồng Tủ & Bổ Sung Chuẩn Thực Tế (tham chiếu spec)
+
+Tài liệu đặc tả đầy đủ (phân tích as-is bám code + bổ sung toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế + gap map + backlog): **`docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md`** (2026-06-14).
+
+Các điểm as-is đã xác minh trực tiếp từ code, cần lưu ý vì là lỗ hổng đúng đắn của luồng tủ đang chạy:
+
+- **Trạng thái ô chỉ có 4 giá trị**: `AVAILABLE / RESERVED / OCCUPIED / FAULT` (xem `LockerService`). `EXPIRED` chỉ tồn tại ở cấp order qua `pickupDeadline`, ô không có trạng thái `EXPIRED/OUT_OF_SERVICE/CLEANING`.
+- **Ô `RESERVED` không có TTL** và `autoCancelUnconfirmedOrders()` đổi đơn `INITIALIZED`>24h sang `CANCELED` nhưng **không release ô** và **không được `@Scheduled`** → ô có thể kẹt `RESERVED` (Gap G1/G2). `cancel()` thủ công thì có release.
+- **Quá hạn lấy hàng chỉ nhắc + cộng phí**; ô vẫn `OCCUPIED` tới khi có lệnh complete/checkout — chưa có move-to-storage/giải phóng tự động (Gap G3).
+- **Luồng nhận hàng qua shipper/courier (PARCEL_RECEIVE) chưa có code** — SEND hiện chỉ là C2C giữa 2 app-user; chưa có "courier access code" tách với PIN khách (Gap G6).
+- **Deadline SEND mặc định 48h**, laundry pickup 24h; rental deadline = số giờ thuê (cấu hình `app.order.*`).
+- **PIN/QR**: QR ký số HMAC gắn PIN hiện tại → đổi PIN (delegate/reset/SEND handover) vô hiệu QR cũ; `getByAccess` nhận cả PIN và QR.
+- **Trạng thái ô là bản sao best-effort** của order (occupy/release nuốt lỗi) → có rủi ro lệch trạng thái, chưa có job đối soát (Gap G4).
+
+Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ trình implement 7 giai đoạn (L1–L7, mỗi giai đoạn 1 branch) nằm trong spec ở trên.
