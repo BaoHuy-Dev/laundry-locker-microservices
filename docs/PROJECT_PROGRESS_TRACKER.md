@@ -48,12 +48,19 @@ Tóm tắt trạng thái:
 
 - Backend Locker Phase 1: đã xong và đã test.
 - Backend Locker Phase 2: đã xong và đã test.
+- Backend production hardening Phase 1: đã implement correlation ID, Prometheus metrics endpoint, OpenAPI docs runtime, security workflow, và deploy verify.
 - Web admin locker/maintenance: đã implement và đã verify build.
 - Flutter customer/manager/maintenance locker flows: đã implement, đã verify targeted build/analyze.
 - IoT backend verify-access bằng PIN/QR: đã implement.
 - Drone delivery/assignment/tracking thật: chưa implement.
 - AI/RAG: chưa implement.
 - `laundry-service` và `partner-service`: thiếu source module.
+
+## Đang Làm
+
+| Ngày | Branch | Task | Phạm vi dự kiến sửa | Không sửa | Ảnh hưởng |
+|---|---|---|---|---|---|
+| 2026-06-13 | `chore/backend-production-phase1` | Production hardening Phase 1 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, CI workflow, cấu hình runtime service, living docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành backend; không đổi API nghiệp vụ/database/event/UI/mobile. |
 
 ## Bản Đồ Repository
 
@@ -113,7 +120,7 @@ Không commit:
 | Battery-aware assignment | TODO | Gap capstone yêu cầu, chưa có code. | Implement sau khi có drone model. |
 | Realtime drone tracking map | TODO | Chưa có map/telemetry service. | Implement bằng simulator và WebSocket. |
 | AI/RAG support | TODO | Chưa có `ai-service`. | Chọn provider/storage rồi scaffold. |
-| CI/CD | PARTIAL | Docker compose và GitHub Actions backend CI `mvn -B test` đã có; deploy workflow vẫn build package skip tests. | Theo dõi CI trên remote và cân nhắc bắt deploy phụ thuộc CI test. |
+| CI/CD | PARTIAL | Backend CI `mvn -B test`, backend security workflow Dependency Review/CodeQL, và deploy workflow `mvn -B clean verify` đã có. | Theo dõi CI trên remote; thêm container scan/SBOM/release artifact nếu cần production nghiêm ngặt hơn. |
 
 ## Chi Tiết Tiến Độ Backend
 
@@ -130,6 +137,12 @@ Không commit:
   - JWT/QR secret phải có tối thiểu 32 UTF-8 bytes.
   - Profile `prod`/`production` fail-fast nếu còn giá trị demo/dev/change-me/default/localhost/sandbox.
 - GitHub Actions backend CI chạy `mvn -B test` cho PR/push vào các nhánh làm việc chính.
+- Production hardening Phase 1 đã implement:
+  - Gateway và servlet services gắn/forward `X-Correlation-Id`, trả lại header response, và đưa vào MDC log ở servlet services.
+  - Tất cả app có actuator expose thêm `/actuator/metrics` và `/actuator/prometheus`; metrics có tag `application`.
+  - Các servlet service và gateway có OpenAPI runtime endpoint `/v3/api-docs`, bật/tắt bằng `SPRINGDOC_API_DOCS_ENABLED`.
+  - GitHub Actions có workflow security cho Dependency Review và CodeQL.
+  - Deploy workflow build bằng `mvn -B clean verify`, không còn package với `-DskipTests`.
 - Locker cell model đã implement:
   - `cell_type`
   - `row_index`
@@ -277,6 +290,9 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-13 | Backend | `mvn -B clean verify` | PASS | 14 module backend clean/test/package/verify pass với dependency OpenAPI/Prometheus và filter correlation ID mới. |
+| 2026-06-13 | Backend | `mvn test` | PASS | 14 module backend build/test pass sau production hardening Phase 1. |
+| 2026-06-13 | Backend | `mvn -pl common-lib,api-gateway -am test` | PASS | Targeted test cho `CorrelationIdFilter`, `CorrelationIdGatewayFilter`, và `SecuritySecrets`. |
 | 2026-06-13 | Backend | `mvn test` tại `laundry-locker-microservices` | PASS | 14 module backend build/test pass; thêm 6 unit tests cho `SecuritySecrets`. |
 | 2026-06-13 | Backend | `mvn -pl common-lib,api-gateway,auth-service,order-service,payment-service -am test` | PASS | Targeted test cho các module hardening bảo mật. |
 | 2026-06-13 | Git/Docs | `git diff --check` | PASS | Không phát hiện whitespace/error trong diff hiện tại. |
@@ -318,6 +334,11 @@ Quan trọng:
 - Re-test old laundry lifecycle sau các thay đổi Phase 2 trong order service.
 - Đồng nhất role name trên backend seed data, mobile, FE permissions và docs.
 - Tạo demo data script ổn định cho deploy và local.
+- Hoàn thiện production hardening Phase 2:
+  - Resilience4j/circuit breaker/timeout cho Feign service-to-service.
+  - Testcontainers integration tests cho Postgres/RabbitMQ/Flyway và các flow order/locker/payment quan trọng.
+  - Container image scan, SBOM, và security gate cho artifact deploy.
+  - OpenAPI grouping/gateway aggregation nếu team muốn xem API tập trung qua gateway.
 - Thêm automated tests cho:
   - SEND PIN hai giai đoạn.
   - RENTAL extend/end.
@@ -340,8 +361,8 @@ Quan trọng:
 - Battery-aware assignment.
 - Realtime map tracking.
 - AI/RAG support.
-- CI/CD pipeline.
-- Production monitoring/logging.
+- Dựng dashboard/alert thực tế cho Prometheus/Grafana/Loki hoặc stack observability được chọn.
+- CI/CD release pipeline nâng cao: container scan, SBOM, artifact signing, rollback/blue-green.
 
 ## Rủi Ro Và Lưu Ý Đã Biết
 
@@ -357,6 +378,7 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-13 | Codex | Production hardening Phase 1: correlation ID xuyên gateway/service, Prometheus metrics endpoint, OpenAPI runtime docs, backend security workflow, deploy bắt buộc `clean verify`. | `common-lib`, `api-gateway`, service `pom.xml`/`application.yml`, `.github/workflows/*`, living docs. | `mvn -pl common-lib,api-gateway -am test` PASS; `mvn test` PASS; `mvn -B clean verify` PASS. |
 | 2026-06-13 | Codex | Hardening backend nền tảng: secret policy dùng chung, chặn refresh token ở gateway, guard config payment production, thêm backend CI. | `common-lib`, `api-gateway`, `auth-service`, `order-service`, `payment-service`, `.github/workflows/backend-ci.yml`. | `mvn test` PASS toàn bộ backend; `git diff --check` PASS. |
 | 2026-06-13 | Codex | Đổi 2 file sống chính sang tiếng Việt có dấu và sync artifact mirror. | `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, `docs/project-artifacts/markdown-by-project/backend/docs/*`. | Kiểm tra heading tiếng Anh cũ, link/copy artifact, và private txt exclusion. |
 | 2026-06-13 | Codex | Tạo living business flow và progress tracker docs. | `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, artifact copies. | Link đã verify; markdown artifacts đã sync; private local txt không bị copy. |
