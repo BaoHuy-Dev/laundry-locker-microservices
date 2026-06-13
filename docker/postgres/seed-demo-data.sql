@@ -8,7 +8,6 @@ INSERT INTO user_schema.user_profiles (
 ) VALUES
     (1001, 'customer.seed@laundry.test', '0901001001', 'Demo', 'Customer', DATE '1999-01-15', 'https://ui-avatars.com/api/?name=Demo+Customer', 'ACTIVE', 'USER', NOW() - INTERVAL '20 days', NOW()),
     (1002, 'staff.seed@laundry.test', '0901001002', 'Demo', 'Staff', DATE '1997-04-10', 'https://ui-avatars.com/api/?name=Demo+Staff', 'ACTIVE', 'STAFF', NOW() - INTERVAL '18 days', NOW()),
-    (1003, 'partner.seed@laundry.test', '0901001003', 'Demo', 'Partner', DATE '1992-09-21', 'https://ui-avatars.com/api/?name=Demo+Partner', 'ACTIVE', 'PARTNER', NOW() - INTERVAL '17 days', NOW()),
     (1004, 'admin.seed@laundry.test', '0901001004', 'Demo', 'Admin', DATE '1990-12-02', 'https://ui-avatars.com/api/?name=Demo+Admin', 'ACTIVE', 'ADMIN', NOW() - INTERVAL '16 days', NOW()),
     (1005, 'customer.vip@laundry.test', '0901001005', 'Vip', 'Customer', DATE '1995-06-30', 'https://ui-avatars.com/api/?name=Vip+Customer', 'ACTIVE', 'USER', NOW() - INTERVAL '12 days', NOW())
 ON CONFLICT (id) DO UPDATE SET
@@ -25,7 +24,6 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO user_schema.roles(name, description) VALUES
     ('USER', 'Customer role'),
     ('STAFF', 'Staff role'),
-    ('PARTNER', 'Partner role'),
     ('ADMIN', 'Administrator role')
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description;
 
@@ -36,8 +34,7 @@ INSERT INTO user_schema.permissions(id, name, description) VALUES
     (1004, 'ORDER_WRITE', 'Create or update order data'),
     (1005, 'LOCKER_MANAGE', 'Manage lockers and boxes'),
     (1006, 'PAYMENT_MANAGE', 'Manage payments and refunds'),
-    (1007, 'ADMIN_DASHBOARD', 'View admin dashboard'),
-    (1008, 'PARTNER_MANAGE', 'Manage partner stores')
+    (1007, 'ADMIN_DASHBOARD', 'View admin dashboard')
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description;
@@ -54,13 +51,6 @@ SELECT r.id, p.id
 FROM user_schema.roles r
 JOIN user_schema.permissions p ON p.name IN ('USER_READ', 'ORDER_READ', 'ORDER_WRITE', 'LOCKER_MANAGE')
 WHERE r.name = 'STAFF'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO user_schema.role_permissions(role_id, permission_id)
-SELECT r.id, p.id
-FROM user_schema.roles r
-JOIN user_schema.permissions p ON p.name IN ('USER_READ', 'ORDER_READ', 'LOCKER_MANAGE', 'PARTNER_MANAGE')
-WHERE r.name = 'PARTNER'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO user_schema.role_permissions(role_id, permission_id)
@@ -98,7 +88,6 @@ INSERT INTO auth_schema.auth_accounts (
 ) VALUES
     (1001, 'customer.seed@laundry.test', '0901001001', '$2a$10$iYGwq/z2LBYxTd92vFkTieFp8ZUrE.PHapoOqFETmA6tAAZCOXyfS', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW() - INTERVAL '2 days', NOW() - INTERVAL '20 days', NOW()),
     (1002, 'staff.seed@laundry.test', '0901001002', '$2a$10$iYGwq/z2LBYxTd92vFkTieFp8ZUrE.PHapoOqFETmA6tAAZCOXyfS', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW() - INTERVAL '3 days', NOW() - INTERVAL '18 days', NOW()),
-    (1003, 'partner.seed@laundry.test', '0901001003', '$2a$10$iYGwq/z2LBYxTd92vFkTieFp8ZUrE.PHapoOqFETmA6tAAZCOXyfS', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW() - INTERVAL '4 days', NOW() - INTERVAL '17 days', NOW()),
     (1004, 'admin.seed@laundry.test', '0901001004', '$2a$10$iYGwq/z2LBYxTd92vFkTieFp8ZUrE.PHapoOqFETmA6tAAZCOXyfS', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW() - INTERVAL '1 day', NOW() - INTERVAL '16 days', NOW()),
     (1005, 'customer.vip@laundry.test', '0901001005', '$2a$10$iYGwq/z2LBYxTd92vFkTieFp8ZUrE.PHapoOqFETmA6tAAZCOXyfS', 'LOCAL', TRUE, TRUE, 'ACTIVE', NULL, NOW() - INTERVAL '12 days', NOW())
 ON CONFLICT (user_id) DO UPDATE SET
@@ -137,38 +126,6 @@ ON CONFLICT (id) DO UPDATE SET
 SELECT setval(pg_get_serial_sequence('auth_schema.auth_accounts', 'id'), GREATEST((SELECT MAX(id) FROM auth_schema.auth_accounts), 1), true);
 SELECT setval(pg_get_serial_sequence('auth_schema.refresh_tokens', 'id'), GREATEST((SELECT MAX(id) FROM auth_schema.refresh_tokens), 1), true);
 SELECT setval(pg_get_serial_sequence('auth_schema.email_otps', 'id'), GREATEST((SELECT MAX(id) FROM auth_schema.email_otps), 1), true);
-
-\echo 'Seeding partner_db'
-\connect partner_db
-
-INSERT INTO partner_schema.partners (
-    id, user_id, business_name, contact_phone, contact_email, status, created_at, updated_at
-) VALUES
-    (1001, 1003, 'Seed Laundry Partner Co', '0287001001', 'partner.seed@laundry.test', 'APPROVED', NOW() - INTERVAL '15 days', NOW()),
-    (1002, 1005, 'Vip Care Laundry Partner', '0287001002', 'vip.partner@laundry.test', 'PENDING', NOW() - INTERVAL '5 days', NOW())
-ON CONFLICT (id) DO UPDATE SET
-    user_id = EXCLUDED.user_id,
-    business_name = EXCLUDED.business_name,
-    contact_phone = EXCLUDED.contact_phone,
-    contact_email = EXCLUDED.contact_email,
-    status = EXCLUDED.status,
-    updated_at = NOW();
-
-INSERT INTO partner_schema.staff_access_codes (
-    id, partner_id, order_id, code, action, status, expires_at
-) VALUES
-    (1001, 1001, 1001, 'STAFF-DROP-1001', 'DROP_OFF', 'ACTIVE', NOW() + INTERVAL '1 day'),
-    (1002, 1001, 1002, 'STAFF-PICK-1002', 'PICK_UP', 'USED', NOW() + INTERVAL '2 days')
-ON CONFLICT (id) DO UPDATE SET
-    partner_id = EXCLUDED.partner_id,
-    order_id = EXCLUDED.order_id,
-    code = EXCLUDED.code,
-    action = EXCLUDED.action,
-    status = EXCLUDED.status,
-    expires_at = EXCLUDED.expires_at;
-
-SELECT setval(pg_get_serial_sequence('partner_schema.partners', 'id'), GREATEST((SELECT MAX(id) FROM partner_schema.partners), 1), true);
-SELECT setval(pg_get_serial_sequence('partner_schema.staff_access_codes', 'id'), GREATEST((SELECT MAX(id) FROM partner_schema.staff_access_codes), 1), true);
 
 \echo 'Seeding store_db'
 \connect store_db
@@ -518,8 +475,7 @@ INSERT INTO loyalty_schema.loyalty_accounts (
 ) VALUES
     (1001, 1001, 320, 4, 'SILVER', NOW() - INTERVAL '20 days', NOW()),
     (1002, 1005, 980, 9, 'GOLD', NOW() - INTERVAL '12 days', NOW()),
-    (1003, 1002, 120, 1, 'BRONZE', NOW() - INTERVAL '18 days', NOW()),
-    (1004, 1003, 540, 5, 'SILVER', NOW() - INTERVAL '17 days', NOW())
+    (1003, 1002, 120, 1, 'BRONZE', NOW() - INTERVAL '18 days', NOW())
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     points = EXCLUDED.points,
