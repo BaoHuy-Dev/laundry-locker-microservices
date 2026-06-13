@@ -31,4 +31,15 @@ public class OrderScheduler {
       log.warn("Release sweep job failed: {}", ex.getMessage());
     }
   }
+
+  // Reservation TTL: cancel unconfirmed orders past the hold window and release
+  // the cells they were holding, so abandoned reservations don't stick RESERVED.
+  @Scheduled(cron = "${app.order.auto-cancel-cron:0 */15 * * * *}")
+  public void sweepUnconfirmedReservations() {
+    try {
+      orderService.autoCancelUnconfirmedOrders();
+    } catch (Exception ex) {
+      log.warn("Auto-cancel sweep job failed: {}", ex.getMessage());
+    }
+  }
 }
