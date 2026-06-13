@@ -15,11 +15,13 @@ Thu muc nay gom cac tai lieu, ket qua chay, anh smoke-test va script tien ich du
 
 ## File quan trong
 
+- `../PROJECT_PROGRESS_TRACKER.md`: file theo doi tien do song; bat buoc cap nhat sau moi tinh nang/fix/verification.
+- `../BUSINESS_FLOWS_CURRENT.md`: file mo ta chi tiet luong nghiep vu hien tai; bat buoc cap nhat khi behavior thay doi.
+- `../CURRENT_PROJECT_STATUS.md`: nguon trang thai chuan hien tai cua du an.
 - `guides/RUN_RESULT.md`: ket qua chay he thong va nhat ky thay doi moi nhat.
 - `guides/HANDOFF_CODEX.md`: handoff tu phien truoc.
 - `guides/LOCKER_FLOW_PLAN.md`: ke hoach va trang thai cac phase luong tu.
 - `guides/GAP_ANALYSIS_AND_PLAN.md`: phan tich gap va ke hoach tong the.
-- `../CURRENT_PROJECT_STATUS.md`: nguon trang thai chuan hien tai cua du an.
 - `scripts/run-all.ps1`: build/chay backend va frontend tu root workspace.
 - `scripts/stop-all.ps1`: dung he thong.
 - `scripts/seed-test-data.ps1`: seed/test data tien ich.

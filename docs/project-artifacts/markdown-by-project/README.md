@@ -6,7 +6,7 @@ Day la ban copy dung de luu tru/tim kiem tap trung trong backend. File goc van d
 
 ## Phan loai
 
-- `workspace-root/`: tai lieu tong o root workspace.
+- `workspace-root/`: tai lieu tong/legacy tu root workspace, hien duoc luu trong `docs/project-artifacts/guides/`.
 - `backend/`: tai lieu nam trong `laundry-locker-microservices/`.
 - `frontend/`: tai lieu nam trong `laundry-locker-frontend/`, bao gom FE React, landing page, drone, IoT/tablet web va mobile legacy.
 - `mobile-flutter/`: tai lieu nam trong `smart-laundry-locker-mobile/`.
@@ -33,10 +33,10 @@ Khong copy Markdown tu cac thu muc dependency/generated/build sau:
 
 | Nhom | So file |
 |---|---:|
-| `backend/` | 6 |
+| `backend/` | 8 |
 | `frontend/` | 38 |
 | `iot-python/` | 1 |
 | `mobile-flutter/` | 11 |
 | `workspace-root/` | 6 |
 
-Tong cong: 62 file Markdown du an.
+Tong cong: 64 file Markdown du an.

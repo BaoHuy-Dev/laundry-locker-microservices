@@ -242,6 +242,8 @@ Invoke-RestMethod -Method Get -Uri "$BASE/api/maintenance/reports" -Headers $MAI
 ## Documentation Map
 
 - `docs/CURRENT_PROJECT_STATUS.md`: source of truth for the current project state.
+- `docs/PROJECT_PROGRESS_TRACKER.md`: living progress tracker; update after every feature/fix/verification.
+- `docs/BUSINESS_FLOWS_CURRENT.md`: living detailed business-flow document; update whenever behavior changes.
 - `RUN_AND_TEST_GUIDE.md`: Windows PowerShell run and smoke-test guide for this backend.
 - `LOCKER_FLOW_PLAN.md`: locker Phase 1/2/3 plan and completion status.
 - `RUN_RESULT.md`: latest verified run results and changed-file log.
