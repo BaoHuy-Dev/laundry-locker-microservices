@@ -28,8 +28,8 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build services
-        run: mvn -B clean package -DskipTests
+      - name: Build and test services
+        run: mvn -B clean verify
 
       - name: Package deploy artifact
         run: |
