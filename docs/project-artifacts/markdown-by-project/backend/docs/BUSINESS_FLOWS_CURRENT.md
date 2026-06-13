@@ -251,16 +251,25 @@ RBAC tại gateway:
 Endpoint kỹ thuật/vận hành:
 
 - `/actuator/health`: health/readiness-liveness probes.
+- `/actuator/info`: runtime info; app module có build metadata từ Spring Boot Maven `build-info`.
 - `/actuator/metrics`: runtime metrics.
 - `/actuator/prometheus`: Prometheus scrape endpoint.
 - `/actuator/sbom`: SBOM runtime endpoint cho app khi actuator được expose.
 - `/v3/api-docs`: OpenAPI runtime docs cho gateway và từng servlet service, có thể tắt bằng `SPRINGDOC_API_DOCS_ENABLED=false`.
+- `/v3/api-docs/<service-name>`: gateway route aggregate OpenAPI docs cho các service đang có source như `auth-service`, `order-service`, `locker-service`, `payment-service`, `iot-service`.
+- `/swagger-ui/index.html`: Swagger UI tại gateway, gom các OpenAPI docs ở trên; có thể tắt bằng `SPRINGDOC_SWAGGER_UI_ENABLED=false`.
 
 Hardening hiện tại:
 
 - Gateway chỉ authorize JWT có `tokenUse=access`; refresh token bị từ chối ở API nghiệp vụ.
 - JWT secret của `auth-service` và `api-gateway` dùng cùng policy trong `common-lib`.
 - Profile `prod`/`production` sẽ fail-fast nếu JWT secret còn là giá trị demo/dev/change-me/default/localhost/sandbox hoặc ngắn hơn 32 UTF-8 bytes.
+- Gateway RBAC/access-token hiện có unit tests cho:
+  - Chặn `/internal/**`.
+  - Từ chối refresh token ở business API.
+  - Role guard cho `/api/admin/**`, `/api/manage/**`, `/api/maintenance/**`.
+  - Forward `X-User-Id`, `X-Account-Id`, `X-User-Roles`.
+  - Public OpenAPI/Swagger UI và catalogue GET.
 - Service-to-service OpenFeign trong các service chính có circuit breaker Resilience4j và default timeout cấu hình bằng env:
   - `SPRING_CLOUD_OPENFEIGN_CIRCUITBREAKER_ENABLED`
   - `SPRING_CLOUD_OPENFEIGN_CIRCUITBREAKER_GROUP_ENABLED`
@@ -269,8 +278,10 @@ Hardening hiện tại:
   - `APP_RESILIENCE4J_CB_*`
 - CI/CD backend hiện có:
   - Backend CI chạy `mvn -B test`.
-  - Backend security workflow chạy Dependency Review, CodeQL, generate SBOM artifact, và Trivy image scan cho các image cốt lõi.
+  - Backend security workflow chạy Dependency Review, CodeQL, generate SBOM artifact, và Trivy image scan cho 12 image có Dockerfile.
   - Deploy workflow build bằng `mvn -B clean verify`, không skip test khi đóng gói deploy.
+  - Deploy artifact có SHA-256 checksum; deploy script verify checksum nếu file `.sha256` được upload.
+  - Deploy script mặc định chỉ chờ các Eureka apps có source trong repo; `laundry-service`/`partner-service` có thể được thêm lại bằng env `EUREKA_EXPECTED_APPS` khi source thật được khôi phục.
 
 ## 5. Mô Hình Locker Vật Lý
 
