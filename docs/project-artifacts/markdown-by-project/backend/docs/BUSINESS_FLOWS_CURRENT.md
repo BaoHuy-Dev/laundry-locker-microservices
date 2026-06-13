@@ -280,8 +280,10 @@ Hardening hiện tại:
   - Backend CI chạy `mvn -B test`.
   - Backend security workflow chạy Dependency Review, CodeQL, generate SBOM artifact, và Trivy image scan cho 12 image có Dockerfile.
   - Deploy workflow build bằng `mvn -B clean verify`, không skip test khi đóng gói deploy.
-  - Deploy artifact có SHA-256 checksum; deploy script verify checksum nếu file `.sha256` được upload.
+  - Deploy artifact có SHA-256 checksum và GitHub artifact attestation/provenance; deploy script verify checksum nếu file `.sha256` được upload.
   - Deploy script mặc định chỉ chờ các Eureka apps có source trong repo; `laundry-service`/`partner-service` có thể được thêm lại bằng env `EUREKA_EXPECTED_APPS` khi source thật được khôi phục.
+  - Release workflow theo tag `v*` tạo tarball backend, root CycloneDX SBOM, checksum, GitHub provenance attestation, upload artifact và publish GitHub Release.
+  - `scripts/verify-release-artifact.sh` hỗ trợ kiểm SHA-256 và, nếu có GitHub CLI, kiểm GitHub artifact attestation.
 
 ## 5. Mô Hình Locker Vật Lý
 
