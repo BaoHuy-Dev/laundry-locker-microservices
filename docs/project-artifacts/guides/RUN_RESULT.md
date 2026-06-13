@@ -274,3 +274,26 @@ Lưu ý commit/artifact:
 
 - Các file `env.txt`, `pro.txt`, `Application.txt` được giữ ngoài luồng commit theo yêu cầu.
 - Các bản copy phân loại trong `laundry-locker-microservices/docs/project-artifacts/markdown-by-project/` cần được đồng bộ lại sau batch cập nhật này.
+
+## 14. Tạo tài liệu sống cho luồng nghiệp vụ và tiến độ dự án (2026-06-13)
+
+Đã tạo 2 file nguồn để bàn giao cho developer/AI coding agent tiếp theo:
+
+- `laundry-locker-microservices/docs/BUSINESS_FLOWS_CURRENT.md`
+  - Mô tả chi tiết các luồng nghiệp vụ hiện tại: auth/profile, laundry order, SEND parcel, RENTAL, PIN/QR unlock, delegation, fault/maintenance, manager/admin/staff, payment/refund, notification, store/loyalty, IoT, RabbitMQ, mobile và web frontend.
+  - File này phải được cập nhật mỗi khi hành vi nghiệp vụ, role, endpoint, event, màn hình hoặc trạng thái luồng thay đổi.
+- `laundry-locker-microservices/docs/PROJECT_PROGRESS_TRACKER.md`
+  - Theo dõi tiến độ triển khai theo component, trạng thái đã làm/chưa làm, verification log, deployment/database notes, known risks và change log.
+  - File này phải được cập nhật sau mỗi lần làm chức năng, fix bug, thay đổi docs quan trọng, chạy test/smoke hoặc thay đổi deploy/database.
+
+Đã link 2 file trên vào:
+
+- `laundry-locker-microservices/README.md`
+- `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`
+- `laundry-locker-microservices/docs/project-artifacts/README.md`
+
+Quy tắc bàn giao mới:
+
+1. Người/AI tiếp theo đọc `docs/PROJECT_PROGRESS_TRACKER.md` trước để biết đang làm tới đâu.
+2. Sau đó đọc `docs/BUSINESS_FLOWS_CURRENT.md` để hiểu nghiệp vụ hiện tại.
+3. Sau mỗi thay đổi mới, cập nhật ít nhất `PROJECT_PROGRESS_TRACKER.md`; nếu đổi behavior thì cập nhật cả `BUSINESS_FLOWS_CURRENT.md`.

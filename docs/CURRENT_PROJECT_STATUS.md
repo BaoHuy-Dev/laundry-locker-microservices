@@ -4,7 +4,16 @@
 > Workspace: `G:\BigProject`
 > Backend repo: `laundry-locker-microservices`
 
-This document is the current source of truth for the capstone project state. Older Markdown files may describe earlier design assumptions, mocks, or partially completed phases. Use this file together with `RUN_RESULT.md` and `LOCKER_FLOW_PLAN.md` when deciding what is actually implemented now.
+This document is the current source of truth for the capstone project state. Older Markdown files may describe earlier design assumptions, mocks, or partially completed phases. Use this file together with `BUSINESS_FLOWS_CURRENT.md`, `PROJECT_PROGRESS_TRACKER.md`, `RUN_RESULT.md`, and `LOCKER_FLOW_PLAN.md` when deciding what is actually implemented now.
+
+## Living Docs For Future Work
+
+These two files must be updated whenever business behavior or project progress changes:
+
+- `docs/BUSINESS_FLOWS_CURRENT.md`: detailed current business flows, roles, endpoints, screens, events, and known partial/future flows.
+- `docs/PROJECT_PROGRESS_TRACKER.md`: implementation progress, component matrix, remaining work, verification log, and recent change log.
+
+When handing the project to another developer or AI coding agent, ask them to read `PROJECT_PROGRESS_TRACKER.md` first, then `BUSINESS_FLOWS_CURRENT.md`.
 
 ## System Scope
 
