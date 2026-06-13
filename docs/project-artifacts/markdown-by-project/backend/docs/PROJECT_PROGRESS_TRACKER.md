@@ -37,7 +37,8 @@ Mức cập nhật tối thiểu cho mỗi phiên làm việc:
 4. `RUN_RESULT.md`
 5. `LOCKER_FLOW_PLAN.md`
 6. `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (phân tích luồng tủ as-is + đặc tả chuẩn thực tế + gap map + backlog).
-7. File code liên quan đến task.
+7. `docs/ARCHITECTURE_DECISIONS.md` (ADR: K8s/Kafka/CQRS/GraphQL/mesh — quyết định hoãn + điều kiện xem lại).
+8. File code liên quan đến task.
 
 Không mặc định tài liệu cũ là đúng nếu chúng mâu thuẫn với các file trên.
 
@@ -65,6 +66,7 @@ Tóm tắt trạng thái:
 
 | Ngày | Branch | Task | Phạm vi dự kiến sửa | Không sửa | Ảnh hưởng |
 |---|---|---|---|---|---|
+| 2026-06-14 | `docs/locker-flows-standard-spec` | Ghi chính thức 5 quyết định kiến trúc (K8s/Helm/GitOps, Kafka, CQRS/ES, GraphQL, service mesh) dưới dạng ADR — đều là "hoãn/chưa áp dụng now" kèm điều kiện xem lại + phác thảo cho CodeX. Chỉ tài liệu. | `docs/ARCHITECTURE_DECISIONS.md` (mới); pointer trong 2 file sống; mirror. | Không sửa code/compose/CI/migration; không deploy K8s/Kafka/mesh. Chỉ tài liệu governance. |
 | 2026-06-14 | `docs/locker-flows-standard-spec` | Phân tích luồng tủ (as-is, bám code locker/order/iot) + đặc tả toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế (to-be) + gap map + backlog. Tài liệu blueprint, chưa code. | `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (mới), `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, mirror artifact backend/docs. | Không sửa code Java/migration/business logic, không đổi API/DB/event/UI runtime, không stage `docker/postgres/init-databases.sql`, không commit file private/secret. | Chỉ tài liệu; không đổi hành vi runtime. Định hướng cho các giai đoạn implement L1–L7 sau. |
 | 2026-06-13 | `chore/backend-production-phase1` | Production hardening Phase 1 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, CI workflow, cấu hình runtime service, living docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành backend; không đổi API nghiệp vụ/database/event/UI/mobile. |
 | 2026-06-13 | `chore/backend-production-phase2` | Production hardening Phase 2 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, service `application.yml`, GitHub Actions, docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành/backend quality; không đổi API nghiệp vụ/database/event/UI/mobile. |
@@ -321,6 +323,7 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-14 | Tài liệu | `git diff --check` cho `ARCHITECTURE_DECISIONS.md` + 2 file sống + mirror | PASS | ADR governance; docs-only, không có file private. |
 | 2026-06-14 | Backend | `mvn -pl order-service -am test` trên branch `fix/locker-reservation-ttl-and-release` | PASS | BUILD SUCCESS; 8 test common-lib pass; order-service (gồm sửa auto-cancel/scheduler L1) compile sạch. Không cần Docker. |
 | 2026-06-14 | Flutter | `flutter analyze lib/features/locker_ops` và `flutter analyze` toàn project | PASS | "No issues found" trên `locker_ops`; toàn project 0 error (413 info/warning debt cũ không đổi) sau revamp UI luồng tủ. |
 | 2026-06-14 | Tài liệu | `git diff --check` trên branch `docs/locker-flows-standard-spec` + quét private-file (`env.txt`/`pro.txt`/`Application.txt`/`Host *.txt`) trong `docs/project-artifacts` | PASS | Chỉ thêm/sửa Markdown (spec luồng tủ + 2 file sống + mirror); không có file private bị copy vào artifacts. |
@@ -430,6 +433,7 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-14 | Claude | Thêm `docs/ARCHITECTURE_DECISIONS.md` (ADR-001..005): hoãn/không-áp-dụng-now K8s/Helm/GitOps, Kafka (giữ RabbitMQ), CQRS/Event Sourcing, GraphQL (giữ REST), service mesh — mỗi ADR có bối cảnh, lý do, phương án nhẹ đang dùng, **điều kiện xem lại**, và phác thảo khi áp dụng (handoff CodeX). Pointer trong 2 file sống. | `docs/ARCHITECTURE_DECISIONS.md`; `docs/BUSINESS_FLOWS_CURRENT.md`; `docs/PROJECT_PROGRESS_TRACKER.md`; mirror. | `git diff --check` PASS; docs-only, không đụng code/CI/compose. |
 | 2026-06-14 | Claude | Backend L1 (luồng tủ): vá lỗ hổng ô kẹt `RESERVED` (G1/G2). `OrderService.autoCancelUnconfirmedOrders` giờ release ô + transition đầy đủ (history/event/notify); thêm `OrderScheduler.sweepUnconfirmedReservations` `@Scheduled` (cron mặc định mỗi 15 phút); cửa sổ giữ chỗ cấu hình `app.order.auto-cancel-hours` (24h). | `laundry-locker-microservices` branch `fix/locker-reservation-ttl-and-release`: `order-service/.../service/OrderService.java`, `OrderScheduler.java`; living docs. | `mvn -pl order-service -am test` BUILD SUCCESS (8 test common-lib pass; order-service compile sạch). |
 | 2026-06-14 | Claude | Mobile: revamp UI 3 màn locker customer (Gửi hàng/Thuê tủ/Đơn tủ của tôi) về design system shadcn navy; thêm design kit dùng chung (`ops_widgets`, `locker_picker`); format giá/ngày/countdown; gate action theo trạng thái+loại (confirm/complete/extend/end/delegate/report/cancel). Bắt đầu lộ trình luồng tủ phần mobile. | `smart-laundry-locker-mobile` branch `feat/locker-customer-ui-revamp`: `lib/features/locker_ops/presentation/{widgets/ops_widgets.dart,widgets/locker_picker.dart,pages/send_parcel_page.dart,pages/rent_locker_page.dart,pages/my_locker_orders_page.dart}`; living docs (backend repo). | `flutter analyze` PASS (0 error; 413 info/warning debt cũ không đổi). |
 | 2026-06-14 | Claude | Phân tích luồng tủ as-is (đọc trực tiếp `LockerService`, `OrderService`, `IotService`, entities, migrations, scheduler, `QrTokenService`) và đặc tả toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế (to-be) + 16 gap (G1–G16) + backlog L1–L7. Phát hiện lỗ hổng: auto-cancel không @Scheduled & không release ô (G1/G2), quá hạn không giải phóng ô (G3), thiếu luồng nhận hàng courier PARCEL_RECEIVE (G6). Chỉ tài liệu, không đụng code. | `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (mới); `docs/BUSINESS_FLOWS_CURRENT.md`; `docs/PROJECT_PROGRESS_TRACKER.md`; mirror `docs/project-artifacts/markdown-by-project/backend/docs/*`. | `git diff --check` PASS; quét private-file trong artifacts PASS. |
