@@ -77,6 +77,25 @@ curl.exe -s -o NUL -w "%{http_code}" http://localhost:8080/actuator/health
 
 Expected result: `200`.
 
+### Backend Production Hardening
+
+Implemented and verified:
+
+- Phase 1: correlation ID through gateway/services, Prometheus metrics, OpenAPI runtime docs, Dependency Review/CodeQL workflow, deploy build with `mvn -B clean verify`.
+- Phase 2: OpenFeign Resilience4j circuit breaker/timeouts, `/actuator/sbom`, CycloneDX SBOM generation, Trivy image scan gate, and locker-service Testcontainers smoke test.
+- Phase 3/4: gateway RBAC/access-token unit tests, Swagger UI/OpenAPI aggregation through gateway, Spring Boot build metadata, full 12-image Trivy matrix for existing Dockerfiles, deploy artifact SHA-256 checksum, and deploy script checksum verification.
+
+Verification:
+
+```powershell
+cd G:\BigProject\laundry-locker-microservices
+mvn -pl api-gateway -am test
+mvn -B test
+mvn -B clean verify
+```
+
+Expected result: Maven passes. Testcontainers locker smoke can be skipped locally when Docker daemon is not available.
+
 ## Web Frontend
 
 Current web frontend repo root: `laundry-locker-frontend`.
