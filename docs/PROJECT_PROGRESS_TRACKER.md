@@ -51,6 +51,7 @@ Tóm tắt trạng thái:
 - Backend production hardening Phase 1: đã implement correlation ID, Prometheus metrics endpoint, OpenAPI docs runtime, security workflow, và deploy verify.
 - Backend production hardening Phase 2: đã implement Resilience4j/timeout cho Feign, SBOM runtime/CI, Trivy container image scan gate, Testcontainers smoke cho locker, và đã verify Maven.
 - Backend production hardening Phase 3/4: đã implement gateway RBAC/access-token tests, Swagger UI/OpenAPI aggregation qua gateway, build metadata, full 12-image Trivy matrix, deploy artifact checksum, và đã verify Maven.
+- Backend production hardening Phase 4 continuation: đã thêm GitHub artifact attestations/provenance cho deploy artifact, tag-based backend release workflow, release SBOM/checksum, và script verify release artifact.
 - Web admin locker/maintenance: đã implement và đã verify build.
 - Flutter customer/manager/maintenance locker flows: đã implement, đã verify targeted build/analyze.
 - IoT backend verify-access bằng PIN/QR: đã implement.
@@ -65,12 +66,13 @@ Tóm tắt trạng thái:
 | 2026-06-13 | `chore/backend-production-phase1` | Production hardening Phase 1 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, CI workflow, cấu hình runtime service, living docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành backend; không đổi API nghiệp vụ/database/event/UI/mobile. |
 | 2026-06-13 | `chore/backend-production-phase2` | Production hardening Phase 2 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, service `application.yml`, GitHub Actions, docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành/backend quality; không đổi API nghiệp vụ/database/event/UI/mobile. |
 | 2026-06-13 | `chore/backend-production-phase3-4` | Production hardening Phase 3/4 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | `api-gateway` tests/config, root Maven config, GitHub Actions, docs/artifact mirrors. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành/API docs/CI; không đổi API nghiệp vụ/database/event/UI/mobile. |
+| 2026-06-13 | `chore/backend-production-phase4-provenance` | Production hardening Phase 4 continuation đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | GitHub Actions release/deploy workflow, `scripts/`, living docs/artifact mirrors. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng CI/CD/release supply-chain; không đổi API nghiệp vụ/database/event/UI/mobile. |
 
 ## Bản Đồ Repository
 
 | Khu vực | Đường dẫn | Branch quan sát gần nhất | Trạng thái |
 |---|---|---|---|
-| Backend | `laundry-locker-microservices/` | `chore/backend-production-phase3-4` | Source backend chính; Phase 3/4 production hardening đang ở branch riêng, có một xoá local ngoài scope tại `docker/postgres/init-databases.sql` không được stage. |
+| Backend | `laundry-locker-microservices/` | `chore/backend-production-phase4-provenance` | Source backend chính; Phase 4 provenance/release hardening đang ở branch riêng, có một xoá local ngoài scope tại `docker/postgres/init-databases.sql` không được stage. |
 | Web frontend | `laundry-locker-frontend/` | `main` | Có admin locker/maintenance và các fix TypeScript. |
 | Flutter mobile | `smart-laundry-locker-mobile/` | `develop` | Có module locker ops và role routing. |
 | IoT runtime | `smart-locker-iot/` | chưa check trong pass gần nhất | Python runtime/simulation cho cabinet. |
@@ -124,7 +126,7 @@ Không commit:
 | Battery-aware assignment | TODO | Gap capstone yêu cầu, chưa có code. | Implement sau khi có drone model. |
 | Realtime drone tracking map | TODO | Chưa có map/telemetry service. | Implement bằng simulator và WebSocket. |
 | AI/RAG support | TODO | Chưa có `ai-service`. | Chọn provider/storage rồi scaffold. |
-| CI/CD | PARTIAL | Backend CI `mvn -B test`, backend security workflow Dependency Review/CodeQL, SBOM artifact, Trivy image scan gate cho 12 image có Dockerfile, build-info metadata, deploy workflow `mvn -B clean verify`, deploy artifact checksum và rollback script đã có. | Theo dõi CI trên remote; thêm artifact signing/provenance/SLSA và blue-green/zero-downtime nếu cần production nghiêm ngặt hơn. |
+| CI/CD | PARTIAL | Backend CI `mvn -B test`, backend security workflow Dependency Review/CodeQL, SBOM artifact, Trivy image scan gate cho 12 image có Dockerfile, build-info metadata, deploy workflow `mvn -B clean verify`, deploy artifact checksum + GitHub provenance attestation, tag-based release workflow, release SBOM/checksum, rollback script và verify-release script đã có. | Theo dõi CI trên remote; thêm SLSA policy enforcement, immutable release setting, blue-green/zero-downtime nếu cần production nghiêm ngặt hơn. |
 
 ## Chi Tiết Tiến Độ Backend
 
@@ -162,6 +164,11 @@ Không commit:
   - Backend security workflow mở rộng Trivy scan matrix từ 6 image lên 12 image có Dockerfile; không thêm `laundry-service`/`partner-service` vì thiếu source.
   - Deploy workflow tạo/upload SHA-256 checksum cho deploy artifact; deploy script verify checksum nếu file `.sha256` tồn tại.
   - Deploy script bỏ mặc định `LAUNDRY-SERVICE`/`PARTNER-SERVICE` khỏi expected Eureka apps, có thể override bằng env `EUREKA_EXPECTED_APPS`.
+- Production hardening Phase 4 continuation đã implement:
+  - Deploy workflow dùng GitHub artifact attestation cho deploy tarball và checksum.
+  - Thêm `backend-release.yml`: khi push tag `v*`, workflow build/test bằng `mvn -B clean verify`, package release tarball, copy root CycloneDX SBOM, tạo checksum, attest provenance và publish GitHub Release.
+  - Release workflow upload release artifacts với retention 30 ngày.
+  - Thêm `scripts/verify-release-artifact.sh` để verify SHA-256 và, nếu có GitHub CLI, verify attestation bằng `gh attestation verify`.
 - Locker cell model đã implement:
   - `cell_type`
   - `row_index`
@@ -309,6 +316,9 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-13 | Backend | `mvn -pl api-gateway -am test` | PASS | Phase 4 continuation không đổi Java logic; targeted gateway/common tests vẫn pass: 8 common-lib tests, 2 correlation gateway tests, 7 JWT/RBAC gateway tests. |
+| 2026-06-13 | Release scripts | `C:\Program Files\Git\bin\bash.exe -n scripts/deploy-from-artifact.sh` và `... verify-release-artifact.sh` | PASS | Shell syntax check pass cho deploy script và script verify release artifact. |
+| 2026-06-13 | Git/Docs | `git diff --check` và quét private-file trong `docs/project-artifacts` | PASS | Không phát hiện whitespace/error; không có `env.txt`, `pro.txt`, `Application.txt`, `Host *.txt` trong artifacts. |
 | 2026-06-13 | Backend | `mvn -B clean verify` | PASS/PARTIAL | 14 module backend clean/test/package/verify pass sau Phase 3/4; build-info/repackage pass; Testcontainers locker smoke skip 2 test vì Docker local không khả dụng. |
 | 2026-06-13 | Backend | `mvn -B test` | PASS/PARTIAL | 14 module backend build/test pass sau Phase 3/4; `JwtGatewayFilterTest` 7 tests pass; Testcontainers locker smoke skip 2 test do Docker local không khả dụng. |
 | 2026-06-13 | Backend | `mvn -pl api-gateway -am test` | PASS | Targeted gateway/common tests pass: 8 common-lib tests, 2 correlation gateway tests, 7 JWT/RBAC gateway tests. |
@@ -388,7 +398,7 @@ Quan trọng:
 - Realtime map tracking.
 - AI/RAG support.
 - Dựng dashboard/alert thực tế cho Prometheus/Grafana/Loki hoặc stack observability được chọn.
-- CI/CD release pipeline nâng cao: artifact signing, provenance/SLSA, rollback có kiểm chứng sâu hơn, blue-green/zero-downtime nếu cần production nghiêm ngặt hơn.
+- CI/CD release pipeline nâng cao: SLSA policy enforcement, immutable release setting trên GitHub, rollback có kiểm chứng sâu hơn, blue-green/zero-downtime nếu cần production nghiêm ngặt hơn.
 
 ## Rủi Ro Và Lưu Ý Đã Biết
 
@@ -404,6 +414,7 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-13 | Codex | Production hardening Phase 4 continuation: thêm GitHub artifact attestations cho deploy artifact, tag-based backend release workflow tạo tarball/SBOM/checksum/provenance và publish GitHub Release, thêm script verify release artifact. | `.github/workflows/deploy-droplet.yml`, `.github/workflows/backend-release.yml`, `scripts/verify-release-artifact.sh`, living docs. | `mvn -pl api-gateway -am test` PASS; Git Bash `bash -n` cho deploy/verify scripts PASS; `git diff --check` PASS. |
 | 2026-06-13 | Codex | Production hardening Phase 3/4: thêm gateway RBAC/access-token unit tests, Swagger UI/OpenAPI aggregation qua gateway, build-info metadata, full 12-image Trivy matrix, deploy artifact checksum và checksum verify trong deploy script. | `api-gateway`, root `pom.xml`, `.github/workflows/backend-security.yml`, `.github/workflows/deploy-droplet.yml`, `scripts/deploy-from-artifact.sh`, living docs. | `mvn -pl api-gateway -am test` PASS; `mvn -B test` PASS/PARTIAL; `mvn -B clean verify` PASS/PARTIAL; Git Bash `bash -n scripts/deploy-from-artifact.sh` PASS. |
 | 2026-06-13 | Codex | Production hardening Phase 2: bật Resilience4j circuit breaker/timeout cho OpenFeign, expose `/actuator/sbom`, generate CycloneDX SBOM, thêm Testcontainers smoke cho locker-service, và thêm SBOM/Trivy container scan gate trong backend security workflow. | Root `pom.xml`, service `pom.xml`/`application.yml`, `locker-service/src/test/**`, `.github/workflows/backend-security.yml`, living docs. | `mvn -pl locker-service -am test` PASS/PARTIAL; `mvn -B test` PASS/PARTIAL; `mvn -B clean verify` PASS/PARTIAL; Docker local không khả dụng nên Testcontainers skip 2 smoke tests. |
 | 2026-06-13 | Codex | Production hardening Phase 1: correlation ID xuyên gateway/service, Prometheus metrics endpoint, OpenAPI runtime docs, backend security workflow, deploy bắt buộc `clean verify`. | `common-lib`, `api-gateway`, service `pom.xml`/`application.yml`, `.github/workflows/*`, living docs. | `mvn -pl common-lib,api-gateway -am test` PASS; `mvn test` PASS; `mvn -B clean verify` PASS. |

@@ -12,6 +12,8 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   deploy:
@@ -45,6 +47,14 @@ jobs:
         with:
           name: laundry-locker-microservices-deploy-checksum
           path: /tmp/laundry-locker-microservices.tar.gz.sha256
+          retention-days: 14
+
+      - name: Attest deploy artifact provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            /tmp/laundry-locker-microservices.tar.gz
+            /tmp/laundry-locker-microservices.tar.gz.sha256
 
       - name: Configure SSH
         env:

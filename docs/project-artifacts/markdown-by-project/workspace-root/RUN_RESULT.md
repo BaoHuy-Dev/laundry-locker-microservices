@@ -10,6 +10,7 @@
 | Backend production hardening Phase 1 | ✅ PASS (`mvn test` và `mvn -B clean verify`) |
 | Backend production hardening Phase 2 | ✅ PASS/PARTIAL (`mvn -B test` và `mvn -B clean verify` PASS; Testcontainers locker smoke skip trên máy local vì Docker daemon không khả dụng) |
 | Backend production hardening Phase 3/4 | ✅ PASS/PARTIAL (`mvn -pl api-gateway -am test`, `mvn -B test`, `mvn -B clean verify` PASS; Testcontainers locker smoke skip trên máy local vì Docker daemon không khả dụng) |
+| Backend production hardening Phase 4 continuation | ✅ PASS (deploy artifact provenance, tag release workflow, release verify script; targeted Maven + script syntax + diff checks PASS) |
 | Backend chạy Docker (14 container) | ✅ Tất cả Up, không restart loop |
 | Đăng ký Eureka | ✅ 11/11 app (gateway + 10 service + iot) |
 | Smoke test API qua gateway | ✅ register / login / my-orders (JWT) / stores đều OK |
@@ -116,6 +117,25 @@ git diff --check
 ```
 
 Kết quả: PASS/PARTIAL. Maven pass toàn bộ; Testcontainers locker smoke vẫn skip 2 test do Docker daemon local không khả dụng. WSL `bash -n` không dùng được trên máy này vì thiếu `/bin/bash`, nên đã syntax-check bằng Git Bash.
+
+## 4.4. Verification backend production hardening Phase 4 continuation (2026-06-13)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Deploy artifact provenance | ✅ Deploy workflow dùng GitHub artifact attestation cho deploy tarball và checksum |
+| Tag-based backend release | ✅ Thêm `backend-release.yml` cho tag `v*`: build/test, package tarball, copy CycloneDX SBOM, tạo checksum, attest provenance, upload artifact, publish GitHub Release |
+| Release verification helper | ✅ Thêm `scripts/verify-release-artifact.sh` để verify SHA-256 và GitHub attestation nếu có `gh` |
+
+Lệnh đã chạy:
+
+```powershell
+mvn -pl api-gateway -am test
+& 'C:\Program Files\Git\bin\bash.exe' -n scripts/deploy-from-artifact.sh
+& 'C:\Program Files\Git\bin\bash.exe' -n scripts/verify-release-artifact.sh
+git diff --check
+```
+
+Kết quả: PASS. Phase này chỉ đổi workflow/script/docs, không đổi Java business logic.
 
 ## 5. Lỗi đã phát hiện và sửa
 
