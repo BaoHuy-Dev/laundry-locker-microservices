@@ -921,6 +921,15 @@ Quick action customer:
 - `Đơn tủ` -> `/locker/my-orders`
 - `Khám phá cửa hàng` -> `/stores` (entry mới trên home)
 
+Revamp UI luồng tủ customer (2026-06-14):
+
+- 3 màn `locker_ops` (Gửi hàng / Thuê tủ / Đơn tủ của tôi) được đồng bộ về design system `AISLShadcnTheme` (navy + Manrope, bo góc 16, card trắng viền `#E2E8F0`) thay cho palette xanh `opsPrimary` cũ.
+- Design kit dùng chung: `ops_widgets.dart` (status/type color+label, format giá/ngày/`Còn…|Quá hạn…`, `OpsCard/OpsBanner/OpsPrimaryButton/OpsInfoRow/OpsEmptyState`, `AccessCredentials` hiển thị PIN dạng ô bấm-để-copy + QR có khung) và `locker_picker.dart` (chọn tủ qua bottom-sheet).
+- Màn Gửi hàng: stepper 2 giai đoạn (bỏ hàng → người nhận lấy) đúng luồng PIN 2 giai đoạn; banner hướng dẫn; hiển thị phí gửi và hạn nhận có định dạng.
+- Màn Thuê tủ: card chọn loại ô (STANDARD/XL kèm kích thước+đơn giá), chip giờ nhanh + slider, thẻ giá tính live.
+- Màn Đơn tủ của tôi: card đơn có countdown/cảnh báo quá hạn; detail sheet format ngày/giá, hiện phí phát sinh; **action gate đúng theo trạng thái+loại** (confirm bỏ đồ; hoàn tất; gia hạn/kết thúc thuê; ủy quyền; báo ô lỗi; hủy chỉ khi `INITIALIZED`).
+- `flutter analyze` 0 error (debt info/warning cũ không đổi). Chưa smoke trên emulator phiên này.
+
 Màn Cửa hàng (mới, 2026-06-13):
 
 - `/stores`: danh sách cửa hàng, tìm theo tên/địa chỉ, nút "gần tôi" (geolocator) gọi `GET /api/stores?latitude&longitude`.
