@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 APP_DIR="${APP_DIR:-/opt/laundry-locker-microservices}"
 ARCHIVE="${ARCHIVE:-/tmp/laundry-locker-microservices.tar.gz}"
+CHECKSUM_FILE="${CHECKSUM_FILE:-${ARCHIVE}.sha256}"
 NEW_DIR="${APP_DIR}.new"
 BACKUP_DIR="${APP_DIR}.previous"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-720}"
@@ -27,6 +28,11 @@ fi
 command -v docker >/dev/null
 docker compose version >/dev/null
 command -v curl >/dev/null
+
+if [ -s "$CHECKSUM_FILE" ]; then
+  command -v sha256sum >/dev/null
+  sha256sum -c "$CHECKSUM_FILE"
+fi
 
 wait_for_http() {
   local name="$1"
@@ -73,6 +79,26 @@ wait_for_eureka_apps() {
   done
 }
 
+DEFAULT_EUREKA_APPS=(
+  API-GATEWAY
+  AUTH-SERVICE
+  USER-SERVICE
+  ORDER-SERVICE
+  LOCKER-SERVICE
+  PAYMENT-SERVICE
+  NOTIFICATION-SERVICE
+  IOT-SERVICE
+  STORE-SERVICE
+  STAFF-SERVICE
+  LOYALTY-SERVICE
+)
+
+if [ -n "${EUREKA_EXPECTED_APPS:-}" ]; then
+  read -r -a EXPECTED_EUREKA_APPS <<<"$EUREKA_EXPECTED_APPS"
+else
+  EXPECTED_EUREKA_APPS=("${DEFAULT_EUREKA_APPS[@]}")
+fi
+
 rm -rf "$NEW_DIR"
 mkdir -p "$NEW_DIR"
 tar -xzf "$ARCHIVE" -C "$NEW_DIR"
@@ -92,24 +118,11 @@ docker compose ps
 
 wait_for_http "discovery-server" "http://127.0.0.1:8761/actuator/health"
 wait_for_http "api-gateway" "http://127.0.0.1:8080/actuator/health"
-wait_for_eureka_apps \
-  API-GATEWAY \
-  AUTH-SERVICE \
-  USER-SERVICE \
-  ORDER-SERVICE \
-  LOCKER-SERVICE \
-  LAUNDRY-SERVICE \
-  PAYMENT-SERVICE \
-  NOTIFICATION-SERVICE \
-  IOT-SERVICE \
-  STORE-SERVICE \
-  STAFF-SERVICE \
-  PARTNER-SERVICE \
-  LOYALTY-SERVICE
+wait_for_eureka_apps "${EXPECTED_EUREKA_APPS[@]}"
 
 docker compose ps
 
-rm -f "$ARCHIVE"
+rm -f "$ARCHIVE" "$CHECKSUM_FILE"
 trap - ERR
 
 echo "Deploy completed."

@@ -168,6 +168,10 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
         || path.equals("/")
         || path.startsWith("/ws")
         || path.startsWith("/actuator")
+        || path.startsWith("/v3/api-docs")
+        || path.startsWith("/swagger-ui")
+        || path.equals("/swagger-ui.html")
+        || path.startsWith("/webjars")
         || path.startsWith("/api/payments/vnpay")
         || path.startsWith("/api/payments/momo")) {
       return true;

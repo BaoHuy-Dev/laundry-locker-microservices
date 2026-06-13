@@ -37,6 +37,14 @@ jobs:
             --exclude='./.git' \
             --exclude='./laundry-ms.zip' \
             -czf /tmp/laundry-locker-microservices.tar.gz .
+          sha256sum /tmp/laundry-locker-microservices.tar.gz \
+            > /tmp/laundry-locker-microservices.tar.gz.sha256
+
+      - name: Upload deploy artifact checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: laundry-locker-microservices-deploy-checksum
+          path: /tmp/laundry-locker-microservices.tar.gz.sha256
 
       - name: Configure SSH
         env:
@@ -61,7 +69,8 @@ jobs:
           PORT="${DROPLET_PORT:-22}"
           scp -P "$PORT" -i ~/.ssh/deploy_key \
             /tmp/laundry-locker-microservices.tar.gz \
-            "$DROPLET_USER@$DROPLET_HOST:/tmp/laundry-locker-microservices.tar.gz"
+            /tmp/laundry-locker-microservices.tar.gz.sha256 \
+            "$DROPLET_USER@$DROPLET_HOST:/tmp/"
 
       - name: Deploy on Droplet
         env:
