@@ -1061,3 +1061,9 @@ Các điểm as-is đã xác minh trực tiếp từ code, cần lưu ý vì là
 - **Trạng thái ô là bản sao best-effort** của order (occupy/release nuốt lỗi) → có rủi ro lệch trạng thái, chưa có job đối soát (Gap G4).
 
 Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ trình implement 7 giai đoạn (L1–L7, mỗi giai đoạn 1 branch) nằm trong spec ở trên.
+
+**Tiến độ lộ trình (cập nhật 2026-06-14):**
+
+- **L1 (phần order-layer) — ĐÃ LÀM** trên branch `fix/locker-reservation-ttl-and-release`: `autoCancelUnconfirmedOrders` giờ **release ô** khi hủy và chạy transition đầy đủ (history + event + notify); thêm job `@Scheduled` (`OrderScheduler.sweepUnconfirmedReservations`, cron mặc định mỗi 15 phút). Đóng **G1** (auto-cancel chưa @Scheduled) và **G2** (ô kẹt `RESERVED` của đơn bỏ dở) ở mức hành vi. Cửa sổ giữ chỗ cấu hình `app.order.auto-cancel-hours` (mặc định 24h). Verify: `mvn -pl order-service -am test` BUILD SUCCESS. *(Phần cell-level `reserved_until` TTL trong locker-service vẫn là follow-up.)*
+- **Mobile UI luồng tủ — ĐÃ LÀM** trên branch `feat/locker-customer-ui-revamp` (xem mục 21).
+- L2–L7: chưa làm.
