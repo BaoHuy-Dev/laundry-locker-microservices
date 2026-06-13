@@ -37,6 +37,7 @@ Phạm vi hiện tại cần ghi nhớ:
 - Source `laundry-service` đang thiếu trong repo backend hiện tại; vẫn giữ tên trong compose/database naming nhưng bị skip qua `docker-compose.override.yml` khi chạy local.
 - Role `PARTNER` và `partner-service` đã được gỡ khỏi backend (seed/role/permission/compose) vì không còn dùng; schema `partner_db`/`partner_schema` cũ được giữ lại chưa dọn.
 - Sản phẩm đang chạy chính là nền tảng locker/laundry/SEND/RENTAL. Drone delivery đầy đủ, engine phân công drone, realtime tracking và AI/RAG vẫn là việc tương lai.
+- Quyết định kiến trúc (K8s/Helm/GitOps, Kafka, CQRS/Event Sourcing, GraphQL, service mesh) hiện **được hoãn có chủ đích** ở quy mô 1 droplet — xem `docs/ARCHITECTURE_DECISIONS.md` để biết lý do và điều kiện xem lại. Stack hiện tại: REST qua gateway + Eureka + Resilience4j + RabbitMQ + Docker Compose.
 
 ## 2. Mô Hình Vai Trò Và Quyền Truy Cập
 
