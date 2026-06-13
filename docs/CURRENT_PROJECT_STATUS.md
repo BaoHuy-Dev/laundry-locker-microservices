@@ -84,6 +84,7 @@ Implemented and verified:
 - Phase 1: correlation ID through gateway/services, Prometheus metrics, OpenAPI runtime docs, Dependency Review/CodeQL workflow, deploy build with `mvn -B clean verify`.
 - Phase 2: OpenFeign Resilience4j circuit breaker/timeouts, `/actuator/sbom`, CycloneDX SBOM generation, Trivy image scan gate, and locker-service Testcontainers smoke test.
 - Phase 3/4: gateway RBAC/access-token unit tests, Swagger UI/OpenAPI aggregation through gateway, Spring Boot build metadata, full 12-image Trivy matrix for existing Dockerfiles, deploy artifact SHA-256 checksum, and deploy script checksum verification.
+- Phase 4 continuation: GitHub artifact attestation/provenance for deploy artifacts, tag-based backend release workflow, release tarball/SBOM/checksum, GitHub Release publishing, and a release artifact verification helper script.
 
 Verification:
 
@@ -92,6 +93,8 @@ cd G:\BigProject\laundry-locker-microservices
 mvn -pl api-gateway -am test
 mvn -B test
 mvn -B clean verify
+& 'C:\Program Files\Git\bin\bash.exe' -n scripts/deploy-from-artifact.sh
+& 'C:\Program Files\Git\bin\bash.exe' -n scripts/verify-release-artifact.sh
 ```
 
 Expected result: Maven passes. Testcontainers locker smoke can be skipped locally when Docker daemon is not available.
