@@ -34,7 +34,8 @@ API Gateway: http://localhost:8080
 
 Phạm vi hiện tại cần ghi nhớ:
 
-- Source `laundry-service` và `partner-service` đang thiếu trong repo backend hiện tại. Chúng vẫn được giữ tên trong compose/database naming, nhưng khi chạy local thì bị skip qua `docker-compose.override.yml`.
+- Source `laundry-service` đang thiếu trong repo backend hiện tại; vẫn giữ tên trong compose/database naming nhưng bị skip qua `docker-compose.override.yml` khi chạy local.
+- Role `PARTNER` và `partner-service` đã được gỡ khỏi backend (seed/role/permission/compose) vì không còn dùng; schema `partner_db`/`partner_schema` cũ được giữ lại chưa dọn.
 - Sản phẩm đang chạy chính là nền tảng locker/laundry/SEND/RENTAL. Drone delivery đầy đủ, engine phân công drone, realtime tracking và AI/RAG vẫn là việc tương lai.
 
 ## 2. Mô Hình Vai Trò Và Quyền Truy Cập
@@ -143,9 +144,9 @@ Endpoint backend hiện có:
 - `GET /api/staff/lockers`
 - `POST /api/staff/unlock-box`
 
-### Partner
+### Partner (đã gỡ)
 
-React app vẫn có route cho Partner portal, nhưng backend `partner-service` đang thiếu source. Một số tài liệu API và seed SQL của partner tồn tại như artifact thiết kế/legacy. Tạm xem Partner là `PARTIAL` cho đến khi khôi phục hoặc viết lại service thật.
+Role `PARTNER` đã được gỡ khỏi backend (2026-06-13) vì không còn dùng: bỏ role `PARTNER`, permission `PARTNER_MANAGE`, account demo `partner.seed`, và service `partner-service` trong `docker-compose.yml`/`docker-compose.override.yml`. `partner-service` vốn đã thiếu source từ trước. Vẫn giữ schema cũ chưa dùng (`partner_db`/`partner_schema`, cột `partner_id` ở store-service) để không đụng migration đã chạy; có thể dọn ở bước sau nếu cần. Route Partner ở React web/legacy mobile xem như deprecated.
 
 ## 3. Luồng Xác Thực Và Hồ Sơ Người Dùng
 
@@ -802,6 +803,10 @@ Flow nghiệp vụ:
 3. Admin quản lý status, thông tin và hình ảnh store.
 4. Store rating được lấy từ order service qua internal client.
 
+Tiêu thụ phía mobile (2026-06-13):
+
+- Flutter customer có màn Cửa hàng (`/stores`, `/stores/detail`) gọi `GET /api/stores`, `GET /api/stores/{id}`, `GET /api/stores/{storeId}/ratings`, và `GET /api/stores?latitude&longitude` cho chế độ "gần tôi". Entry từ home ("Khám phá cửa hàng").
+
 ## 18. Luồng Loyalty
 
 Loyalty service sở hữu điểm, stamp, reward và redemption history.
@@ -914,6 +919,18 @@ Quick action customer:
 - `Thuê tủ` -> `/locker/rent`
 - `Gửi hàng` -> `/locker/send-parcel`
 - `Đơn tủ` -> `/locker/my-orders`
+- `Khám phá cửa hàng` -> `/stores` (entry mới trên home)
+
+Màn Cửa hàng (mới, 2026-06-13):
+
+- `/stores`: danh sách cửa hàng, tìm theo tên/địa chỉ, nút "gần tôi" (geolocator) gọi `GET /api/stores?latitude&longitude`.
+- `/stores/detail`: chi tiết cửa hàng (tên, trạng thái, địa chỉ, SĐT, mô tả, khoảng cách), nút Chỉ đường (mở Google Maps qua `url_launcher`), nút Xem tủ (`/lockers`), và danh sách đánh giá từ `GET /api/stores/{id}/ratings`.
+- Feature: `lib/features/stores/**` (clean-arch: domain entity `Store`/`StoreRating` + infrastructure `StoreService` + presentation pages/widgets). Đã `flutter analyze` 0 error.
+
+Maintenance home (đã xác minh 2026-06-13):
+
+- Role `MAINTENANCE` đăng nhập/auto-login được route tới `/maintenance-home` (`homeForRoles()` ở `splash_screen` và `login_screen`).
+- `MaintenanceHomePage` gọi `/api/maintenance/faults`, `/api/maintenance/reports?mine=`, claim/resolve/clear-fault. Backend API đã có sẵn trong `locker-service`.
 
 `locker_ops` service gọi:
 
@@ -984,7 +1001,7 @@ Partner portal routes tồn tại:
 
 Lưu ý hiện tại:
 
-- `partner-service` đang thiếu source, nên partner portal là partial/legacy cho đến khi verify hoặc build lại API contract.
+- Role `PARTNER` và `partner-service` đã được gỡ khỏi backend (2026-06-13). Partner portal trên React web là deprecated/legacy; không còn account/role partner để đăng nhập.
 
 ## 23. Seed Và Tài Khoản Test
 
@@ -994,13 +1011,13 @@ Seed account đã quan sát trong deploy DB:
 |---|---|---:|---|
 | `customer.seed@laundry.test` | `USER` | `1001` | `0901001001` |
 | `staff.seed@laundry.test` | `STAFF` | `1002` | `0901001002` |
-| `partner.seed@laundry.test` | `PARTNER` | `1003` | `0901001003` |
 | `admin.seed@laundry.test` | `ADMIN` | `1004` | `0901001004` |
 | `customer.vip@laundry.test` | `USER` | `1005` | `0901001005` |
 
 Quan trọng:
 
 - `seed-demo-data.sql` chỉ lưu password hash. Plaintext password không được document trong seed file.
+- Account `partner.seed` (user `1003`, role `PARTNER`) và toàn bộ seed `partner_db` đã bị gỡ khỏi `seed-demo-data.sql` (2026-06-13). Deploy DB cũ có thể vẫn còn record này cho tới khi re-seed.
 - Nếu cần demo account có mật khẩu biết trước, hãy reset password hash có chủ đích và ghi vào `docs/PROJECT_PROGRESS_TRACKER.md` ở phần verification notes.
 - Dev accounts từng dùng trong local smoke test gồm `demo@laundry.test`, `admin@laundry.test`, `manager@laundry.test`, và `maintenance@laundry.test`, nhưng có thể không tồn tại trong deploy DB mới.
 
@@ -1009,7 +1026,6 @@ Quan trọng:
 Những phần sau chưa hoàn tất trong sản phẩm đang chạy:
 
 - Source `laundry-service` thật và ownership catalog.
-- Source `partner-service` thật và ownership partner backend.
 - Tablet-web cabinet UI cho người dùng đứng trước locker.
 - Tự động occupy/release từ door/weight sensors.
 - Drone delivery service đầy đủ.

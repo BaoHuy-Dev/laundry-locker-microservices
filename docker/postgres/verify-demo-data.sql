@@ -45,10 +45,6 @@ SELECT 'store_schema.stores' AS table_name, COUNT(*) AS row_count FROM store_sch
 \connect staff_db
 SELECT 'staff_schema.staff_assignments' AS table_name, COUNT(*) AS row_count FROM staff_schema.staff_assignments;
 
-\connect partner_db
-SELECT 'partner_schema.partners' AS table_name, COUNT(*) AS row_count FROM partner_schema.partners;
-SELECT 'partner_schema.staff_access_codes' AS table_name, COUNT(*) AS row_count FROM partner_schema.staff_access_codes;
-
 \connect loyalty_db
 SELECT 'loyalty_schema.loyalty_accounts' AS table_name, COUNT(*) AS row_count FROM loyalty_schema.loyalty_accounts;
 SELECT 'loyalty_schema.point_transactions' AS table_name, COUNT(*) AS row_count FROM loyalty_schema.point_transactions;
