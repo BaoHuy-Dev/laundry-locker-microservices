@@ -3,6 +3,7 @@ package com.huynqb.laundrylocker.payment.service;
 import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.common.security.SecuritySecrets;
 import com.huynqb.laundrylocker.payment.dto.CreatePaymentRequest;
 import com.huynqb.laundrylocker.payment.dto.PaymentResponse;
 import com.huynqb.laundrylocker.payment.dto.RefundRequest;
@@ -22,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import jakarta.annotation.PostConstruct;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,6 +46,7 @@ public class PaymentService {
   private final PaymentRepository repository;
   private final RefundRepository refundRepository;
   private final RabbitTemplate rabbitTemplate;
+  private final Environment environment;
 
   @Value("${vnpay.pay-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
   private String vnpayPayUrl;
@@ -58,6 +62,16 @@ public class PaymentService {
 
   @Value("${momo.redirect-url:http://localhost:8080/api/payments/momo/return}")
   private String momoRedirectUrl;
+
+  @PostConstruct
+  void validateProductionPaymentConfig() {
+    String[] activeProfiles = environment.getActiveProfiles();
+    SecuritySecrets.requireProductionSafeValue(vnpayTmnCode, "vnpay.tmn-code", activeProfiles);
+    SecuritySecrets.requireProductionSafeValue(vnpayHashSecret, "vnpay.hash-secret", activeProfiles);
+    SecuritySecrets.requireProductionSafeValue(vnpayPayUrl, "vnpay.pay-url", activeProfiles);
+    SecuritySecrets.requireProductionSafeValue(vnpayReturnUrl, "vnpay.return-url", activeProfiles);
+    SecuritySecrets.requireProductionSafeValue(momoRedirectUrl, "momo.redirect-url", activeProfiles);
+  }
 
   @Transactional
   public PaymentResponse create(CreatePaymentRequest request) {

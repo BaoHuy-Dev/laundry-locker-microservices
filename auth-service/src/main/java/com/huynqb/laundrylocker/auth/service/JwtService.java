@@ -1,15 +1,15 @@
 package com.huynqb.laundrylocker.auth.service;
 
+import com.huynqb.laundrylocker.common.security.SecuritySecrets;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Set;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,15 +24,18 @@ public class JwtService {
   @Value("${app.security.jwt.refresh-expiration-ms:2592000000}")
   private long refreshExpirationMs;
 
+  private final Environment environment;
   private SecretKey key;
+
+  public JwtService(Environment environment) {
+    this.environment = environment;
+  }
 
   @PostConstruct
   void init() {
-    byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-    if (keyBytes.length < 32) {
-      keyBytes = (secret + "00000000000000000000000000000000").substring(0, 32).getBytes(StandardCharsets.UTF_8);
-    }
-    key = Keys.hmacShaKeyFor(keyBytes);
+    key =
+        SecuritySecrets.hmacShaKeyFor(
+            secret, "app.security.jwt.secret", environment.getActiveProfiles());
   }
 
   public TokenPair issue(Long accountId, Long userId, Set<String> roles) {

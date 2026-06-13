@@ -37,3 +37,7 @@ management:
     health:
       probes:
         enabled: true
+
+app:
+  security:
+    qr-secret: ${APP_SECURITY_QR_SECRET:laundry-locker-dev-qr-secret-change-me-32chars}

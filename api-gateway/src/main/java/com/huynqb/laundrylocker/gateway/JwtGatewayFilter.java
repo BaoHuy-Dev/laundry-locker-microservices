@@ -1,16 +1,18 @@
 package com.huynqb.laundrylocker.gateway;
 
+import com.huynqb.laundrylocker.common.security.SecuritySecrets;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
-import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -24,15 +26,18 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
   @Value("${app.security.jwt.secret:laundry-locker-microservices-secret-key-change-me-please-32chars}")
   private String secret;
 
+  private final Environment environment;
   private SecretKey key;
+
+  public JwtGatewayFilter(Environment environment) {
+    this.environment = environment;
+  }
 
   @PostConstruct
   void init() {
-    byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-    if (keyBytes.length < 32) {
-      keyBytes = (secret + "00000000000000000000000000000000").substring(0, 32).getBytes(StandardCharsets.UTF_8);
-    }
-    key = Keys.hmacShaKeyFor(keyBytes);
+    key =
+        SecuritySecrets.hmacShaKeyFor(
+            secret, "app.security.jwt.secret", environment.getActiveProfiles());
   }
 
   @Override
@@ -56,7 +61,11 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
 
     try {
       Claims claims = parse(authHeader.substring(7));
-      List<String> roles = claims.get("roles", List.class);
+      if (!isAccessToken(claims)) {
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        return exchange.getResponse().setComplete();
+      }
+      List<String> roles = extractRoles(claims);
       boolean mutatingLockerStructure =
           !org.springframework.http.HttpMethod.GET.equals(exchange.getRequest().getMethod())
               && (path.startsWith("/api/lockers") || path.startsWith("/api/boxes"))
@@ -80,7 +89,10 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
     }
     try {
       Claims claims = parse(authHeader.substring(7));
-      return chain.filter(withUserHeaders(exchange, claims, claims.get("roles", List.class)));
+      if (!isAccessToken(claims)) {
+        return chain.filter(exchange);
+      }
+      return chain.filter(withUserHeaders(exchange, claims, extractRoles(claims)));
     } catch (Exception ex) {
       return chain.filter(exchange);
     }
@@ -101,6 +113,21 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
 
   private Claims parse(String token) {
     return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+  }
+
+  private boolean isAccessToken(Claims claims) {
+    return "access".equals(claims.get("tokenUse", String.class));
+  }
+
+  private List<String> extractRoles(Claims claims) {
+    Object value = claims.get("roles");
+    if (value instanceof List<?> list) {
+      return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
+    }
+    if (value instanceof String roles && !roles.isBlank()) {
+      return Arrays.stream(roles.split(",")).map(String::trim).filter(role -> !role.isBlank()).toList();
+    }
+    return Collections.emptyList();
   }
 
   // Path-prefix RBAC. ADMIN is a superset of every operational role.
