@@ -81,7 +81,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway,metrics,prometheus
+        include: health,info,gateway,metrics,prometheus,sbom
   endpoint:
     health:
       probes:
