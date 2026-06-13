@@ -206,6 +206,7 @@ Hành vi backend:
    - `X-User-Id`
    - `X-Account-Id`
    - `X-User-Roles`
+   - `X-Correlation-Id`
 
 ### Admin Auth
 
@@ -220,6 +221,12 @@ Flow admin login phụ thuộc credential/OTP. Trong dev/test, `/api/auth/login`
 ## 4. Gateway Và Ranh Giới Service
 
 Client chỉ nên gọi qua gateway. Port service trực tiếp chỉ dùng debug.
+
+Request tracing kỹ thuật:
+
+- Gateway tạo hoặc giữ nguyên `X-Correlation-Id` cho mọi request.
+- Header này được forward xuống service phía sau và trả lại trong response.
+- Servlet services đưa correlation id vào MDC log key `correlationId` để tra lỗi xuyên service.
 
 Route ownership của gateway:
 
@@ -241,11 +248,22 @@ RBAC tại gateway:
 - `/api/maintenance/**`: `MAINTENANCE` hoặc `ADMIN`
 - `/internal/**`: bị chặn qua gateway; chỉ dùng service-to-service.
 
+Endpoint kỹ thuật/vận hành:
+
+- `/actuator/health`: health/readiness-liveness probes.
+- `/actuator/metrics`: runtime metrics.
+- `/actuator/prometheus`: Prometheus scrape endpoint.
+- `/v3/api-docs`: OpenAPI runtime docs cho gateway và từng servlet service, có thể tắt bằng `SPRINGDOC_API_DOCS_ENABLED=false`.
+
 Hardening hiện tại:
 
 - Gateway chỉ authorize JWT có `tokenUse=access`; refresh token bị từ chối ở API nghiệp vụ.
 - JWT secret của `auth-service` và `api-gateway` dùng cùng policy trong `common-lib`.
 - Profile `prod`/`production` sẽ fail-fast nếu JWT secret còn là giá trị demo/dev/change-me/default/localhost/sandbox hoặc ngắn hơn 32 UTF-8 bytes.
+- CI/CD backend hiện có:
+  - Backend CI chạy `mvn -B test`.
+  - Backend security workflow chạy Dependency Review và CodeQL.
+  - Deploy workflow build bằng `mvn -B clean verify`, không skip test khi đóng gói deploy.
 
 ## 5. Mô Hình Locker Vật Lý
 

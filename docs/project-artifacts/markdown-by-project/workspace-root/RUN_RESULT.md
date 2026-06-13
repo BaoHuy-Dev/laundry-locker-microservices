@@ -1,12 +1,13 @@
 # RUN_RESULT.md — Kết quả chạy toàn bộ hệ thống
 
-> Thời điểm: 2026-06-12 • Máy: Windows 11, workspace `G:\BigProject`
+> Thời điểm: 2026-06-12, cập nhật thêm 2026-06-13 • Máy: Windows 11, workspace `G:\BigProject`
 
 ## 1. Tổng kết nhanh
 
 | Hạng mục | Kết quả |
 |---|---|
-| Build backend (Maven, 12 module) | ✅ PASS (sau khi sửa 3 lỗi compile/config) |
+| Build backend (Maven, 14 module) | ✅ PASS (sau khi sửa 3 lỗi compile/config; 2026-06-13 chạy lại production hardening PASS) |
+| Backend production hardening Phase 1 | ✅ PASS (`mvn test` và `mvn -B clean verify`) |
 | Backend chạy Docker (14 container) | ✅ Tất cả Up, không restart loop |
 | Đăng ký Eureka | ✅ 11/11 app (gateway + 10 service + iot) |
 | Smoke test API qua gateway | ✅ register / login / my-orders (JWT) / stores đều OK |
@@ -51,6 +52,26 @@
 | `POST /api/auth/login` (body dùng field `identifier`, không phải `email`) | ✅ `AUTH_LOGIN_OK` |
 | `GET /api/orders/my-orders` + Bearer token | ✅ trả `[]` (JWT verify + forward header hoạt động) |
 | `GET /api/stores` | ✅ trả `[]` |
+
+## 4.1. Verification backend production hardening (2026-06-13)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Correlation ID servlet/gateway | ✅ `X-Correlation-Id` được tạo/giữ nguyên, forward và trả trong response; unit test PASS |
+| Prometheus metrics | ✅ Tất cả app có actuator expose thêm `/actuator/metrics` và `/actuator/prometheus` |
+| OpenAPI runtime docs | ✅ Gateway dùng WebFlux OpenAPI starter; servlet services dùng WebMVC OpenAPI starter; endpoint `/v3/api-docs` bật bằng mặc định |
+| Security workflow | ✅ Thêm GitHub Actions Dependency Review và CodeQL |
+| Deploy workflow | ✅ Đổi build deploy sang `mvn -B clean verify`, không skip tests |
+
+Lệnh đã chạy:
+
+```powershell
+mvn -pl common-lib,api-gateway -am test
+mvn test
+mvn -B clean verify
+```
+
+Tất cả đều PASS.
 
 ## 5. Lỗi đã phát hiện và sửa
 

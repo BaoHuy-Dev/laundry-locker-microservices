@@ -32,11 +32,22 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:unknown},%X{correlationId:-}]"
 
 vnpay:
   tmn-code: ${VNPAY_TMN_CODE:DEMO}
