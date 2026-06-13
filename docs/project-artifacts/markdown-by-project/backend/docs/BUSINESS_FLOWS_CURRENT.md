@@ -201,7 +201,8 @@ Hành vi backend:
 2. BCrypt kiểm tra password.
 3. `auth-service` lấy role/profile summary từ `user-service`.
 4. JWT chứa identity của user/account và roles.
-5. Gateway validate JWT và forward các header:
+5. JWT có claim `tokenUse`; token truy cập API nghiệp vụ phải là `tokenUse=access`, refresh token chỉ dùng cho refresh flow.
+6. Gateway validate JWT access token và forward các header:
    - `X-User-Id`
    - `X-Account-Id`
    - `X-User-Roles`
@@ -239,6 +240,12 @@ RBAC tại gateway:
 - `/api/manage/**`: `MANAGER` hoặc `ADMIN`
 - `/api/maintenance/**`: `MAINTENANCE` hoặc `ADMIN`
 - `/internal/**`: bị chặn qua gateway; chỉ dùng service-to-service.
+
+Hardening hiện tại:
+
+- Gateway chỉ authorize JWT có `tokenUse=access`; refresh token bị từ chối ở API nghiệp vụ.
+- JWT secret của `auth-service` và `api-gateway` dùng cùng policy trong `common-lib`.
+- Profile `prod`/`production` sẽ fail-fast nếu JWT secret còn là giá trị demo/dev/change-me/default/localhost/sandbox hoặc ngắn hơn 32 UTF-8 bytes.
 
 ## 5. Mô Hình Locker Vật Lý
 
@@ -458,6 +465,11 @@ QR format stateless và được backend ký. Implementation hiện tại gắn 
 - active PIN
 - HMAC secret
 
+QR secret dùng cùng production secret policy với JWT:
+
+- Secret phải dài tối thiểu 32 UTF-8 bytes.
+- Profile `prod`/`production` không được dùng giá trị demo/dev/change-me/default.
+
 Endpoint tra cứu/access:
 
 - `GET /api/orders/access/{code}`: lookup public/gateway cho PIN hoặc QR.
@@ -671,6 +683,7 @@ Lưu ý hiện tại:
 
 - Credential provider production và đối soát phụ thuộc environment.
 - UX thanh toán cho SEND/RENTAL chưa hoàn tất end-to-end; order service đã expose flags/giá, nhưng product flow thanh toán cuối cùng cần làm tiếp.
+- Khi chạy profile `prod`/`production`, payment service fail-fast nếu VNPay/MoMo config còn là demo, sandbox, localhost hoặc default placeholder.
 
 ## 16. Luồng Thông Báo
 

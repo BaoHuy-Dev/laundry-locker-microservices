@@ -297,3 +297,30 @@ Quy tắc bàn giao mới:
 1. Người/AI tiếp theo đọc `docs/PROJECT_PROGRESS_TRACKER.md` trước để biết đang làm tới đâu.
 2. Sau đó đọc `docs/BUSINESS_FLOWS_CURRENT.md` để hiểu nghiệp vụ hiện tại.
 3. Sau mỗi thay đổi mới, cập nhật ít nhất `PROJECT_PROGRESS_TRACKER.md`; nếu đổi behavior thì cập nhật cả `BUSINESS_FLOWS_CURRENT.md`.
+
+## 15. Backend production hardening nền tảng (2026-06-13)
+
+Đã tạo branch làm việc:
+
+`chore/backend-production-hardening`
+
+Thay đổi chính:
+
+- Thêm `SecuritySecrets` trong `common-lib` để chuẩn hóa policy secret dùng chung.
+- `auth-service` và `api-gateway` dùng chung policy tạo JWT HMAC key, bỏ hành vi tự pad secret ngắn.
+- `api-gateway` chỉ authorize JWT có `tokenUse=access`; refresh token không còn dùng được để gọi API nghiệp vụ.
+- `order-service` đưa QR token secret vào cùng policy production, thêm `APP_SECURITY_QR_SECRET`.
+- `payment-service` fail-fast khi chạy profile `prod`/`production` nếu VNPay/MoMo config còn demo/sandbox/localhost/default.
+- Thêm unit test cho `SecuritySecrets`.
+- Thêm GitHub Actions `Backend CI` chạy `mvn -B test` trên PR/push các nhánh làm việc chính.
+
+Verification:
+
+| Lệnh / kiểm tra | Kết quả |
+|---|---|
+| `mvn -pl common-lib,api-gateway,auth-service,order-service,payment-service -am test` | PASS |
+| `mvn test` | PASS, 14 module backend |
+| `git diff --check` | PASS |
+| Quét private file trong `docs/project-artifacts` | PASS, không có `env.txt`, `pro.txt`, `Application.txt`, `Host *.txt` |
+
+Lưu ý: thay đổi local `D docker/postgres/init-databases.sql` vẫn nằm ngoài phạm vi hardening và không được stage/commit.

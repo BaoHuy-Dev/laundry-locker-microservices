@@ -86,7 +86,7 @@ Không commit:
 |---|---|---|---|
 | Auth register/login/JWT | DONE | `auth-service`, login smoke với customer/manager/maintenance pass. | Đồng nhất role naming trong docs/code nếu cần. |
 | User profile/roles | DONE | `user-service`, `user_profiles`, admin user APIs. | Đảm bảo deployed seed roles có `MANAGER`/`MAINTENANCE` nếu cần demo. |
-| Gateway routing/RBAC | DONE | Guard cho `/api/admin/**`, `/api/manage/**`, `/api/maintenance/**`, `/internal/**`. | Cập nhật route table khi thêm service. |
+| Gateway routing/RBAC | DONE | Guard cho `/api/admin/**`, `/api/manage/**`, `/api/maintenance/**`, `/internal/**`; gateway chỉ authorize JWT `tokenUse=access`. | Cập nhật route table khi thêm service; bổ sung integration test RBAC/access-token khi có harness. |
 | Locker physical cell model | DONE | V2/V3 migrations, `DRONE/STANDARD/XL`, layout endpoint. | Chỉ thêm cell status `EXPIRED` nếu product cần. |
 | Locker fault/maintenance flow | DONE | V4 migration, API claim/resolve report, FE/mobile pages. | Thêm lịch/log bảo trì định kỳ nếu cần. |
 | SEND parcel flow | DONE | `POST /api/orders/send`, PIN hai giai đoạn, QR, receiver flow. | Thêm payment UX nếu SEND là tính năng có phí. |
@@ -99,7 +99,7 @@ Không commit:
 | Admin maintenance page | DONE | `/admin/maintenance`, action report/fault. | Browser smoke với admin token thật. |
 | Partner portal | PARTIAL | FE routes tồn tại; backend `partner-service` thiếu. | Build lại source service hoặc mark out of scope. |
 | Services/laundry catalog | PARTIAL | FE/admin docs tồn tại; backend `laundry-service` thiếu. | Build lại `laundry-service` hoặc route catalog qua service khác. |
-| Payment/refund | PARTIAL | `payment-service` endpoints tồn tại; provider phụ thuộc environment. | Verify VNPay/MoMo với credential sandbox/real. |
+| Payment/refund | PARTIAL | `payment-service` endpoints tồn tại; provider phụ thuộc environment; production profile đã fail-fast nếu còn config demo/sandbox/localhost. | Verify VNPay/MoMo với credential sandbox/real. |
 | Notifications/FCM/WebSocket | PARTIAL | Service endpoints/events tồn tại; Firebase production chưa verify. | Verify FCM và WebSocket trên deploy. |
 | Loyalty | PARTIAL | `loyalty-service` endpoints tồn tại. | Verify event integration và FE/mobile usage. |
 | Store management | DONE | `store-service` endpoints và route admin/public. | Browser smoke admin stores nếu cần. |
@@ -113,7 +113,7 @@ Không commit:
 | Battery-aware assignment | TODO | Gap capstone yêu cầu, chưa có code. | Implement sau khi có drone model. |
 | Realtime drone tracking map | TODO | Chưa có map/telemetry service. | Implement bằng simulator và WebSocket. |
 | AI/RAG support | TODO | Chưa có `ai-service`. | Chọn provider/storage rồi scaffold. |
-| CI/CD | TODO/PARTIAL | Docker compose tồn tại; CI chưa verify trong pass gần nhất. | Thêm GitHub Actions build/test. |
+| CI/CD | PARTIAL | Docker compose và GitHub Actions backend CI `mvn -B test` đã có; deploy workflow vẫn build package skip tests. | Theo dõi CI trên remote và cân nhắc bắt deploy phụ thuộc CI test. |
 
 ## Chi Tiết Tiến Độ Backend
 
@@ -124,6 +124,12 @@ Không commit:
 - Gateway route table đã có.
 - JWT identity propagation đã có.
 - Gateway chặn `/internal/**` từ bên ngoài.
+- Gateway chỉ cho token `tokenUse=access` truy cập API nghiệp vụ; refresh token chỉ dùng ở auth refresh flow.
+- Secret policy dùng chung trong `common-lib` cho JWT/QR/payment production guard:
+  - Không tự pad HMAC secret ngắn.
+  - JWT/QR secret phải có tối thiểu 32 UTF-8 bytes.
+  - Profile `prod`/`production` fail-fast nếu còn giá trị demo/dev/change-me/default/localhost/sandbox.
+- GitHub Actions backend CI chạy `mvn -B test` cho PR/push vào các nhánh làm việc chính.
 - Locker cell model đã implement:
   - `cell_type`
   - `row_index`
@@ -271,6 +277,9 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-13 | Backend | `mvn test` tại `laundry-locker-microservices` | PASS | 14 module backend build/test pass; thêm 6 unit tests cho `SecuritySecrets`. |
+| 2026-06-13 | Backend | `mvn -pl common-lib,api-gateway,auth-service,order-service,payment-service -am test` | PASS | Targeted test cho các module hardening bảo mật. |
+| 2026-06-13 | Git/Docs | `git diff --check` | PASS | Không phát hiện whitespace/error trong diff hiện tại. |
 | 2026-06-13 | Tài liệu | Đổi `BUSINESS_FLOWS_CURRENT.md` và `PROJECT_PROGRESS_TRACKER.md` sang tiếng Việt có dấu, sync mirror artifact, và quét heading tiếng Anh cũ | PASS | Hai file nguồn và bản copy artifact đã được Việt hoá; không đụng secret txt. |
 | 2026-06-13 | Tài liệu | `rg -n "BUSINESS_FLOWS_CURRENT|PROJECT_PROGRESS_TRACKER" ...` và quét private-file trong `docs/project-artifacts` | PASS | Living docs đã được link/copy; `env.txt`, `pro.txt`, `Application.txt`, và `Host *.txt` không bị copy vào artifacts. |
 | 2026-06-13 | Backend | Gateway health `GET /actuator/health` | PASS | Trả `200`. |
@@ -348,6 +357,7 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-13 | Codex | Hardening backend nền tảng: secret policy dùng chung, chặn refresh token ở gateway, guard config payment production, thêm backend CI. | `common-lib`, `api-gateway`, `auth-service`, `order-service`, `payment-service`, `.github/workflows/backend-ci.yml`. | `mvn test` PASS toàn bộ backend; `git diff --check` PASS. |
 | 2026-06-13 | Codex | Đổi 2 file sống chính sang tiếng Việt có dấu và sync artifact mirror. | `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, `docs/project-artifacts/markdown-by-project/backend/docs/*`. | Kiểm tra heading tiếng Anh cũ, link/copy artifact, và private txt exclusion. |
 | 2026-06-13 | Codex | Tạo living business flow và progress tracker docs. | `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, artifact copies. | Link đã verify; markdown artifacts đã sync; private local txt không bị copy. |
 | 2026-06-13 | Codex | Cập nhật tài liệu cũ theo trạng thái hiện tại. | Backend README/run guide, mobile README, IoT README, root docs, artifact copies. | Markdown synced; private env/pro/Application excluded from artifacts. |

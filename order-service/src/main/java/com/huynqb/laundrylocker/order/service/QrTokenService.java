@@ -1,11 +1,14 @@
 package com.huynqb.laundrylocker.order.service;
 
+import com.huynqb.laundrylocker.common.security.SecuritySecrets;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,8 +22,22 @@ public class QrTokenService {
 
   public static final String PREFIX = "LLQR.";
 
-  @Value("${app.security.qr-secret:laundry-locker-dev-qr-secret}")
+  @Value("${app.security.qr-secret:laundry-locker-dev-qr-secret-change-me-32chars}")
   private String secret;
+
+  private final Environment environment;
+  private SecretKey secretKey;
+
+  public QrTokenService(Environment environment) {
+    this.environment = environment;
+  }
+
+  @PostConstruct
+  void init() {
+    secretKey =
+        SecuritySecrets.hmacShaKeyFor(
+            secret, "app.security.qr-secret", environment.getActiveProfiles());
+  }
 
   public String issue(Long orderId, String pinCode) {
     if (orderId == null || pinCode == null || pinCode.isBlank()) {
@@ -62,7 +79,7 @@ public class QrTokenService {
   private String sign(Long orderId, String pinCode) {
     try {
       Mac mac = Mac.getInstance("HmacSHA256");
-      mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+      mac.init(secretKey);
       byte[] sig = mac.doFinal((orderId + ":" + pinCode).getBytes(StandardCharsets.UTF_8));
       return Base64.getUrlEncoder().withoutPadding().encodeToString(sig);
     } catch (Exception ex) {
