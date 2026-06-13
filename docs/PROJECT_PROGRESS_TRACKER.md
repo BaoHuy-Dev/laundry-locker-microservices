@@ -57,7 +57,8 @@ Tóm tắt trạng thái:
 - IoT backend verify-access bằng PIN/QR: đã implement.
 - Drone delivery/assignment/tracking thật: chưa implement.
 - AI/RAG: chưa implement.
-- `laundry-service` và `partner-service`: thiếu source module.
+- `laundry-service`: thiếu source module.
+- Role `PARTNER`/`partner-service`: đã gỡ khỏi backend (seed/role/permission/compose) vì không còn dùng.
 
 ## Đang Làm
 
@@ -110,15 +111,16 @@ Không commit:
 | Admin web dashboard | PARTIAL | Main admin routes tồn tại; build pass. | Browser smoke tất cả admin pages. |
 | Admin locker list/layout | DONE | `/admin/lockers`, `/admin/lockers/:lockerId`, RTK lockerOps. | Giữ UI khớp `LockerLayoutResponse`. |
 | Admin maintenance page | DONE | `/admin/maintenance`, action report/fault. | Browser smoke với admin token thật. |
-| Partner portal | PARTIAL | FE routes tồn tại; backend `partner-service` thiếu. | Build lại source service hoặc mark out of scope. |
+| Partner portal | Đã gỡ | Role `PARTNER`/permission `PARTNER_MANAGE`/account `partner.seed`/`partner-service` đã gỡ khỏi seed + docker-compose (2026-06-13). | FE partner routes là deprecated; dọn UI partner khi có thời gian. |
 | Services/laundry catalog | PARTIAL | FE/admin docs tồn tại; backend `laundry-service` thiếu. | Build lại `laundry-service` hoặc route catalog qua service khác. |
 | Payment/refund | PARTIAL | `payment-service` endpoints tồn tại; provider phụ thuộc environment; production profile đã fail-fast nếu còn config demo/sandbox/localhost. | Verify VNPay/MoMo với credential sandbox/real. |
 | Notifications/FCM/WebSocket | PARTIAL | Service endpoints/events tồn tại; Firebase production chưa verify. | Verify FCM và WebSocket trên deploy. |
 | Loyalty | PARTIAL | `loyalty-service` endpoints tồn tại. | Verify event integration và FE/mobile usage. |
 | Store management | DONE | `store-service` endpoints và route admin/public. | Browser smoke admin stores nếu cần. |
 | Flutter customer locker ops | DONE | Login/home quick actions/rental/send/my-orders smoke pass. | Full end-to-end create/complete trên emulator với deploy. |
+| Flutter stores (customer) | DONE | Feature `lib/features/stores/**`: list (search + nearby), detail (info + ratings + directions), entry "Khám phá cửa hàng" từ home; gọi `/api/stores`, `/api/stores/{id}`, `/api/stores/{id}/ratings`. `flutter analyze` 0 error. | Manual smoke trên emulator với deploy có store data. |
 | Flutter manager home | PARTIAL | Code và backend role login đã verify; manual UI smoke bị giới hạn. | Test manager UI trên emulator/device ổn định. |
-| Flutter maintenance home | PARTIAL | Code và backend role login đã verify; manual UI smoke bị giới hạn. | Test maintenance UI với seeded fault. |
+| Flutter maintenance home | PARTIAL | Backend API `/api/maintenance/**` đã có (`locker-service`); role routing `MAINTENANCE -> /maintenance-home` đã verify (`homeForRoles` ở splash/login); `flutter analyze` 0 error. Manual UI smoke còn giới hạn. | Test maintenance UI với seeded fault trên emulator. |
 | Flutter legacy courier/logistics | PARTIAL | Nhiều route tồn tại; chưa align backend hiện tại trong pass gần nhất. | Audit hoặc remove/mark legacy. |
 | Python IoT runtime | PARTIAL | README/runtime tồn tại; hardware/simulation cần config. | Đồng bộ broker và test với verify-access. |
 | Tablet-web cabinet UI | TODO | Mới được nhắc trong docs. | Build dựa trên layout + verify-access. |
@@ -191,15 +193,14 @@ Không commit:
 
 ### Partial / Cần Chú Ý
 
-- `docker-compose.yml` vẫn khai báo `laundry-service` và `partner-service` đang thiếu; `docker-compose.override.yml` skip chúng khi chạy local.
+- `docker-compose.yml` vẫn khai báo `laundry-service` đang thiếu; `docker-compose.override.yml` skip nó khi chạy local. `partner-service` đã được gỡ hẳn khỏi compose (2026-06-13).
 - Một số docs cũ và FE pages vẫn giả định có service catalog/partner APIs.
-- Seed data role có `USER`, `STAFF`, `PARTNER`, `ADMIN`, trong khi role routing mới dùng thêm `CUSTOMER`, `MANAGER`, `MAINTENANCE`.
+- Seed data role hiện còn `USER`, `STAFF`, `ADMIN` (đã gỡ `PARTNER`), trong khi role routing mới dùng thêm `CUSTOMER`, `MANAGER`, `MAINTENANCE`.
 - Password của deployed seed account không biết từ seed hash; có thể cần reset cho demo.
 
 ### Chưa Bắt Đầu
 
 - Real drone backend service.
-- Real partner source service.
 - Real laundry catalog source service.
 - AI/RAG service.
 
@@ -253,6 +254,8 @@ Không commit:
 - Render QR qua `qr_flutter`.
 - Targeted analyze/build đã pass.
 - Customer UI smoke pass trên emulator cho route rendering.
+- Module `stores` mới (2026-06-13): màn danh sách cửa hàng (tìm kiếm + gần tôi), màn chi tiết cửa hàng (thông tin + đánh giá + chỉ đường), entry "Khám phá cửa hàng" trên home. `flutter analyze` 0 error.
+- Xác minh `develop` đã là superset (đã merge `ThaiBinh_NewUI_v1` qua PR #1) nên không cần merge thủ công; UI Đội bảo trì (MAINTENANCE) đã có sẵn và wire route đầy đủ.
 
 ### Partial / Cần Chú Ý
 
@@ -302,9 +305,9 @@ DigitalOcean Droplet đã quan sát:
 - Deploy DB seed accounts đã quan sát:
   - `customer.seed@laundry.test`
   - `staff.seed@laundry.test`
-  - `partner.seed@laundry.test`
   - `admin.seed@laundry.test`
   - `customer.vip@laundry.test`
+  - (`partner.seed@laundry.test` đã gỡ khỏi seed file 2026-06-13; deploy DB cũ có thể còn record cho tới khi re-seed.)
 
 Quan trọng:
 
@@ -316,6 +319,9 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-13 | Flutter | `flutter analyze lib/features/stores lib/core/routing/app_router.dart lib/features/home/...` | PASS | "No issues found"; 0 lỗi trên feature stores mới + file wiring. |
+| 2026-06-13 | Flutter | `flutter analyze` toàn project | PASS/PARTIAL | 0 lỗi mức error; 413 issue còn lại là info/warning debt cũ của codebase migrate (gồm `test/widget_test.dart`). |
+| 2026-06-13 | Backend/Seed | `git diff --check` sau khi bỏ role `PARTNER` khỏi seed/compose | PASS | Không lỗi whitespace; seed SQL giữ cấu trúc/comma hợp lệ (`USER/STAFF/ADMIN`, permission `1001-1007`); chỉ còn cột `partner_id` ở store là schema cố ý giữ. Không đụng Java/migration. |
 | 2026-06-13 | Backend | `mvn -pl api-gateway -am test` | PASS | Phase 4 continuation không đổi Java logic; targeted gateway/common tests vẫn pass: 8 common-lib tests, 2 correlation gateway tests, 7 JWT/RBAC gateway tests. |
 | 2026-06-13 | Release scripts | `C:\Program Files\Git\bin\bash.exe -n scripts/deploy-from-artifact.sh` và `... verify-release-artifact.sh` | PASS | Shell syntax check pass cho deploy script và script verify release artifact. |
 | 2026-06-13 | Git/Docs | `git diff --check` và quét private-file trong `docs/project-artifacts` | PASS | Không phát hiện whitespace/error; không có `env.txt`, `pro.txt`, `Application.txt`, `Host *.txt` trong artifacts. |
@@ -385,8 +391,8 @@ Quan trọng:
 ### P2 - Service Đang Thiếu Source
 
 - Build lại hoặc remove scope `laundry-service`.
-- Build lại hoặc remove scope `partner-service`.
-- Cập nhật FE partner/services pages theo quyết định cuối.
+- `partner-service`: đã remove scope (gỡ role/seed/compose 2026-06-13). Còn lại: dọn FE partner pages deprecated khi có thời gian.
+- Cập nhật FE services pages theo quyết định cuối.
 
 ### P3 - Capstone / Advanced Scope
 
@@ -414,6 +420,8 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-13 | Claude | Mobile: thêm feature `stores` (list + detail + ratings) cho customer + entry "Khám phá cửa hàng" trên home; xác minh `develop` đã merge `ThaiBinh_NewUI_v1` (PR #1) nên không cần merge thủ công; xác minh UI Đội bảo trì (MAINTENANCE) đã wire (`homeForRoles`). | `smart-laundry-locker-mobile`: `lib/features/stores/**`, `lib/core/routing/app_router.dart`, `lib/features/home/presentation/pages/home_page.dart`; living docs (backend repo). | `flutter analyze` targeted PASS (0 issue) + full PASS (0 error). |
+| 2026-06-13 | Claude | Bỏ role `PARTNER` khỏi backend mức shallow: gỡ role/permission `PARTNER_MANAGE`/account `partner.seed`/seed `partner_db` khỏi seed-demo-data, gỡ check partner trong verify-demo-data, gỡ `partner-service` khỏi docker-compose + override. Giữ schema `partner_db`/`partner_schema`/`partner_id` cũ (không đụng migration). | `docker/postgres/seed-demo-data.sql`, `docker/postgres/verify-demo-data.sql`, `docker-compose.yml`, `docker-compose.override.yml`, `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`. | `git diff --check` PASS; review seed SQL comma/structure PASS; grep Java `PARTNER` = no match. |
 | 2026-06-13 | Codex | Production hardening Phase 4 continuation: thêm GitHub artifact attestations cho deploy artifact, tag-based backend release workflow tạo tarball/SBOM/checksum/provenance và publish GitHub Release, thêm script verify release artifact. | `.github/workflows/deploy-droplet.yml`, `.github/workflows/backend-release.yml`, `scripts/verify-release-artifact.sh`, living docs. | `mvn -pl api-gateway -am test` PASS; Git Bash `bash -n` cho deploy/verify scripts PASS; `git diff --check` PASS. |
 | 2026-06-13 | Codex | Production hardening Phase 3/4: thêm gateway RBAC/access-token unit tests, Swagger UI/OpenAPI aggregation qua gateway, build-info metadata, full 12-image Trivy matrix, deploy artifact checksum và checksum verify trong deploy script. | `api-gateway`, root `pom.xml`, `.github/workflows/backend-security.yml`, `.github/workflows/deploy-droplet.yml`, `scripts/deploy-from-artifact.sh`, living docs. | `mvn -pl api-gateway -am test` PASS; `mvn -B test` PASS/PARTIAL; `mvn -B clean verify` PASS/PARTIAL; Git Bash `bash -n scripts/deploy-from-artifact.sh` PASS. |
 | 2026-06-13 | Codex | Production hardening Phase 2: bật Resilience4j circuit breaker/timeout cho OpenFeign, expose `/actuator/sbom`, generate CycloneDX SBOM, thêm Testcontainers smoke cho locker-service, và thêm SBOM/Trivy container scan gate trong backend security workflow. | Root `pom.xml`, service `pom.xml`/`application.yml`, `locker-service/src/test/**`, `.github/workflows/backend-security.yml`, living docs. | `mvn -pl locker-service -am test` PASS/PARTIAL; `mvn -B test` PASS/PARTIAL; `mvn -B clean verify` PASS/PARTIAL; Docker local không khả dụng nên Testcontainers skip 2 smoke tests. |
