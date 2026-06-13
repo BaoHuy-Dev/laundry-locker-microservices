@@ -1,6 +1,6 @@
 # Theo Dõi Tiến Độ Dự Án
 
-> Cập nhật lần cuối: 2026-06-13
+> Cập nhật lần cuối: 2026-06-14
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/BUSINESS_FLOWS_CURRENT.md`
 
@@ -36,7 +36,8 @@ Mức cập nhật tối thiểu cho mỗi phiên làm việc:
 3. `docs/CURRENT_PROJECT_STATUS.md`
 4. `RUN_RESULT.md`
 5. `LOCKER_FLOW_PLAN.md`
-6. File code liên quan đến task.
+6. `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (phân tích luồng tủ as-is + đặc tả chuẩn thực tế + gap map + backlog).
+7. File code liên quan đến task.
 
 Không mặc định tài liệu cũ là đúng nếu chúng mâu thuẫn với các file trên.
 
@@ -64,6 +65,7 @@ Tóm tắt trạng thái:
 
 | Ngày | Branch | Task | Phạm vi dự kiến sửa | Không sửa | Ảnh hưởng |
 |---|---|---|---|---|---|
+| 2026-06-14 | `docs/locker-flows-standard-spec` | Phân tích luồng tủ (as-is, bám code locker/order/iot) + đặc tả toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế (to-be) + gap map + backlog. Tài liệu blueprint, chưa code. | `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (mới), `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, mirror artifact backend/docs. | Không sửa code Java/migration/business logic, không đổi API/DB/event/UI runtime, không stage `docker/postgres/init-databases.sql`, không commit file private/secret. | Chỉ tài liệu; không đổi hành vi runtime. Định hướng cho các giai đoạn implement L1–L7 sau. |
 | 2026-06-13 | `chore/backend-production-phase1` | Production hardening Phase 1 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, CI workflow, cấu hình runtime service, living docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành backend; không đổi API nghiệp vụ/database/event/UI/mobile. |
 | 2026-06-13 | `chore/backend-production-phase2` | Production hardening Phase 2 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, service `application.yml`, GitHub Actions, docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành/backend quality; không đổi API nghiệp vụ/database/event/UI/mobile. |
 | 2026-06-13 | `chore/backend-production-phase3-4` | Production hardening Phase 3/4 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | `api-gateway` tests/config, root Maven config, GitHub Actions, docs/artifact mirrors. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành/API docs/CI; không đổi API nghiệp vụ/database/event/UI/mobile. |
@@ -117,7 +119,7 @@ Không commit:
 | Notifications/FCM/WebSocket | PARTIAL | Service endpoints/events tồn tại; Firebase production chưa verify. | Verify FCM và WebSocket trên deploy. |
 | Loyalty | PARTIAL | `loyalty-service` endpoints tồn tại. | Verify event integration và FE/mobile usage. |
 | Store management | DONE | `store-service` endpoints và route admin/public. | Browser smoke admin stores nếu cần. |
-| Flutter customer locker ops | DONE | Login/home quick actions/rental/send/my-orders smoke pass. | Full end-to-end create/complete trên emulator với deploy. |
+| Flutter customer locker ops | DONE | Login/home quick actions/rental/send/my-orders smoke pass. UI 3 màn revamp về design system shadcn navy + action gate theo state machine (2026-06-14, `flutter analyze` 0 error). | Smoke trên emulator với deploy cho UI mới (create/confirm/complete/extend/delegate/report). |
 | Flutter stores (customer) | DONE | Feature `lib/features/stores/**`: list (search + nearby), detail (info + ratings + directions), entry "Khám phá cửa hàng" từ home; gọi `/api/stores`, `/api/stores/{id}`, `/api/stores/{id}/ratings`. `flutter analyze` 0 error. | Manual smoke trên emulator với deploy có store data. |
 | Flutter manager home | PARTIAL | Code và backend role login đã verify; manual UI smoke bị giới hạn. | Test manager UI trên emulator/device ổn định. |
 | Flutter maintenance home | PARTIAL | Backend API `/api/maintenance/**` đã có (`locker-service`); role routing `MAINTENANCE -> /maintenance-home` đã verify (`homeForRoles` ở splash/login); `flutter analyze` 0 error. Manual UI smoke còn giới hạn. | Test maintenance UI với seeded fault trên emulator. |
@@ -319,6 +321,9 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-14 | Backend | `mvn -pl order-service -am test` trên branch `fix/locker-reservation-ttl-and-release` | PASS | BUILD SUCCESS; 8 test common-lib pass; order-service (gồm sửa auto-cancel/scheduler L1) compile sạch. Không cần Docker. |
+| 2026-06-14 | Flutter | `flutter analyze lib/features/locker_ops` và `flutter analyze` toàn project | PASS | "No issues found" trên `locker_ops`; toàn project 0 error (413 info/warning debt cũ không đổi) sau revamp UI luồng tủ. |
+| 2026-06-14 | Tài liệu | `git diff --check` trên branch `docs/locker-flows-standard-spec` + quét private-file (`env.txt`/`pro.txt`/`Application.txt`/`Host *.txt`) trong `docs/project-artifacts` | PASS | Chỉ thêm/sửa Markdown (spec luồng tủ + 2 file sống + mirror); không có file private bị copy vào artifacts. |
 | 2026-06-13 | Flutter | `flutter analyze lib/features/stores lib/core/routing/app_router.dart lib/features/home/...` | PASS | "No issues found"; 0 lỗi trên feature stores mới + file wiring. |
 | 2026-06-13 | Flutter | `flutter analyze` toàn project | PASS/PARTIAL | 0 lỗi mức error; 413 issue còn lại là info/warning debt cũ của codebase migrate (gồm `test/widget_test.dart`). |
 | 2026-06-13 | Backend/Seed | `git diff --check` sau khi bỏ role `PARTNER` khỏi seed/compose | PASS | Không lỗi whitespace; seed SQL giữ cấu trúc/comma hợp lệ (`USER/STAFF/ADMIN`, permission `1001-1007`); chỉ còn cột `partner_id` ở store là schema cố ý giữ. Không đụng Java/migration. |
@@ -373,6 +378,11 @@ Quan trọng:
 
 ### P1 - Làm Cứng Sản Phẩm Hiện Tại
 
+- **Luồng tủ — backlog từ `LOCKER_FLOWS_STANDARD_SPEC.md`** (xem gap map G1–G16, lộ trình L1–L7):
+  - L1 (ưu tiên cao nhất): vá auto-cancel `@Scheduled` + release ô khi hủy (G1/G2), thêm TTL cho ô `RESERVED`, đối soát drift trạng thái ô↔order (G4).
+  - L2: cell `EXPIRED`/move-to-storage khi quá hạn (G3), enforce `size` khi reserve (G9).
+  - L3: luồng nhận hàng courier `PARCEL_RECEIVE` + courier access code (G6).
+  - L4+: gate thanh toán (G5), access-log từng lần mở ô (G11), SMS/email OTP thật (G13), PIN brute-force lockout (G14).
 - Thêm/verify payment UX cho SEND và RENTAL.
 - Re-test old laundry lifecycle sau các thay đổi Phase 2 trong order service.
 - Đồng nhất role name trên backend seed data, mobile, FE permissions và docs.
@@ -420,6 +430,9 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-14 | Claude | Backend L1 (luồng tủ): vá lỗ hổng ô kẹt `RESERVED` (G1/G2). `OrderService.autoCancelUnconfirmedOrders` giờ release ô + transition đầy đủ (history/event/notify); thêm `OrderScheduler.sweepUnconfirmedReservations` `@Scheduled` (cron mặc định mỗi 15 phút); cửa sổ giữ chỗ cấu hình `app.order.auto-cancel-hours` (24h). | `laundry-locker-microservices` branch `fix/locker-reservation-ttl-and-release`: `order-service/.../service/OrderService.java`, `OrderScheduler.java`; living docs. | `mvn -pl order-service -am test` BUILD SUCCESS (8 test common-lib pass; order-service compile sạch). |
+| 2026-06-14 | Claude | Mobile: revamp UI 3 màn locker customer (Gửi hàng/Thuê tủ/Đơn tủ của tôi) về design system shadcn navy; thêm design kit dùng chung (`ops_widgets`, `locker_picker`); format giá/ngày/countdown; gate action theo trạng thái+loại (confirm/complete/extend/end/delegate/report/cancel). Bắt đầu lộ trình luồng tủ phần mobile. | `smart-laundry-locker-mobile` branch `feat/locker-customer-ui-revamp`: `lib/features/locker_ops/presentation/{widgets/ops_widgets.dart,widgets/locker_picker.dart,pages/send_parcel_page.dart,pages/rent_locker_page.dart,pages/my_locker_orders_page.dart}`; living docs (backend repo). | `flutter analyze` PASS (0 error; 413 info/warning debt cũ không đổi). |
+| 2026-06-14 | Claude | Phân tích luồng tủ as-is (đọc trực tiếp `LockerService`, `OrderService`, `IotService`, entities, migrations, scheduler, `QrTokenService`) và đặc tả toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế (to-be) + 16 gap (G1–G16) + backlog L1–L7. Phát hiện lỗ hổng: auto-cancel không @Scheduled & không release ô (G1/G2), quá hạn không giải phóng ô (G3), thiếu luồng nhận hàng courier PARCEL_RECEIVE (G6). Chỉ tài liệu, không đụng code. | `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (mới); `docs/BUSINESS_FLOWS_CURRENT.md`; `docs/PROJECT_PROGRESS_TRACKER.md`; mirror `docs/project-artifacts/markdown-by-project/backend/docs/*`. | `git diff --check` PASS; quét private-file trong artifacts PASS. |
 | 2026-06-13 | Claude | Mobile: thêm feature `stores` (list + detail + ratings) cho customer + entry "Khám phá cửa hàng" trên home; xác minh `develop` đã merge `ThaiBinh_NewUI_v1` (PR #1) nên không cần merge thủ công; xác minh UI Đội bảo trì (MAINTENANCE) đã wire (`homeForRoles`). | `smart-laundry-locker-mobile`: `lib/features/stores/**`, `lib/core/routing/app_router.dart`, `lib/features/home/presentation/pages/home_page.dart`; living docs (backend repo). | `flutter analyze` targeted PASS (0 issue) + full PASS (0 error). |
 | 2026-06-13 | Claude | Bỏ role `PARTNER` khỏi backend mức shallow: gỡ role/permission `PARTNER_MANAGE`/account `partner.seed`/seed `partner_db` khỏi seed-demo-data, gỡ check partner trong verify-demo-data, gỡ `partner-service` khỏi docker-compose + override. Giữ schema `partner_db`/`partner_schema`/`partner_id` cũ (không đụng migration). | `docker/postgres/seed-demo-data.sql`, `docker/postgres/verify-demo-data.sql`, `docker-compose.yml`, `docker-compose.override.yml`, `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`. | `git diff --check` PASS; review seed SQL comma/structure PASS; grep Java `PARTNER` = no match. |
 | 2026-06-13 | Codex | Production hardening Phase 4 continuation: thêm GitHub artifact attestations cho deploy artifact, tag-based backend release workflow tạo tarball/SBOM/checksum/provenance và publish GitHub Release, thêm script verify release artifact. | `.github/workflows/deploy-droplet.yml`, `.github/workflows/backend-release.yml`, `scripts/verify-release-artifact.sh`, living docs. | `mvn -pl api-gateway -am test` PASS; Git Bash `bash -n` cho deploy/verify scripts PASS; `git diff --check` PASS. |

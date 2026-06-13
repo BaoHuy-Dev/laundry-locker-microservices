@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-13
+> Cập nhật lần cuối: 2026-06-14
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -921,6 +921,15 @@ Quick action customer:
 - `Đơn tủ` -> `/locker/my-orders`
 - `Khám phá cửa hàng` -> `/stores` (entry mới trên home)
 
+Revamp UI luồng tủ customer (2026-06-14):
+
+- 3 màn `locker_ops` (Gửi hàng / Thuê tủ / Đơn tủ của tôi) được đồng bộ về design system `AISLShadcnTheme` (navy + Manrope, bo góc 16, card trắng viền `#E2E8F0`) thay cho palette xanh `opsPrimary` cũ.
+- Design kit dùng chung: `ops_widgets.dart` (status/type color+label, format giá/ngày/`Còn…|Quá hạn…`, `OpsCard/OpsBanner/OpsPrimaryButton/OpsInfoRow/OpsEmptyState`, `AccessCredentials` hiển thị PIN dạng ô bấm-để-copy + QR có khung) và `locker_picker.dart` (chọn tủ qua bottom-sheet).
+- Màn Gửi hàng: stepper 2 giai đoạn (bỏ hàng → người nhận lấy) đúng luồng PIN 2 giai đoạn; banner hướng dẫn; hiển thị phí gửi và hạn nhận có định dạng.
+- Màn Thuê tủ: card chọn loại ô (STANDARD/XL kèm kích thước+đơn giá), chip giờ nhanh + slider, thẻ giá tính live.
+- Màn Đơn tủ của tôi: card đơn có countdown/cảnh báo quá hạn; detail sheet format ngày/giá, hiện phí phát sinh; **action gate đúng theo trạng thái+loại** (confirm bỏ đồ; hoàn tất; gia hạn/kết thúc thuê; ủy quyền; báo ô lỗi; hủy chỉ khi `INITIALIZED`).
+- `flutter analyze` 0 error (debt info/warning cũ không đổi). Chưa smoke trên emulator phiên này.
+
 Màn Cửa hàng (mới, 2026-06-13):
 
 - `/stores`: danh sách cửa hàng, tìm theo tên/địa chỉ, nút "gần tôi" (geolocator) gọi `GET /api/stores?latitude&longitude`.
@@ -1036,3 +1045,25 @@ Những phần sau chưa hoàn tất trong sản phẩm đang chạy:
 - Đối soát/thanh quyết toán provider payment cấp production.
 - Cài đặt Firebase/FCM credential cấp production.
 - Full parity các feature mobile legacy với backend hiện tại.
+
+## 25. Phân Tích Luồng Tủ & Bổ Sung Chuẩn Thực Tế (tham chiếu spec)
+
+Tài liệu đặc tả đầy đủ (phân tích as-is bám code + bổ sung toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế + gap map + backlog): **`docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md`** (2026-06-14).
+
+Các điểm as-is đã xác minh trực tiếp từ code, cần lưu ý vì là lỗ hổng đúng đắn của luồng tủ đang chạy:
+
+- **Trạng thái ô chỉ có 4 giá trị**: `AVAILABLE / RESERVED / OCCUPIED / FAULT` (xem `LockerService`). `EXPIRED` chỉ tồn tại ở cấp order qua `pickupDeadline`, ô không có trạng thái `EXPIRED/OUT_OF_SERVICE/CLEANING`.
+- **Ô `RESERVED` không có TTL** và `autoCancelUnconfirmedOrders()` đổi đơn `INITIALIZED`>24h sang `CANCELED` nhưng **không release ô** và **không được `@Scheduled`** → ô có thể kẹt `RESERVED` (Gap G1/G2). `cancel()` thủ công thì có release.
+- **Quá hạn lấy hàng chỉ nhắc + cộng phí**; ô vẫn `OCCUPIED` tới khi có lệnh complete/checkout — chưa có move-to-storage/giải phóng tự động (Gap G3).
+- **Luồng nhận hàng qua shipper/courier (PARCEL_RECEIVE) chưa có code** — SEND hiện chỉ là C2C giữa 2 app-user; chưa có "courier access code" tách với PIN khách (Gap G6).
+- **Deadline SEND mặc định 48h**, laundry pickup 24h; rental deadline = số giờ thuê (cấu hình `app.order.*`).
+- **PIN/QR**: QR ký số HMAC gắn PIN hiện tại → đổi PIN (delegate/reset/SEND handover) vô hiệu QR cũ; `getByAccess` nhận cả PIN và QR.
+- **Trạng thái ô là bản sao best-effort** của order (occupy/release nuốt lỗi) → có rủi ro lệch trạng thái, chưa có job đối soát (Gap G4).
+
+Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ trình implement 7 giai đoạn (L1–L7, mỗi giai đoạn 1 branch) nằm trong spec ở trên.
+
+**Tiến độ lộ trình (cập nhật 2026-06-14):**
+
+- **L1 (phần order-layer) — ĐÃ LÀM** trên branch `fix/locker-reservation-ttl-and-release`: `autoCancelUnconfirmedOrders` giờ **release ô** khi hủy và chạy transition đầy đủ (history + event + notify); thêm job `@Scheduled` (`OrderScheduler.sweepUnconfirmedReservations`, cron mặc định mỗi 15 phút). Đóng **G1** (auto-cancel chưa @Scheduled) và **G2** (ô kẹt `RESERVED` của đơn bỏ dở) ở mức hành vi. Cửa sổ giữ chỗ cấu hình `app.order.auto-cancel-hours` (mặc định 24h). Verify: `mvn -pl order-service -am test` BUILD SUCCESS. *(Phần cell-level `reserved_until` TTL trong locker-service vẫn là follow-up.)*
+- **Mobile UI luồng tủ — ĐÃ LÀM** trên branch `feat/locker-customer-ui-revamp` (xem mục 21).
+- L2–L7: chưa làm.
