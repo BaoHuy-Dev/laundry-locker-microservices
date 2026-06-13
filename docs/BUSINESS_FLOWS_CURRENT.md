@@ -927,6 +927,15 @@ Màn Cửa hàng (mới, 2026-06-13):
 - `/stores/detail`: chi tiết cửa hàng (tên, trạng thái, địa chỉ, SĐT, mô tả, khoảng cách), nút Chỉ đường (mở Google Maps qua `url_launcher`), nút Xem tủ (`/lockers`), và danh sách đánh giá từ `GET /api/stores/{id}/ratings`.
 - Feature: `lib/features/stores/**` (clean-arch: domain entity `Store`/`StoreRating` + infrastructure `StoreService` + presentation pages/widgets). Đã `flutter analyze` 0 error.
 
+Dẫn đường in-app (mới, 2026-06-13):
+
+- `DirectionsMapPage` (`lib/core/presentation/pages/directions_map_page.dart`) vẽ tuyến đường lái xe từ vị trí hiện tại tới điểm đến trên bản đồ OSM, dùng `flutter_map` + OSRM public router (`router.project-osrm.org`, decode polyline), kèm nút mở Google/Apple Maps cho chỉ đường turn-by-turn.
+- Route `/directions` (extra `{lat,lng,title,subtitle}`). Nút "Chỉ đường" ở chi tiết cửa hàng và FAB ở màn bản đồ locker (`LockerDetailMapPage`) đều mở màn này. Lưu ý: `@mapcn/map` là component web (React/shadcn) nên không nhúng vào Flutter; dùng `flutter_map` (tương đương OSM/MapLibre) đã có sẵn trong app.
+
+Đăng nhập nhanh dev (mới, 2026-06-13):
+
+- `login_screen` có khối "Đăng nhập nhanh (DEV)" với nút cho từng role (Khách hàng/Quản lý/Bảo trì/Admin), chỉ hiển thị ở bản debug (`kDebugMode`). Dùng credential dev đã seed (`demo@laundry.test/secret123`, `manager@laundry.test/Manager@123456`, `maintenance@laundry.test/Maint@123456`, `admin@laundry.test/Admin@123456`) và vẫn gọi `/api/auth/login` thật (JWT hợp lệ) — cần backend có sẵn các account này.
+
 Maintenance home (đã xác minh 2026-06-13):
 
 - Role `MAINTENANCE` đăng nhập/auto-login được route tới `/maintenance-home` (`homeForRoles()` ở `splash_screen` và `login_screen`).
