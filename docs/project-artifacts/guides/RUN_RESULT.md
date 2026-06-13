@@ -9,6 +9,7 @@
 | Build backend (Maven, 14 module) | ✅ PASS (sau khi sửa 3 lỗi compile/config; 2026-06-13 chạy lại production hardening PASS) |
 | Backend production hardening Phase 1 | ✅ PASS (`mvn test` và `mvn -B clean verify`) |
 | Backend production hardening Phase 2 | ✅ PASS/PARTIAL (`mvn -B test` và `mvn -B clean verify` PASS; Testcontainers locker smoke skip trên máy local vì Docker daemon không khả dụng) |
+| Backend production hardening Phase 3/4 | ✅ PASS/PARTIAL (`mvn -pl api-gateway -am test`, `mvn -B test`, `mvn -B clean verify` PASS; Testcontainers locker smoke skip trên máy local vì Docker daemon không khả dụng) |
 | Backend chạy Docker (14 container) | ✅ Tất cả Up, không restart loop |
 | Đăng ký Eureka | ✅ 11/11 app (gateway + 10 service + iot) |
 | Smoke test API qua gateway | ✅ register / login / my-orders (JWT) / stores đều OK |
@@ -92,6 +93,29 @@ mvn -B clean verify
 ```
 
 Kết quả Maven đều PASS. Ghi chú: Testcontainers dùng `@Testcontainers(disabledWithoutDocker = true)`, nên đây là PASS/PARTIAL trên máy local không có Docker environment.
+
+## 4.3. Verification backend production hardening Phase 3/4 (2026-06-13)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Gateway RBAC/access-token contract tests | ✅ Thêm `JwtGatewayFilterTest`: chặn `/internal/**`, reject refresh token ở business API, role guard admin/manage/maintenance, forward identity headers, public OpenAPI/catalog GET |
+| OpenAPI aggregation | ✅ Gateway có Swagger UI starter, `/swagger-ui/index.html`, và route `/v3/api-docs/<service-name>` cho các service đang có source |
+| Build metadata | ✅ Spring Boot Maven `build-info` chạy cho app modules để sinh metadata cho `/actuator/info` |
+| Security workflow | ✅ Trivy image scan matrix mở rộng đủ 12 Dockerfile hiện có; không thêm `laundry-service`/`partner-service` vì thiếu source |
+| Deploy artifact integrity | ✅ Deploy workflow tạo/upload SHA-256 checksum; deploy script verify checksum nếu `.sha256` tồn tại |
+| Deploy expected apps | ✅ Deploy script mặc định chờ các Eureka apps có source thật, tránh kẹt vì `laundry-service`/`partner-service` đang thiếu source |
+
+Lệnh đã chạy:
+
+```powershell
+mvn -pl api-gateway -am test
+mvn -B test
+mvn -B clean verify
+& 'C:\Program Files\Git\bin\bash.exe' -n scripts/deploy-from-artifact.sh
+git diff --check
+```
+
+Kết quả: PASS/PARTIAL. Maven pass toàn bộ; Testcontainers locker smoke vẫn skip 2 test do Docker daemon local không khả dụng. WSL `bash -n` không dùng được trên máy này vì thiếu `/bin/bash`, nên đã syntax-check bằng Git Bash.
 
 ## 5. Lỗi đã phát hiện và sửa
 

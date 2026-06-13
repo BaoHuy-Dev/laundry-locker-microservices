@@ -96,10 +96,16 @@ jobs:
         module:
           - api-gateway
           - auth-service
+          - discovery-server
+          - user-service
           - order-service
           - locker-service
           - payment-service
+          - notification-service
           - iot-service
+          - store-service
+          - staff-service
+          - loyalty-service
 
     steps:
       - name: Checkout
