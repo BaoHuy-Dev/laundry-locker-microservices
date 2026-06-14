@@ -283,6 +283,9 @@ public class LockerService {
               box.getLockerId(),
               locker == null ? null : locker.getCode(),
               locker == null ? null : locker.getName(),
+              locker == null ? null : locker.getAddress(),
+              locker == null ? null : locker.getLatitude(),
+              locker == null ? null : locker.getLongitude(),
               box.getId(),
               box.getBoxNumber(),
               box.getCellType(),
@@ -408,6 +411,8 @@ public class LockerService {
   }
 
   private LockerReportResponse toReport(LockerReport report) {
+    LockerUnit locker = lockerRepository.findById(report.getLockerId()).orElse(null);
+    LockerBox box = report.getBoxId() == null ? null : boxRepository.findById(report.getBoxId()).orElse(null);
     return new LockerReportResponse(
         report.getId(),
         report.getLockerId(),
@@ -420,7 +425,14 @@ public class LockerService {
         report.getAssignedAt(),
         report.getResolvedByUserId(),
         report.getResolvedAt(),
-        report.getCreatedAt());
+        report.getCreatedAt(),
+        locker == null ? null : locker.getCode(),
+        locker == null ? null : locker.getName(),
+        locker == null ? null : locker.getAddress(),
+        locker == null ? null : locker.getLatitude(),
+        locker == null ? null : locker.getLongitude(),
+        box == null ? null : box.getBoxNumber(),
+        box == null ? null : box.getCellType());
   }
 
   private void publishBoxOpened(LockerBox box) {

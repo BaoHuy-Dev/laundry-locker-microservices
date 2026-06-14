@@ -66,6 +66,7 @@ Tóm tắt trạng thái:
 
 | Ngày | Branch | Task | Phạm vi dự kiến sửa | Không sửa | Ảnh hưởng |
 |---|---|---|---|---|---|
+| 2026-06-14 | `feat/maintenance-user-realtime-flows` | Triển khai vertical slice nâng cấp trải nghiệm role theo hướng production: ưu tiên Maintenance chi tiết trên mobile/web, bổ sung đường đi tới tủ/lỗi cho user/maintenance, và khảo sát/nối realtime chat/thông báo nếu backend hiện có cho phép. | Dự kiến chạm `smart-laundry-locker-mobile/lib/features/**`, `laundry-locker-frontend/fe/src/**`, có thể chạm `notification-service`/docs nếu cần API realtime; cập nhật living docs và mirror. | Không sửa migration cũ đã chạy, không đụng `laundry-service`/`partner-service` legacy, không đổi deploy infra/secret/local env, không expose `/internal/**` qua gateway. | Có thể ảnh hưởng mobile UI, web admin/ops UI, API/notification/WebSocket; chỉ thêm migration mới nếu thật sự cần đổi DB. |
 | 2026-06-14 | `docs/locker-flows-standard-spec` | Ghi chính thức 5 quyết định kiến trúc (K8s/Helm/GitOps, Kafka, CQRS/ES, GraphQL, service mesh) dưới dạng ADR — đều là "hoãn/chưa áp dụng now" kèm điều kiện xem lại + phác thảo cho CodeX. Chỉ tài liệu. | `docs/ARCHITECTURE_DECISIONS.md` (mới); pointer trong 2 file sống; mirror. | Không sửa code/compose/CI/migration; không deploy K8s/Kafka/mesh. Chỉ tài liệu governance. |
 | 2026-06-14 | `docs/locker-flows-standard-spec` | Phân tích luồng tủ (as-is, bám code locker/order/iot) + đặc tả toàn bộ luồng nghiệp vụ tủ khóa chuẩn thực tế (to-be) + gap map + backlog. Tài liệu blueprint, chưa code. | `docs/project-artifacts/guides/LOCKER_FLOWS_STANDARD_SPEC.md` (mới), `docs/BUSINESS_FLOWS_CURRENT.md`, `docs/PROJECT_PROGRESS_TRACKER.md`, mirror artifact backend/docs. | Không sửa code Java/migration/business logic, không đổi API/DB/event/UI runtime, không stage `docker/postgres/init-databases.sql`, không commit file private/secret. | Chỉ tài liệu; không đổi hành vi runtime. Định hướng cho các giai đoạn implement L1–L7 sau. |
 | 2026-06-13 | `chore/backend-production-phase1` | Production hardening Phase 1 đã implement, verify, commit và push trên branch riêng; chờ merge nếu cần. | Backend Maven modules, CI workflow, cấu hình runtime service, living docs. | Không sửa nghiệp vụ locker/order/payment hiện có, không sửa migration cũ đã chạy, không stage `docker/postgres/init-databases.sql` đang bị xoá local từ trước, không commit file private/secret. | Ảnh hưởng kỹ thuật vận hành backend; không đổi API nghiệp vụ/database/event/UI/mobile. |
@@ -114,17 +115,17 @@ Không commit:
 | Staff operations | PARTIAL | Staff endpoints tồn tại; không phải path mobile/FE chính hiện tại. | Quyết định STAFF có tách với MANAGER không. |
 | Admin web dashboard | PARTIAL | Main admin routes tồn tại; build pass. | Browser smoke tất cả admin pages. |
 | Admin locker list/layout | DONE | `/admin/lockers`, `/admin/lockers/:lockerId`, RTK lockerOps. | Giữ UI khớp `LockerLayoutResponse`. |
-| Admin maintenance page | DONE | `/admin/maintenance`, action report/fault. | Browser smoke với admin token thật. |
+| Admin maintenance page | DONE | `/admin/maintenance`, action report/fault; hiển thị tổng quan backlog, địa chỉ/toạ độ locker và nút chỉ đường cho fault/report. | Browser smoke với admin token thật trên deploy. |
 | Partner portal | Đã gỡ | Role `PARTNER`/permission `PARTNER_MANAGE`/account `partner.seed`/`partner-service` đã gỡ khỏi seed + docker-compose (2026-06-13). | FE partner routes là deprecated; dọn UI partner khi có thời gian. |
 | Services/laundry catalog | PARTIAL | FE/admin docs tồn tại; backend `laundry-service` thiếu. | Build lại `laundry-service` hoặc route catalog qua service khác. |
 | Payment/refund | PARTIAL | `payment-service` endpoints tồn tại; provider phụ thuộc environment; production profile đã fail-fast nếu còn config demo/sandbox/localhost. | Verify VNPay/MoMo với credential sandbox/real. |
-| Notifications/FCM/WebSocket | PARTIAL | Service endpoints/events tồn tại; Firebase production chưa verify. | Verify FCM và WebSocket trên deploy. |
+| Notifications/FCM/WebSocket | PARTIAL | Service endpoints/events tồn tại; đã thêm public JWT endpoint `/api/notifications/fcm-tokens`; Flutter notification client đã chuyển sang `/api/notifications/**` và parser response hiện tại. Firebase production/WebSocket client chưa verify deploy. | Verify FCM token registration/push và WebSocket trên deploy. |
 | Loyalty | PARTIAL | `loyalty-service` endpoints tồn tại. | Verify event integration và FE/mobile usage. |
 | Store management | DONE | `store-service` endpoints và route admin/public. | Browser smoke admin stores nếu cần. |
-| Flutter customer locker ops | DONE | Login/home quick actions/rental/send/my-orders smoke pass. UI 3 màn revamp về design system shadcn navy + action gate theo state machine (2026-06-14, `flutter analyze` 0 error). | Smoke trên emulator với deploy cho UI mới (create/confirm/complete/extend/delegate/report). |
+| Flutter customer locker ops | DONE | Login/home quick actions/rental/send/my-orders smoke pass. UI 3 màn revamp về design system shadcn navy + action gate theo state machine; chi tiết đơn tủ có nút chỉ đường tới locker qua Google Maps/address fallback. | Smoke trên emulator với deploy cho UI mới (create/confirm/complete/extend/delegate/report/directions). |
 | Flutter stores (customer) | DONE | Feature `lib/features/stores/**`: list (search + nearby), detail (info + ratings + directions), entry "Khám phá cửa hàng" từ home; gọi `/api/stores`, `/api/stores/{id}`, `/api/stores/{id}/ratings`. `flutter analyze` 0 error. | Manual smoke trên emulator với deploy có store data. |
 | Flutter manager home | PARTIAL | Code và backend role login đã verify; manual UI smoke bị giới hạn. | Test manager UI trên emulator/device ổn định. |
-| Flutter maintenance home | PARTIAL | Backend API `/api/maintenance/**` đã có (`locker-service`); role routing `MAINTENANCE -> /maintenance-home` đã verify (`homeForRoles` ở splash/login); `flutter analyze` 0 error. Manual UI smoke còn giới hạn. | Test maintenance UI với seeded fault trên emulator. |
+| Flutter maintenance home | PARTIAL | Backend API `/api/maintenance/**` đã có; role routing `MAINTENANCE -> /maintenance-home` đã verify; UI đã nâng cấp tổng quan ca trực, SLA/chip triage, địa chỉ/toạ độ locker và nút chỉ đường cho fault/report; targeted `flutter analyze --no-pub` PASS. Manual UI smoke còn giới hạn. | Test maintenance UI với seeded fault trên emulator/deploy. |
 | Flutter legacy courier/logistics | PARTIAL | Nhiều route tồn tại; chưa align backend hiện tại trong pass gần nhất. | Audit hoặc remove/mark legacy. |
 | Python IoT runtime | PARTIAL | README/runtime tồn tại; hardware/simulation cần config. | Đồng bộ broker và test với verify-access. |
 | Tablet-web cabinet UI | TODO | Mới được nhắc trong docs. | Build dựa trên layout + verify-access. |
@@ -323,6 +324,10 @@ Quan trọng:
 
 | Ngày | Khu vực | Lệnh / Kiểm tra | Kết quả | Ghi chú |
 |---|---|---|---|---|
+| 2026-06-14 | Backend | `mvn -pl locker-service,notification-service -am test` | PASS | common-lib 8 tests pass; locker-service Testcontainers PostgreSQL smoke 2 tests pass; notification-service compile/test phase pass. |
+| 2026-06-14 | Flutter | `flutter analyze --no-pub lib/features/locker_ops/presentation/pages/maintenance_home_page.dart lib/features/locker_ops/presentation/pages/my_locker_orders_page.dart lib/features/locker_ops/data/locker_ops_service.dart lib/features/locker_ops/presentation/utils/locker_maps.dart lib/features/notifications/domain/entities/notification_model.dart lib/features/notifications/infrastructure/data_sources/notification_remote_data_source.dart lib/core/services/firebase_messaging_service.dart` | PASS | Targeted analyze 7 items: "No issues found". Lệnh rộng hơn `flutter analyze lib/features/locker_ops lib/features/notifications lib/core/services/firebase_messaging_service.dart` timeout 5 phút không trả output. |
+| 2026-06-14 | Web FE | `npm.cmd run build` trong `laundry-locker-frontend/fe` | PASS | `tsc -b && vite build` pass; còn warning Vite/Browserslist/chunk-size cũ, không chặn build. |
+| 2026-06-14 | Git/Docs | `git diff --check` ở backend/mobile/frontend và quét private-file trong `docs/project-artifacts` | PASS | Không có whitespace error; không thấy `env.txt`, `pro.txt`, `Application.txt`, `Host *.txt` trong artifacts. |
 | 2026-06-14 | Tài liệu | `git diff --check` cho `ARCHITECTURE_DECISIONS.md` + 2 file sống + mirror | PASS | ADR governance; docs-only, không có file private. |
 | 2026-06-14 | Backend | `mvn -pl order-service -am test` trên branch `fix/locker-reservation-ttl-and-release` | PASS | BUILD SUCCESS; 8 test common-lib pass; order-service (gồm sửa auto-cancel/scheduler L1) compile sạch. Không cần Docker. |
 | 2026-06-14 | Flutter | `flutter analyze lib/features/locker_ops` và `flutter analyze` toàn project | PASS | "No issues found" trên `locker_ops`; toàn project 0 error (413 info/warning debt cũ không đổi) sau revamp UI luồng tủ. |
@@ -374,8 +379,13 @@ Quan trọng:
 - Full smoke trên emulator/device:
   - Customer tạo SEND.
   - Customer tạo RENTAL.
+  - Customer mở chi tiết đơn tủ và bấm chỉ đường tới locker.
   - Manager home.
-  - Maintenance claim/resolve.
+  - Maintenance claim/resolve/clear fault và bấm chỉ đường tới locker lỗi.
+- Verify notification runtime:
+  - Mobile gọi `/api/notifications`/unread/read-all đúng dữ liệu deploy.
+  - Mobile đăng ký FCM token qua `/api/notifications/fcm-tokens`.
+  - Push FCM thật tới thiết bị và/hoặc WebSocket deploy nếu bật client.
 - Quyết định deployed seed roles nên dùng `CUSTOMER` thay vì `USER` không.
 - Xác nhận mobile `.env` trỏ đến deployed API khi test trên thiết bị thật.
 
@@ -433,6 +443,7 @@ Quan trọng:
 
 | Ngày | Người thực hiện | Thay đổi | File / Khu vực | Verification |
 |---|---|---|---|---|
+| 2026-06-14 | Codex | Nâng cấp vertical slice maintenance/user realtime-readiness: maintenance API trả thêm locker address/toạ độ/thông tin ô; notification-service thêm public JWT endpoint `/api/notifications/fcm-tokens`; mobile sửa notification client sang `/api/notifications/**`, sync FCM token đúng gateway, thêm chỉ đường trong đơn tủ customer và màn Maintenance Home có dashboard ca trực/SLA/chỉ đường; web admin maintenance thêm stats và nút chỉ đường. | `locker-service`, `notification-service`, `smart-laundry-locker-mobile/lib/features/locker_ops/**`, `smart-laundry-locker-mobile/lib/features/notifications/**`, `smart-laundry-locker-mobile/lib/core/services/firebase_messaging_service.dart`, `laundry-locker-frontend/fe/src/pages/Admin/maintenance`, `fe/src/stores/apis/admin/lockerOps.ts`, living docs/mirror. | Backend Maven targeted PASS; Flutter targeted analyze PASS; Web FE build PASS. |
 | 2026-06-14 | Claude | Thêm `docs/ARCHITECTURE_DECISIONS.md` (ADR-001..005): hoãn/không-áp-dụng-now K8s/Helm/GitOps, Kafka (giữ RabbitMQ), CQRS/Event Sourcing, GraphQL (giữ REST), service mesh — mỗi ADR có bối cảnh, lý do, phương án nhẹ đang dùng, **điều kiện xem lại**, và phác thảo khi áp dụng (handoff CodeX). Pointer trong 2 file sống. | `docs/ARCHITECTURE_DECISIONS.md`; `docs/BUSINESS_FLOWS_CURRENT.md`; `docs/PROJECT_PROGRESS_TRACKER.md`; mirror. | `git diff --check` PASS; docs-only, không đụng code/CI/compose. |
 | 2026-06-14 | Claude | Backend L1 (luồng tủ): vá lỗ hổng ô kẹt `RESERVED` (G1/G2). `OrderService.autoCancelUnconfirmedOrders` giờ release ô + transition đầy đủ (history/event/notify); thêm `OrderScheduler.sweepUnconfirmedReservations` `@Scheduled` (cron mặc định mỗi 15 phút); cửa sổ giữ chỗ cấu hình `app.order.auto-cancel-hours` (24h). | `laundry-locker-microservices` branch `fix/locker-reservation-ttl-and-release`: `order-service/.../service/OrderService.java`, `OrderScheduler.java`; living docs. | `mvn -pl order-service -am test` BUILD SUCCESS (8 test common-lib pass; order-service compile sạch). |
 | 2026-06-14 | Claude | Mobile: revamp UI 3 màn locker customer (Gửi hàng/Thuê tủ/Đơn tủ của tôi) về design system shadcn navy; thêm design kit dùng chung (`ops_widgets`, `locker_picker`); format giá/ngày/countdown; gate action theo trạng thái+loại (confirm/complete/extend/end/delegate/report/cancel). Bắt đầu lộ trình luồng tủ phần mobile. | `smart-laundry-locker-mobile` branch `feat/locker-customer-ui-revamp`: `lib/features/locker_ops/presentation/{widgets/ops_widgets.dart,widgets/locker_picker.dart,pages/send_parcel_page.dart,pages/rent_locker_page.dart,pages/my_locker_orders_page.dart}`; living docs (backend repo). | `flutter analyze` PASS (0 error; 413 info/warning debt cũ không đổi). |

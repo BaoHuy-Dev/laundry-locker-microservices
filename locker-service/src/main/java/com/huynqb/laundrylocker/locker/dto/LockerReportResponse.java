@@ -14,4 +14,11 @@ public record LockerReportResponse(
     LocalDateTime assignedAt,
     Long resolvedByUserId,
     LocalDateTime resolvedAt,
-    LocalDateTime createdAt) {}
+    LocalDateTime createdAt,
+    String lockerCode,
+    String lockerName,
+    String lockerAddress,
+    Double lockerLatitude,
+    Double lockerLongitude,
+    Integer boxNumber,
+    String cellType) {}

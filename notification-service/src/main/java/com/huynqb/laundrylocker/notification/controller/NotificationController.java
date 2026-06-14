@@ -2,6 +2,7 @@ package com.huynqb.laundrylocker.notification.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.NotificationRequest;
+import com.huynqb.laundrylocker.notification.dto.DeviceTokenRequest;
 import com.huynqb.laundrylocker.notification.dto.FcmTokenRequest;
 import com.huynqb.laundrylocker.notification.dto.NotificationResponse;
 import com.huynqb.laundrylocker.notification.service.NotificationService;
@@ -55,6 +56,26 @@ public class NotificationController {
     if (body != null) {
       userId = body.get("userId") == null ? userId : Long.valueOf(String.valueOf(body.get("userId")));
       token = body.get("token") == null ? token : String.valueOf(body.get("token"));
+    }
+    notificationService.deleteFcmToken(userId, token);
+    return ApiResponse.ok("FCM_TOKEN_DELETED", "FCM token deleted");
+  }
+
+  @PostMapping("/api/notifications/fcm-tokens")
+  public ApiResponse<Void> saveCurrentUserFcmToken(
+      @RequestHeader("X-User-Id") Long userId,
+      @Valid @RequestBody DeviceTokenRequest request) {
+    notificationService.upsertFcmToken(new FcmTokenRequest(userId, request.token(), request.deviceType()));
+    return ApiResponse.ok("FCM_TOKEN_SAVED", "FCM token saved");
+  }
+
+  @DeleteMapping("/api/notifications/fcm-tokens")
+  public ApiResponse<Void> deleteCurrentUserFcmToken(
+      @RequestHeader("X-User-Id") Long userId,
+      @RequestParam(required = false) String token,
+      @RequestBody(required = false) Map<String, Object> body) {
+    if (body != null && body.get("token") != null) {
+      token = String.valueOf(body.get("token"));
     }
     notificationService.deleteFcmToken(userId, token);
     return ApiResponse.ok("FCM_TOKEN_DELETED", "FCM token deleted");
