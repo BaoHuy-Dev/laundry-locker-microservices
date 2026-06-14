@@ -937,15 +937,6 @@ Quick action customer:
 - `Gửi hàng` -> `/locker/send-parcel`
 - `Đơn tủ` -> `/locker/my-orders`
 - `Khám phá cửa hàng` -> `/stores` (entry mới trên home)
-- `Yêu thích` (nút tim trên màn Cửa hàng) -> `/stores/favorites` (mới)
-
-Revamp UI thương hiệu role user (2026-06-14, port từ app React Native cũ `laundry-locker-frontend/mobile`):
-
-- Hai app khác framework (RN/Expo ↔ Flutter) nên UI được **dựng lại** bằng widget Flutter, không copy code. Thêm UI kit dùng chung `lib/shared/widgets/user_ui_kit.dart` mang design system app cũ: palette navy gradient `#003D5B→#0077B6→#00B4D8` và các widget `BrandHeroHeader`, `BrandAvatar`, `BrandFilterChip`, `BrandSectionHeader`, `BrandStatusBadge`, `BrandCircleIconButton`.
-- Home: header gradient bo góc + avatar viền gradient + chuông thông báo (badge unread), filter chips điều hướng nhanh, welcome card, lưới "Dịch vụ tiện ích" (Thuê tủ/Gửi hàng/Lấy hàng/Đơn tủ/Ủy quyền/Giặt đồ), section "Các nơi đặt locker" với card cửa hàng (ảnh + badge trạng thái + nút tim yêu thích).
-- Thanh điều hướng dưới: đổi sang pill navy nổi bo góc (tab active có nền sáng), vẫn giữ nút **Quét QR** nổi ở giữa và 5 mục Trang chủ/Tủ/QR/Đơn hàng/Hồ sơ.
-- Các màn còn lại đồng bộ cùng hero header gradient: Cửa hàng (list card ảnh), Chi tiết cửa hàng (hero ảnh + nút back/tim), Danh sách tủ, Hồ sơ (header hero gradient), Ưu đãi, Đơn tủ của tôi, Thông báo.
-- **Màn mới — Yêu thích cửa hàng** (`/stores/favorites`, `FavoritesPage`): danh sách cửa hàng đã lưu, vào từ nút tim trên màn Cửa hàng. Favourites lưu **cục bộ trên thiết bị** bằng `shared_preferences` (không có endpoint backend cho favourites), khớp hành vi app RN cũ. Không đổi role/quyền/endpoint nghiệp vụ.
 
 Revamp UI luồng tủ customer (2026-06-14):
 
