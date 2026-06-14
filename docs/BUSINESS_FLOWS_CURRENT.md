@@ -977,6 +977,26 @@ Maintenance home (cập nhật 2026-06-14):
 - Maintenance faults/reports/claim/resolve/clear.
 - Notification list/unread/read-all và FCM token registration.
 
+### Sửa lệch endpoint mobile↔backend (2026-06-14)
+
+App Flutter có gốc từ app cũ (Revoland/courier) nên nhiều màn legacy gọi endpoint không khớp backend microservices hiện tại (thiếu prefix `/api` hoặc path đã đổi). ApiClient base = `API_BASE_URL` (không tự thêm `/api`), nên path phải tự viết đủ `/api/...`. Branch `fix/mobile-api-endpoints-alignment` đã sửa các màn người dùng gặp lỗi trực tiếp:
+
+- **Tab Hồ sơ (Profile)**: `getProfile` đổi `/users/me` → `GET /api/user/profile` (+ normalize `id` int→String). Lỗi phụ: `ProfileProvider._getFaceRegistrationStatus` gọi `/auth/ai/registered/{id}` (AI legacy, 404) **không bắt lỗi** → `loadProfile()` ném → trang kẹt spinner và hiện sai "Bạn cần đăng nhập" dù đã login → đã bọc try/catch.
+- **Đăng ký**: `register` đổi `/auth/register` → `POST /api/auth/register`, body từ `{fullName, role}` → `{firstName, lastName, roles:[...], phoneNumber, email, password}` đúng `RegisterRequest` backend; sau đăng ký chuyển sang tab Đăng nhập (backend cấp tài khoản ngay, bỏ bước OTP legacy).
+- **Tab Tủ (danh sách tủ)**: cả 3 method `getLocations` / `getLocationsForCustomer` / `getLocationsForCourier` đổi `/locations*` → `GET /api/lockers`, map sang `LockerLocation` với null-safety (id/address/lat/long có thể null), lọc tìm kiếm client-side.
+
+Đã verify on-device (emulator) bằng logcat + screenshot: tab Tủ hiện 2 tủ, tab Hồ sơ hiện profile, register trả `AUTH_REGISTERED`.
+
+**Feature mobile legacy CHƯA wire backend hiện tại (gọi endpoint chết, nên ẩn hoặc dựng lại sau):**
+
+- Ví/nạp tiền: `/wallet/balance`, `/payments/topup/*`, `/payments/transactions*` (không có backend ví).
+- Khuôn mặt/QR-login: `/auth/ai/*`, `/auth/face-verify`, `/auth/qr/confirm` (không có AI service).
+- Courier/giao hàng + đăng ký nhân viên: `/courier/*`, `/orders/courier/*`, `/staff-applications`.
+- Ủy quyền (màn legacy): `/delegations/*` (luồng ủy quyền thật dùng `POST /api/orders/{id}/delegate`).
+- Home: `/advertisements`, `/blogs` (404, đã biết, không chặn).
+- **Tab Đơn hàng** (bottom nav): ĐÃ repoint (2026-06-14, commit `08567d3`) sang `MyLockerOrdersPage` (`locker_ops`, `GET /api/orders/my-orders`) thay cho `OrderPage` legacy (`/orders/me` chết). Tab này giờ hiện đơn tủ thật với đầy đủ action theo state machine. `OrderPage` legacy không còn được route.
+- Chi tiết tủ (khi bấm 1 tủ ở tab Tủ): `LockerDetailMapPage` chỉ render bản đồ từ `LockerLocation` (call legacy `getLockerCountBySize` đã bị comment-out), nên KHÔNG gọi endpoint chết — đã chạy. Tủ thiếu toạ độ (vd `LCK-Q1-01`) nay map sang `NaN` → hiện màn "toạ độ không hợp lệ" thân thiện thay vì pin (0,0); tủ có toạ độ (`CAB-DEMO-01`) render bản đồ bình thường.
+
 ### Các khu vực mobile legacy/partial
 
 App vẫn còn route/feature cho:
