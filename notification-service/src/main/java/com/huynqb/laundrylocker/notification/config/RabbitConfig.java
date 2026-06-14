@@ -1,10 +1,13 @@
 package com.huynqb.laundrylocker.notification.config;
 
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
+import java.util.List;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.amqp.support.converter.SimpleMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -36,5 +39,17 @@ public class RabbitConfig {
   @Bean
   Binding paymentFailedBinding(Queue notificationEventsQueue, TopicExchange laundryEventsExchange) {
     return BindingBuilder.bind(notificationEventsQueue).to(laundryEventsExchange).with(DomainEventNames.PAYMENT_FAILED);
+  }
+
+  @Bean
+  MessageConverter domainEventMessageConverter() {
+    SimpleMessageConverter converter = new SimpleMessageConverter();
+    converter.setAllowedListPatterns(
+        List.of(
+            "com.huynqb.laundrylocker.common.event.*",
+            "java.lang.*",
+            "java.time.*",
+            "java.util.*"));
+    return converter;
   }
 }
