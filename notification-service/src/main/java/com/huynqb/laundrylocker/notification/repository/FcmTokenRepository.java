@@ -15,5 +15,7 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
   @Query("select distinct f.token from FcmToken f")
   List<String> findAllDistinctTokens();
 
+  void deleteByUserId(Long userId);
+
   void deleteByUserIdAndToken(Long userId, String token);
 }
