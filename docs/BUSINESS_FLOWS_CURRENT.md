@@ -217,6 +217,10 @@ Hành vi backend:
    - `X-User-Roles`
    - `X-Correlation-Id`
 
+Lưu ý kỹ thuật:
+- Do `auth-service` gọi sang `user-service` qua OpenFeign, lần gọi đầu tiên (Cold Start) thường tốn nhiều thời gian khởi tạo kết nối DB của Hibernate. Resilience4j TimeLimiter mặc định 1s sẽ gây lỗi 500/503. Đã cấu hình tăng `timeout-duration` lên 10s để khắc phục.
+- Tài khoản test đầy đủ (`binhtntse182370@fpt.edu.vn` / `12345678`) đã được chèn qua SQL seed script trực tiếp vào Postgres container (qua 4 DB: `auth`, `user`, `order`, `loyalty`).
+
 ### Admin Auth
 
 Endpoint riêng cho admin:
