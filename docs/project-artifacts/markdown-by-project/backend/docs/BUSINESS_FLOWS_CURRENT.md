@@ -772,7 +772,7 @@ Endpoint admin:
 Realtime:
 
 - WebSocket/STOMP qua gateway `/ws`.
-- STOMP client phải gửi `Authorization: Bearer <access-token>` trong `CONNECT`; notification-service verify JWT `tokenUse=access` và bind user principal theo `userId`.
+- Client nên gửi `Authorization: Bearer <access-token>` ở WebSocket handshake header và bắt buộc gửi trong STOMP `CONNECT`; notification-service verify JWT `tokenUse=access` và bind user principal theo `userId`.
 - User client subscribe `/user/queue/notifications` để nhận notification realtime riêng tư.
 
 Flow nghiệp vụ:
@@ -789,7 +789,7 @@ Lưu ý hiện tại:
 
 - Firebase production credentials phụ thuộc environment.
 - Flutter notification client đã được cập nhật để dùng `/api/notifications/**`, parse response phẳng hiện tại (`data` là list) và unread count dạng số.
-- Flutter có STOMP realtime subscriber cho `/user/queue/notifications`; runtime smoke trên deploy/emulator vẫn cần chạy lại khi gateway/Docker ổn định.
+- Flutter có STOMP realtime subscriber cho `/user/queue/notifications`; local runtime smoke qua gateway đã PASS với admin send -> private STOMP `MESSAGE`. Deploy/emulator vẫn cần chạy lại khi `api-dev` health route và Firebase/device sẵn sàng.
 
 ## 17. Luồng Store
 
@@ -917,7 +917,7 @@ Hành vi event:
 - Payment service emit event payment.
 - Locker service emit event box/fault.
 - IoT service emit event device status.
-- Notification service listen và tạo notification.
+- Notification service listen và tạo notification; RabbitMQ consumer dùng `SimpleMessageConverter` với allow-list package dự án/JDK cần thiết cho `DomainEvent`, không bật trust-all deserialization.
 
 ## 21. Luồng Flutter Mobile
 
@@ -958,7 +958,7 @@ Maintenance home (cập nhật 2026-06-14):
 - Role `MAINTENANCE` đăng nhập/auto-login được route tới `/maintenance-home` (`homeForRoles()` ở `splash_screen` và `login_screen`).
 - `MaintenanceHomePage` gọi `/api/maintenance/faults`, `/api/maintenance/reports?mine=`, claim/resolve/clear-fault. Backend API đã có sẵn trong `locker-service`.
 - UI có tổng quan ca trực (ô lỗi, phiếu mới, đang xử lý, việc của tôi), chip SLA theo thời gian mở phiếu, thông tin locker/ô/cell type, địa chỉ locker và nút **Chỉ đường** cho fault/report.
-- Notification mobile client đã chuyển sang `/api/notifications/**`; FCM token sync dùng `/api/notifications/fcm-tokens`; realtime subscriber dùng STOMP `Authorization` và `/user/queue/notifications`. Targeted `flutter analyze --no-pub` cho các file thay đổi PASS.
+- Notification mobile client đã chuyển sang `/api/notifications/**`; FCM token sync dùng `/api/notifications/fcm-tokens`; realtime subscriber dùng WebSocket/STOMP `Authorization` và `/user/queue/notifications`. Backend runtime smoke local đã PASS list/count, FCM token save/delete và private STOMP `MESSAGE`; targeted `flutter analyze --no-pub` cho các file thay đổi PASS.
 
 `locker_ops` service gọi:
 
