@@ -11,4 +11,5 @@ public record SendOrderRequest(
     @NotBlank String receiverPhone,
     String receiverName,
     String note,
-    BigDecimal totalPrice) {}
+    BigDecimal totalPrice,
+    String promotionCode) {}

@@ -9,4 +9,5 @@ public record RentalOrderRequest(
     Long boxId,
     String cellType,
     @NotNull @Min(1) @Max(720) Integer hours,
-    String note) {}
+    String note,
+    String promotionCode) {}

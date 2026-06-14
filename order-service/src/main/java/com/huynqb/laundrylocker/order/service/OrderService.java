@@ -193,7 +193,7 @@ public class OrderService {
             userId, request.lockerId(), boxId, null, null,
             "SEND", "PARCEL",
             null, request.receiverPhone(), request.receiverName(),
-            null, null, request.note(), null, null, null, null, null, price));
+            null, null, request.note(), null, null, null, request.promotionCode(), null, price));
   }
 
   @Transactional
@@ -212,7 +212,7 @@ public class OrderService {
             new CreateOrderRequest(
                 userId, request.lockerId(), boxId, null, null,
                 "RENTAL", "RENTAL",
-                null, null, null, null, null, request.note(), null, null, null, null, null, price));
+                null, null, null, null, null, request.note(), null, null, null, request.promotionCode(), null, price));
     LockerOrder order = find(created.id());
     order.setPickupDeadline(LocalDateTime.now().plusHours(request.hours()));
     return toResponse(orderRepository.save(order));
