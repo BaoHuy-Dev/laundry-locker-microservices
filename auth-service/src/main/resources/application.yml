@@ -54,6 +54,62 @@ management:
 
 springdoc:
   api-docs:
+server:
+  port: ${SERVER_PORT:8081}
+spring:
+  application:
+    name: auth-service
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: ${SPRING_CLOUD_OPENFEIGN_CIRCUITBREAKER_ENABLED:true}
+        group:
+          enabled: ${SPRING_CLOUD_OPENFEIGN_CIRCUITBREAKER_GROUP_ENABLED:true}
+      client:
+        config:
+          default:
+            connectTimeout: ${APP_FEIGN_CONNECT_TIMEOUT_MS:2000}
+            readTimeout: ${APP_FEIGN_READ_TIMEOUT_MS:5000}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:15432/auth_db}
+    username: ${SPRING_DATASOURCE_USERNAME:auth_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:auth_pass}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: auth_schema
+  flyway:
+    enabled: true
+    create-schemas: true
+    schemas: auth_schema
+    default-schema: auth_schema
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,sbom
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  api-docs:
     enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
 
 logging:
@@ -61,6 +117,10 @@ logging:
     level: "%5p [${spring.application.name:unknown},%X{correlationId:-}]"
 
 resilience4j:
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 10s
   circuitbreaker:
     configs:
       default:
