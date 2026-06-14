@@ -85,7 +85,11 @@ public class NotificationService {
 
   @Transactional
   public void deleteFcmToken(Long userId, String token) {
-    fcmTokenRepository.deleteByUserIdAndToken(userId, token);
+    if (StringUtils.hasText(token)) {
+      fcmTokenRepository.deleteByUserIdAndToken(userId, token);
+      return;
+    }
+    fcmTokenRepository.deleteByUserId(userId);
   }
 
   @Transactional(readOnly = true)
