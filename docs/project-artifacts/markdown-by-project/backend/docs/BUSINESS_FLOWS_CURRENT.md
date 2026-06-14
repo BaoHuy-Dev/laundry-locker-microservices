@@ -114,6 +114,7 @@ Dùng cho nhân sự xử lý lỗi locker:
 - Claim báo cáo.
 - Resolve báo cáo và clear fault cho ô tủ.
 - Clear fault trực tiếp.
+- Xem địa chỉ/toạ độ locker lỗi và mở chỉ đường tới tủ qua bản đồ ngoài thiết bị.
 
 Gateway yêu cầu `MAINTENANCE` hoặc `ADMIN` cho `/api/maintenance/**`.
 
@@ -124,6 +125,12 @@ Endpoint backend hiện có:
 - `PUT /api/maintenance/reports/{id}/claim`
 - `PUT /api/maintenance/reports/{id}/resolve`
 - `POST /api/maintenance/boxes/{id}/clear-fault`
+
+Response của `faults` và `reports` hiện trả thêm metadata định vị locker để web/mobile không cần gọi vòng lại khi điều phối kỹ thuật:
+
+- `lockerCode`, `lockerName`, `lockerAddress`
+- `lockerLatitude`, `lockerLongitude`
+- Với report có ô cụ thể: `boxNumber`, `cellType`
 
 ### Staff
 
@@ -587,13 +594,15 @@ Flow nghiệp vụ:
 2. Backend mark cell thành `FAULT`.
 3. Backend tạo/cập nhật locker report với box id và lý do.
 4. Cell bị lỗi bị loại khỏi luồng reserve bình thường.
-5. Maintenance user xem các report đang mở.
-6. Maintenance claim report: `OPEN -> IN_PROGRESS`.
-7. Maintenance resolve report.
-8. Backend clear fault và đưa cell về `AVAILABLE`.
+5. Backend trả danh sách fault/report kèm locker name/code/address/toạ độ và thông tin ô nếu có.
+6. Maintenance user xem các report đang mở, ưu tiên theo trạng thái/SLA, và mở chỉ đường tới tủ lỗi.
+7. Maintenance claim report: `OPEN -> IN_PROGRESS`.
+8. Maintenance resolve report.
+9. Backend clear fault và đưa cell về `AVAILABLE`.
 
 Lưu ý hiện tại:
 
+- `GET /api/maintenance/faults` và `GET /api/maintenance/reports` là nguồn dữ liệu chính cho mobile/web maintenance; client không gọi `/internal/**`.
 - Lịch bảo trì định kỳ, work log của technician, và bảo trì theo tần suất sử dụng vẫn là việc tương lai.
 
 ## 12. Luồng Manager Operations
@@ -744,6 +753,8 @@ Endpoint user:
 - `GET /api/notifications/all`
 - `GET /api/notifications/unread`
 - `GET /api/notifications/unread/count`
+- `POST /api/notifications/fcm-tokens`
+- `DELETE /api/notifications/fcm-tokens`
 - `PATCH /api/notifications/{id}/read`
 - `PUT /api/notifications/{id}/read`
 - `PATCH /api/notifications/read-all`
@@ -767,13 +778,16 @@ Flow nghiệp vụ:
 1. Order/payment/locker/iot event xảy ra.
 2. Service publish RabbitMQ event hoặc gọi internal notification endpoint.
 3. Notification service lưu notification.
-4. Có thể push FCM nếu có token/config.
-5. Có thể broadcast qua WebSocket.
-6. User/admin đọc hoặc mark read notification.
+4. Mobile/web đọc danh sách qua `/api/notifications`; mobile đăng ký device token qua `/api/notifications/fcm-tokens` sau khi có JWT.
+5. Có thể push FCM nếu có token/config.
+6. Có thể broadcast qua WebSocket.
+7. User/admin đọc hoặc mark read notification.
 
 Lưu ý hiện tại:
 
 - Firebase production credentials phụ thuộc environment.
+- Flutter notification client đã được cập nhật để dùng `/api/notifications/**`, parse response phẳng hiện tại (`data` là list) và unread count dạng số.
+- WebSocket/STOMP backend route đã có, nhưng mobile client WebSocket riêng chưa được smoke deploy trong pass này; realtime user notification khả dụng theo hướng FCM khi token và Firebase config đúng.
 
 ## 17. Luồng Store
 
@@ -928,7 +942,7 @@ Revamp UI luồng tủ customer (2026-06-14):
 - Design kit dùng chung: `ops_widgets.dart` (status/type color+label, format giá/ngày/`Còn…|Quá hạn…`, `OpsCard/OpsBanner/OpsPrimaryButton/OpsInfoRow/OpsEmptyState`, `AccessCredentials` hiển thị PIN dạng ô bấm-để-copy + QR có khung) và `locker_picker.dart` (chọn tủ qua bottom-sheet).
 - Màn Gửi hàng: stepper 2 giai đoạn (bỏ hàng → người nhận lấy) đúng luồng PIN 2 giai đoạn; banner hướng dẫn; hiển thị phí gửi và hạn nhận có định dạng.
 - Màn Thuê tủ: card chọn loại ô (STANDARD/XL kèm kích thước+đơn giá), chip giờ nhanh + slider, thẻ giá tính live.
-- Màn Đơn tủ của tôi: card đơn có countdown/cảnh báo quá hạn; detail sheet format ngày/giá, hiện phí phát sinh; **action gate đúng theo trạng thái+loại** (confirm bỏ đồ; hoàn tất; gia hạn/kết thúc thuê; ủy quyền; báo ô lỗi; hủy chỉ khi `INITIALIZED`).
+- Màn Đơn tủ của tôi: card đơn có countdown/cảnh báo quá hạn; detail sheet format ngày/giá, hiện phí phát sinh; **action gate đúng theo trạng thái+loại** (confirm bỏ đồ; hoàn tất; gia hạn/kết thúc thuê; ủy quyền; báo ô lỗi; hủy chỉ khi `INITIALIZED`); nút **Chỉ đường tới tủ** gọi `GET /api/lockers/{id}` rồi mở Google Maps bằng toạ độ hoặc địa chỉ.
 - `flutter analyze` 0 error (debt info/warning cũ không đổi). Chưa smoke trên emulator phiên này.
 
 Màn Cửa hàng (mới, 2026-06-13):
@@ -937,10 +951,12 @@ Màn Cửa hàng (mới, 2026-06-13):
 - `/stores/detail`: chi tiết cửa hàng (tên, trạng thái, địa chỉ, SĐT, mô tả, khoảng cách), nút Chỉ đường (mở Google Maps qua `url_launcher`), nút Xem tủ (`/lockers`), và danh sách đánh giá từ `GET /api/stores/{id}/ratings`.
 - Feature: `lib/features/stores/**` (clean-arch: domain entity `Store`/`StoreRating` + infrastructure `StoreService` + presentation pages/widgets). Đã `flutter analyze` 0 error.
 
-Maintenance home (đã xác minh 2026-06-13):
+Maintenance home (cập nhật 2026-06-14):
 
 - Role `MAINTENANCE` đăng nhập/auto-login được route tới `/maintenance-home` (`homeForRoles()` ở `splash_screen` và `login_screen`).
 - `MaintenanceHomePage` gọi `/api/maintenance/faults`, `/api/maintenance/reports?mine=`, claim/resolve/clear-fault. Backend API đã có sẵn trong `locker-service`.
+- UI có tổng quan ca trực (ô lỗi, phiếu mới, đang xử lý, việc của tôi), chip SLA theo thời gian mở phiếu, thông tin locker/ô/cell type, địa chỉ locker và nút **Chỉ đường** cho fault/report.
+- Notification mobile client đã chuyển sang `/api/notifications/**`; FCM token sync dùng `/api/notifications/fcm-tokens`. Targeted `flutter analyze --no-pub` cho các file thay đổi PASS.
 
 `locker_ops` service gọi:
 
@@ -957,6 +973,7 @@ Maintenance home (đã xác minh 2026-06-13):
 - Report fault.
 - Manager stats/orders.
 - Maintenance faults/reports/claim/resolve/clear.
+- Notification list/unread/read-all và FCM token registration.
 
 ### Các khu vực mobile legacy/partial
 
@@ -990,7 +1007,7 @@ Flow giá trị cao hiện tại của React app:
 - Admin services.
 - Admin lockers.
 - Admin locker layout.
-- Admin maintenance.
+- Admin maintenance: tổng quan ô hỏng/phiếu mới/đang xử lý/đã xong, claim/resolve/clear fault, hiển thị địa chỉ/toạ độ locker và mở chỉ đường bằng Google Maps.
 - Admin orders.
 - Admin payments.
 - Admin loyalty.
