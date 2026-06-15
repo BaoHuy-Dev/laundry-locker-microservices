@@ -25,8 +25,7 @@ CREATE DATABASE iot_db OWNER iot_user;
 CREATE USER store_user WITH PASSWORD 'store_pass';
 CREATE DATABASE store_db OWNER store_user;
 
-CREATE USER staff_user WITH PASSWORD 'staff_pass';
-CREATE DATABASE staff_db OWNER staff_user;
+-- PA3 (đợt 2): staff_db gỡ khỏi init (staff-service đã bỏ). Drop trên DB đã chạy: scripts/drop-legacy-databases.sql
 
 CREATE USER loyalty_user WITH PASSWORD 'loyalty_pass';
 CREATE DATABASE loyalty_db OWNER loyalty_user;

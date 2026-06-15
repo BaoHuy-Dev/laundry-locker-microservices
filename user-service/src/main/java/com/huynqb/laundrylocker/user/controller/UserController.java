@@ -5,8 +5,6 @@ import com.huynqb.laundrylocker.common.dto.UserSummary;
 import com.huynqb.laundrylocker.user.client.AuthClient;
 import com.huynqb.laundrylocker.user.client.NotificationClient;
 import com.huynqb.laundrylocker.user.dto.UserProfileRequest;
-import com.huynqb.laundrylocker.user.model.AuditLog;
-import com.huynqb.laundrylocker.user.repository.AuditLogRepository;
 import com.huynqb.laundrylocker.user.service.UserProfileService;
 import java.util.HashMap;
 import java.util.List;
@@ -30,7 +28,6 @@ public class UserController {
   private final UserProfileService userProfileService;
   private final AuthClient authClient;
   private final NotificationClient notificationClient;
-  private final AuditLogRepository auditLogRepository;
 
   @PostMapping("/api/users")
   public ApiResponse<UserSummary> create(@RequestBody UserProfileRequest request) {
@@ -157,27 +154,6 @@ public class UserController {
   public ApiResponse<Void> adminDelete(@PathVariable Long id) {
     userProfileService.delete(id);
     return ApiResponse.ok("USER_DELETED", "User deleted");
-  }
-
-  @GetMapping("/api/admin/audit-logs")
-  public ApiResponse<List<AuditLog>> auditLogs() {
-    return ApiResponse.ok(auditLogRepository.findAll());
-  }
-
-  @GetMapping("/api/admin/audit-logs/entity/{entityType}/{entityId}")
-  public ApiResponse<List<AuditLog>> entityAuditLogs(
-      @PathVariable String entityType, @PathVariable Long entityId) {
-    return ApiResponse.ok(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId));
-  }
-
-  @GetMapping("/api/admin/audit-logs/user/{userId}")
-  public ApiResponse<List<AuditLog>> userAuditLogs(@PathVariable Long userId) {
-    return ApiResponse.ok(auditLogRepository.findByUserIdOrderByCreatedAtDesc(userId));
-  }
-
-  @GetMapping("/api/admin/audit-logs/statistics")
-  public ApiResponse<Map<String, Long>> auditStatistics() {
-    return ApiResponse.ok(Map.of("total", auditLogRepository.count()));
   }
 
   @GetMapping("/api/admin/hello")

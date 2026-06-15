@@ -146,7 +146,7 @@ Response của `faults` và `reports` hiện trả thêm metadata định vị l
 
 ### Staff
 
-> **Deprecated (PA3, 2026-06-15)**: `staff-service` + bảng `staff_assignments` + DB `staff_db` KHÔNG được luồng hiện tại gọi (order-service/locker-service không gọi staff; FE/mobile không gọi `/api/staff`). Luồng SEND/RENTAL/LAUNDRY do order-service xử lý trực tiếp. Giữ tạm để chờ xác nhận có kế hoạch dùng lại không; nếu không, drop ở đợt sau.
+> **ĐÃ GỠ HOÀN TOÀN (PA3 đợt 2, 2026-06-15)**: `staff-service` (module Maven + container + route gateway `/api/staff/**`) và DB `staff_db`/bảng `staff_assignments` đã bị xóa — không luồng nào dùng (order-service xử lý SEND/RENTAL/LAUNDRY trực tiếp). Cũng giải phóng 1 JVM trên droplet. Phần mô tả endpoint bên dưới chỉ còn giá trị lịch sử.
 
 Dùng cho các flow vận hành cũ/legacy:
 
@@ -181,7 +181,7 @@ Auth và profile được tách riêng:
 - `auth_db.auth_schema.email_otps`: OTP hash.
 - `user_db.user_schema.user_profiles`: hồ sơ người dùng, phone/email, status, role.
 - ~~`user_db.user_schema.roles`, `permissions`, `role_permissions`~~: **đã drop (PA3)** — 3 bảng RBAC này không có entity/repository, không bao giờ được query. Phân quyền thực tế dùng cột `user_profiles.roles` (VARCHAR) + claim `roles` trong JWT.
-- `user_db.user_schema.audit_logs`: **deprecated (PA3)** — có endpoint admin đọc + được seed mẫu, nhưng không có code runtime nào GHI. Giữ tạm, chưa drop.
+- ~~`user_db.user_schema.audit_logs`~~: **ĐÃ DROP (PA3 đợt 2)** — không có code runtime nào ghi (tính năng audit chưa hoàn thiện); đã gỡ bảng (user-service V4) + entity/repository + 4 endpoint `/api/admin/audit-logs*` + seed.
 
 Không lưu mật khẩu plain text. Chỉ lưu bcrypt hash.
 

@@ -30,7 +30,6 @@
         <module>notification-service</module>
         <module>iot-service</module>
         <module>store-service</module>
-        <module>staff-service</module>
         <module>loyalty-service</module>
     </modules>
 
