@@ -128,6 +128,8 @@ Endpoint backend hiện có:
 - `POST /api/maintenance/boxes/{id}/out-of-service` (L5, body `{reason?}`): ngưng dùng ô có chủ đích.
 - `POST /api/maintenance/boxes/{id}/cleaning` (L5): đánh dấu ô đang vệ sinh/khử khuẩn.
 - `POST /api/maintenance/boxes/{id}/return-to-service` (L5): khôi phục ô `OUT_OF_SERVICE`/`CLEANING` về `AVAILABLE`.
+- `GET /api/maintenance/reports/{id}/logs` (L5): nhật ký xử lý (work-log) của phiếu.
+- `POST /api/maintenance/reports/{id}/logs` (L5, body `{note}`): KTV thêm 1 bước xử lý (actor = `X-User-Id`). Bảng mới `repair_logs` (migration V5).
 
 Ô `OUT_OF_SERVICE`/`CLEANING` tự động bị loại khỏi phân phối (reserve/findAvailable chỉ nhận `AVAILABLE`); không thể ngưng dùng/vệ sinh ô đang `OCCUPIED`/`RESERVED`. Surface: Maintenance mobile (tab Kiểm tra tủ → bottom sheet hành động theo trạng thái ô) và Admin web (sơ đồ tủ `layout-view` → action theo từng ô).
 
