@@ -138,6 +138,7 @@ Response của `faults` và `reports` hiện trả thêm metadata định vị l
 - `lockerCode`, `lockerName`, `lockerAddress`
 - `lockerLatitude`, `lockerLongitude`
 - Với report có ô cụ thể: `boxNumber`, `cellType`
+- SLA (L5): `slaHours` (mặc định 4h, cấu hình `app.maintenance.sla-hours`), `slaDueAt` (= `createdAt + slaHours`), `overdue` (`true` khi quá hạn và phiếu chưa `RESOLVED`). Mobile + Admin web hiển thị badge "Quá hạn SLA" theo cờ này (authoritative, không tự đoán ở client).
 
 ### Staff
 
