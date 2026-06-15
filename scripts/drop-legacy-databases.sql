@@ -16,3 +16,7 @@ DROP USER IF EXISTS partner_user;
 -- laundry_db: laundry-service thiếu source, bị skip; DB rỗng.
 DROP DATABASE IF EXISTS laundry_db;
 DROP USER IF EXISTS laundry_user;
+
+-- staff_db: staff-service đã bỏ hoàn toàn (PA3 đợt 2) — không flow nào dùng.
+DROP DATABASE IF EXISTS staff_db;
+DROP USER IF EXISTS staff_user;

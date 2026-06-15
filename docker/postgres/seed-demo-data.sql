@@ -25,24 +25,9 @@ ON CONFLICT (id) DO UPDATE SET
 -- (user-service V3). Phân quyền dùng cột user_schema.user_profiles.roles (VARCHAR)
 -- + claim `roles` trong JWT.
 
-INSERT INTO user_schema.audit_logs (
-    id, user_id, action, entity_type, entity_id, description, status, created_at
-) VALUES
-    (1001, 1004, 'CREATE', 'STORE', 1001, 'Seeded District 1 flagship store', 'SUCCESS', NOW() - INTERVAL '11 days'),
-    (1002, 1004, 'CREATE', 'LOCKER', 1001, 'Seeded locker LCK-D1-001', 'SUCCESS', NOW() - INTERVAL '10 days'),
-    (1003, 1001, 'CREATE', 'ORDER', 1001, 'Customer created laundry order ORD-SEED-1001', 'SUCCESS', NOW() - INTERVAL '8 days'),
-    (1004, 1002, 'UPDATE', 'ORDER', 1001, 'Staff updated order status to PROCESSING', 'SUCCESS', NOW() - INTERVAL '7 days'),
-    (1005, 1004, 'REFUND', 'PAYMENT', 1004, 'Admin approved sample refund', 'SUCCESS', NOW() - INTERVAL '1 day')
-ON CONFLICT (id) DO UPDATE SET
-    user_id = EXCLUDED.user_id,
-    action = EXCLUDED.action,
-    entity_type = EXCLUDED.entity_type,
-    entity_id = EXCLUDED.entity_id,
-    description = EXCLUDED.description,
-    status = EXCLUDED.status;
+-- PA3 (đợt 2): bỏ seed audit_logs — bảng đã được drop (user-service V4).
 
 SELECT setval(pg_get_serial_sequence('user_schema.user_profiles', 'id'), GREATEST((SELECT MAX(id) FROM user_schema.user_profiles), 1), true);
-SELECT setval(pg_get_serial_sequence('user_schema.audit_logs', 'id'), GREATEST((SELECT MAX(id) FROM user_schema.audit_logs), 1), true);
 
 \echo 'Seeding auth_db'
 \connect auth_db

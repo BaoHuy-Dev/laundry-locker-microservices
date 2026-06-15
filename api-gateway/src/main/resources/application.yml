@@ -50,10 +50,6 @@ spring:
               uri: lb://store-service
               predicates:
                 - Path=/api/stores/**,/api/admin/stores,/api/admin/stores/**,/internal/stores/**
-            - id: staff-service
-              uri: lb://staff-service
-              predicates:
-                - Path=/api/staff/**,/internal/staff/**
             - id: loyalty-service
               uri: lb://loyalty-service
               predicates:
@@ -106,12 +102,6 @@ spring:
                 - Path=/v3/api-docs/store-service
               filters:
                 - RewritePath=/v3/api-docs/store-service, /v3/api-docs
-            - id: docs-staff-service
-              uri: lb://staff-service
-              predicates:
-                - Path=/v3/api-docs/staff-service
-              filters:
-                - RewritePath=/v3/api-docs/staff-service, /v3/api-docs
             - id: docs-loyalty-service
               uri: lb://loyalty-service
               predicates:
@@ -174,8 +164,6 @@ springdoc:
         url: /v3/api-docs/iot-service
       - name: store-service
         url: /v3/api-docs/store-service
-      - name: staff-service
-        url: /v3/api-docs/staff-service
       - name: loyalty-service
         url: /v3/api-docs/loyalty-service
 

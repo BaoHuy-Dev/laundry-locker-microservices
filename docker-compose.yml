@@ -330,34 +330,6 @@ services:
     networks:
       - laundry-ms-network
 
-  staff-service:
-    build:
-      context: .
-      dockerfile: staff-service/Dockerfile
-    container_name: ll-ms-staff-service
-    restart: unless-stopped
-    environment:
-      SERVER_PORT: 8090
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/staff_db
-      SPRING_DATASOURCE_USERNAME: staff_user
-      SPRING_DATASOURCE_PASSWORD: staff_pass
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
-      SPRING_RABBITMQ_HOST: rabbitmq
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
-      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8090:8090"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
-    networks:
-      - laundry-ms-network
-
   loyalty-service:
     build:
       context: .
