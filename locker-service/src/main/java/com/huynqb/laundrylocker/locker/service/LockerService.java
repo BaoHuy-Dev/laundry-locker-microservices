@@ -22,12 +22,14 @@ import com.huynqb.laundrylocker.locker.repository.LockerBoxRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerReportRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerUnitRepository;
 import com.huynqb.laundrylocker.locker.repository.RepairLogRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,6 +45,10 @@ public class LockerService {
   private final LockerBoxRepository boxRepository;
   private final LockerReportRepository reportRepository;
   private final RepairLogRepository repairLogRepository;
+
+  /// SLA: số giờ tối đa để xử lý một phiếu bảo trì trước khi bị coi là quá hạn.
+  @Value("${app.maintenance.sla-hours:4}")
+  private int slaHours;
   private final RabbitTemplate rabbitTemplate;
 
   @Transactional
@@ -489,6 +495,12 @@ public class LockerService {
   private LockerReportResponse toReport(LockerReport report) {
     LockerUnit locker = lockerRepository.findById(report.getLockerId()).orElse(null);
     LockerBox box = report.getBoxId() == null ? null : boxRepository.findById(report.getBoxId()).orElse(null);
+    LocalDateTime slaDueAt =
+        report.getCreatedAt() == null ? null : report.getCreatedAt().plusHours(slaHours);
+    boolean overdue =
+        slaDueAt != null
+            && !"RESOLVED".equalsIgnoreCase(report.getStatus())
+            && LocalDateTime.now().isAfter(slaDueAt);
     return new LockerReportResponse(
         report.getId(),
         report.getLockerId(),
@@ -508,7 +520,10 @@ public class LockerService {
         locker == null ? null : locker.getLatitude(),
         locker == null ? null : locker.getLongitude(),
         box == null ? null : box.getBoxNumber(),
-        box == null ? null : box.getCellType());
+        box == null ? null : box.getCellType(),
+        slaHours,
+        slaDueAt,
+        overdue);
   }
 
   private void publishBoxOpened(LockerBox box) {
