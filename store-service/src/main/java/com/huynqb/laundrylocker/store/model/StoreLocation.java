@@ -22,9 +22,6 @@ public class StoreLocation {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(name = "partner_id")
-  private Long partnerId;
-
   @Column(nullable = false)
   private String name;
 

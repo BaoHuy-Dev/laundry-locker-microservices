@@ -10,8 +10,8 @@ CREATE DATABASE order_db OWNER order_user;
 CREATE USER locker_user WITH PASSWORD 'locker_pass';
 CREATE DATABASE locker_db OWNER locker_user;
 
-CREATE USER laundry_user WITH PASSWORD 'laundry_pass';
-CREATE DATABASE laundry_db OWNER laundry_user;
+-- PA3: laundry_db gỡ khỏi init (laundry-service thiếu source, bị skip; DB rỗng).
+-- partner_db gỡ khỏi init (role PARTNER đã bỏ). Drop trên DB đã chạy: scripts/drop-legacy-databases.sql
 
 CREATE USER payment_user WITH PASSWORD 'payment_pass';
 CREATE DATABASE payment_db OWNER payment_user;
@@ -27,9 +27,6 @@ CREATE DATABASE store_db OWNER store_user;
 
 CREATE USER staff_user WITH PASSWORD 'staff_pass';
 CREATE DATABASE staff_db OWNER staff_user;
-
-CREATE USER partner_user WITH PASSWORD 'partner_pass';
-CREATE DATABASE partner_db OWNER partner_user;
 
 CREATE USER loyalty_user WITH PASSWORD 'loyalty_pass';
 CREATE DATABASE loyalty_db OWNER loyalty_user;

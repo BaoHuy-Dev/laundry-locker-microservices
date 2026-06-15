@@ -35,7 +35,7 @@ API Gateway: http://localhost:8080
 Phạm vi hiện tại cần ghi nhớ:
 
 - Source `laundry-service` đang thiếu trong repo backend hiện tại; vẫn giữ tên trong compose/database naming nhưng bị skip qua `docker-compose.override.yml` khi chạy local.
-- Role `PARTNER` và `partner-service` đã được gỡ khỏi backend (seed/role/permission/compose) vì không còn dùng; schema `partner_db`/`partner_schema` cũ được giữ lại chưa dọn.
+- Role `PARTNER` và `partner-service` đã được gỡ khỏi backend (seed/role/permission/compose) vì không còn dùng. **PA3 (2026-06-15)**: đã dọn nốt — drop DB rỗng `partner_db` + `laundry_db`, bỏ cột `stores.partner_id`, drop 3 bảng RBAC orphan `roles/permissions/role_permissions`.
 - Sản phẩm đang chạy chính là nền tảng locker/laundry/SEND/RENTAL. Drone delivery đầy đủ, engine phân công drone, realtime tracking và AI/RAG vẫn là việc tương lai.
 - Quyết định kiến trúc (K8s/Helm/GitOps, Kafka, CQRS/Event Sourcing, GraphQL, service mesh) hiện **được hoãn có chủ đích** ở quy mô 1 droplet — xem `docs/ARCHITECTURE_DECISIONS.md` để biết lý do và điều kiện xem lại. Stack hiện tại: REST qua gateway + Eureka + Resilience4j + RabbitMQ + Docker Compose.
 
@@ -146,6 +146,8 @@ Response của `faults` và `reports` hiện trả thêm metadata định vị l
 
 ### Staff
 
+> **Deprecated (PA3, 2026-06-15)**: `staff-service` + bảng `staff_assignments` + DB `staff_db` KHÔNG được luồng hiện tại gọi (order-service/locker-service không gọi staff; FE/mobile không gọi `/api/staff`). Luồng SEND/RENTAL/LAUNDRY do order-service xử lý trực tiếp. Giữ tạm để chờ xác nhận có kế hoạch dùng lại không; nếu không, drop ở đợt sau.
+
 Dùng cho các flow vận hành cũ/legacy:
 
 - Gán staff cho đơn.
@@ -166,7 +168,7 @@ Endpoint backend hiện có:
 
 ### Partner (đã gỡ)
 
-Role `PARTNER` đã được gỡ khỏi backend (2026-06-13) vì không còn dùng: bỏ role `PARTNER`, permission `PARTNER_MANAGE`, account demo `partner.seed`, và service `partner-service` trong `docker-compose.yml`/`docker-compose.override.yml`. `partner-service` vốn đã thiếu source từ trước. Vẫn giữ schema cũ chưa dùng (`partner_db`/`partner_schema`, cột `partner_id` ở store-service) để không đụng migration đã chạy; có thể dọn ở bước sau nếu cần. Route Partner ở React web/legacy mobile xem như deprecated.
+Role `PARTNER` đã được gỡ khỏi backend (2026-06-13) vì không còn dùng: bỏ role `PARTNER`, permission `PARTNER_MANAGE`, account demo `partner.seed`, và service `partner-service` trong `docker-compose.yml`/`docker-compose.override.yml`. `partner-service` vốn đã thiếu source từ trước. **PA3 (2026-06-15) đã dọn**: drop DB `partner_db` (script `scripts/drop-legacy-databases.sql`), gỡ cột `stores.partner_id` (store-service V2 + entity/DTO/service), gỡ khỏi `init-databases.sql`. Route Partner ở React web/legacy mobile xem như deprecated.
 
 ## 3. Luồng Xác Thực Và Hồ Sơ Người Dùng
 
@@ -178,7 +180,8 @@ Auth và profile được tách riêng:
 - `auth_db.auth_schema.refresh_tokens`: refresh token.
 - `auth_db.auth_schema.email_otps`: OTP hash.
 - `user_db.user_schema.user_profiles`: hồ sơ người dùng, phone/email, status, role.
-- `user_db.user_schema.roles`, `permissions`, `role_permissions`: dữ liệu role/permission.
+- ~~`user_db.user_schema.roles`, `permissions`, `role_permissions`~~: **đã drop (PA3)** — 3 bảng RBAC này không có entity/repository, không bao giờ được query. Phân quyền thực tế dùng cột `user_profiles.roles` (VARCHAR) + claim `roles` trong JWT.
+- `user_db.user_schema.audit_logs`: **deprecated (PA3)** — có endpoint admin đọc + được seed mẫu, nhưng không có code runtime nào GHI. Giữ tạm, chưa drop.
 
 Không lưu mật khẩu plain text. Chỉ lưu bcrypt hash.
 
