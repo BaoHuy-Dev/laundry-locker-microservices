@@ -235,6 +235,7 @@ Hành vi backend:
 Lưu ý kỹ thuật:
 - Do `auth-service` gọi sang `user-service` qua OpenFeign, lần gọi đầu tiên (Cold Start) thường tốn nhiều thời gian khởi tạo kết nối DB của Hibernate. Resilience4j TimeLimiter mặc định 1s sẽ gây lỗi 500/503. Đã cấu hình tăng `timeout-duration` lên 10s để khắc phục.
 - Tài khoản test đầy đủ (`binhtntse182370@fpt.edu.vn` / `12345678`) đã được chèn qua SQL seed script trực tiếp vào Postgres container (qua 4 DB: `auth`, `user`, `order`, `loyalty`).
+- **Refresh token (làm mới access token):** `POST /api/auth/refresh-token` body `{"refreshToken":"..."}` → trả `AuthResponse` mới (`accessToken/refreshToken/...`). Backend **xoay vòng** refresh token (revoke token cũ, cấp token mới) mỗi lần refresh. Access token sống ~24h. **Mobile (2026-06-15):** `AuthInterceptor` khi gặp 401 sẽ tự gọi refresh-token (serialize 1 lần/đợt) rồi retry request gốc với token mới; chỉ logout về onboarding khi không có refresh token hoặc refresh thất bại — thay cho hành vi cũ là logout ngay khi access token hết hạn.
 
 ### Admin Auth
 
@@ -1099,6 +1100,19 @@ Seed account đã quan sát trong deploy DB:
 | `staff.seed@laundry.test` | `STAFF` | `1002` | `0901001002` |
 | `admin.seed@laundry.test` | `ADMIN` | `1004` | `0901001004` |
 | `customer.vip@laundry.test` | `USER` | `1005` | `0901001005` |
+
+### Bộ seed demo đầy đủ (2026-06-15)
+
+`scripts/seed-full-demo-ms.sql` (idempotent, dải id riêng ≥9001/≥90001 + marker `*-DEMO-*`) tạo dữ liệu test A→Z cho toàn bộ MS DB. **4 tài khoản đặt sẵn — tất cả mật khẩu `12345678`:**
+
+| Email | Role | user_id |
+|---|---|---:|
+| `baohuy2k12k4@gmail.com` | `ADMIN` | 9001 |
+| `nqbhuy2004nt@gmail.com` | `CUSTOMER` | 9002 |
+| `se180211nguyenquocbaohuy@gmail.com` | `MAINTENANCE` | 9003 |
+| `huynqbse180211@fpt.edu.vn` | `MANAGER` | 9004 |
+
+Kèm 100 khách bulk (`*@demo.laundry.test`) và ~100+ bản ghi mỗi bảng nghiệp vụ (stores/lockers/boxes/orders/payments/notifications/loyalty/maintenance...). Đa số dữ liệu order/payment/notification/loyalty gắn với CUSTOMER 9002 để test luồng người dùng; report bảo trì gán cho MAINTENANCE 9003. Áp bằng: `psql -U postgres -f scripts/seed-full-demo-ms.sql` (chạy như superuser, file tự `\connect` từng DB).
 
 Quan trọng:
 

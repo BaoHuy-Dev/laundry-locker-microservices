@@ -99,7 +99,7 @@ action={{
 
 **Các buttons bị ảnh hưởng:**
 - "Tạo đơn hàng" trong Orders page
-- "Thêm ngườii dùng" trong Users page
+- "Thêm người dùng" trong Users page
 - "Cập nhật trạng thái" trong OrderTable
 - "Xem chi tiết" trong nhiều tables
 
