@@ -12,13 +12,16 @@ import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportResponse;
+import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerResponse;
 import com.huynqb.laundrylocker.locker.model.LockerBox;
 import com.huynqb.laundrylocker.locker.model.LockerReport;
+import com.huynqb.laundrylocker.locker.model.RepairLog;
 import com.huynqb.laundrylocker.locker.model.LockerUnit;
 import com.huynqb.laundrylocker.locker.repository.LockerBoxRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerReportRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerUnitRepository;
+import com.huynqb.laundrylocker.locker.repository.RepairLogRepository;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class LockerService {
   private final LockerUnitRepository lockerRepository;
   private final LockerBoxRepository boxRepository;
   private final LockerReportRepository reportRepository;
+  private final RepairLogRepository repairLogRepository;
   private final RabbitTemplate rabbitTemplate;
 
   @Transactional
@@ -392,6 +396,30 @@ public class LockerService {
           });
     }
     return toReport(reportRepository.save(report));
+  }
+
+  /// L5: kỹ thuật viên thêm 1 dòng nhật ký xử lý vào phiếu bảo trì.
+  @Transactional
+  public RepairLogResponse addRepairLog(Long reportId, String note, Long actorUserId) {
+    LockerReport report =
+        reportRepository.findById(reportId).orElseThrow(() -> new NotFoundException("Report", reportId));
+    RepairLog log = new RepairLog();
+    log.setReportId(report.getId());
+    log.setActorUserId(actorUserId);
+    log.setNote(note);
+    return toRepairLog(repairLogRepository.save(log));
+  }
+
+  @Transactional(readOnly = true)
+  public List<RepairLogResponse> repairLogs(Long reportId) {
+    return repairLogRepository.findByReportIdOrderByCreatedAtAsc(reportId).stream()
+        .map(this::toRepairLog)
+        .toList();
+  }
+
+  private RepairLogResponse toRepairLog(RepairLog log) {
+    return new RepairLogResponse(
+        log.getId(), log.getReportId(), log.getActorUserId(), log.getNote(), log.getCreatedAt());
   }
 
   private LockerStatsResponse toStats(LockerUnit locker) {

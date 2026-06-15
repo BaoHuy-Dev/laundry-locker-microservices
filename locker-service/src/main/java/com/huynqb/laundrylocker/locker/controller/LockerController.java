@@ -10,6 +10,7 @@ import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportResponse;
+import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerResponse;
 import com.huynqb.laundrylocker.locker.service.LockerService;
 import jakarta.validation.Valid;
@@ -179,6 +180,21 @@ public class LockerController {
   public ApiResponse<CellResponse> maintenanceReturnToService(@PathVariable Long id) {
     return ApiResponse.ok(
         "BOX_RETURNED_TO_SERVICE", "Box returned to service", lockerService.returnToService(id));
+  }
+
+  @GetMapping("/api/maintenance/reports/{id}/logs")
+  public ApiResponse<List<RepairLogResponse>> maintenanceReportLogs(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.repairLogs(id));
+  }
+
+  @PostMapping("/api/maintenance/reports/{id}/logs")
+  public ApiResponse<RepairLogResponse> maintenanceAddReportLog(
+      @PathVariable Long id,
+      @RequestBody Map<String, String> body,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok(
+        "REPAIR_LOG_ADDED", "Repair log added",
+        lockerService.addRepairLog(id, body.get("note"), userId));
   }
 
   @GetMapping("/internal/lockers/{id}/boxes/find")
