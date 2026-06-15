@@ -21,4 +21,7 @@ public record LockerReportResponse(
     Double lockerLatitude,
     Double lockerLongitude,
     Integer boxNumber,
-    String cellType) {}
+    String cellType,
+    Integer slaHours,
+    LocalDateTime slaDueAt,
+    Boolean overdue) {}
