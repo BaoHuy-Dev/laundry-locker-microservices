@@ -1,10 +1,45 @@
 # USER flow merge status
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-15:** UX/UI revamp luồng tủ khóa cho Customer đã hoàn tất trên branch `feat/mobile-user-ui-revamp` (develop). Các thay đổi chính: (1) Tab Tủ + Xem tất cả home đều dẫn đến lưới ô tủ thực tế thay vì danh sách địa điểm; (2) Ô DRONE hiển thị icon máy bay + màu indigo + không cho đặt dịch vụ thường; (3) Booking (Thuê tủ/Gửi hàng) bỏ picker khi đến từ lưới ô; (4) CellType.java constants class được thêm vào backend với Javadoc đầy đủ. `flutter analyze` 0 error.
 <!-- CURRENT_STATUS_END -->
 
 ## Files changed
+
+### 2026-06-15 — UX revamp lưới ô tủ + DRONE cell type (branch `feat/mobile-user-ui-revamp`)
+
+Routing và home:
+
+- `lib/core/routing/app_router.dart` — thêm route `/stores/lockers` (future deep link); "Xem tất cả" home → LockerPage
+- `lib/features/home/presentation/pages/home_page.dart` — `onSeeAll` → `context.go(AppRouter.lockers)` thay vì StoresPage
+
+Lưới ô tủ (mới):
+
+- `lib/features/stores/presentation/pages/store_lockers_page.dart` — **tạo mới**: `StoreLockerGridPage`, lưới ô 2D, `_LockerCard` lazy-load, `_CellGrid`, `_CellTile` (DRONE icon + màu indigo + non-tappable), `_BookingSheet`, `_GridLegend` (thêm Drone), `_CellPalette` (thêm drone = `0xFF6366F1`), `_cellTypeForBooking()` helper
+
+Locker list tab:
+
+- `lib/features/locker/presentation/pages/locker_page.dart` — `_navigateToMap` → `StoreLockerGridPage` thay `LockerDetailMapPage`; bridge `LockerLocation` → `Store` qua `int.tryParse`
+
+Chi tiết cửa hàng:
+
+- `lib/features/stores/presentation/pages/store_detail_page.dart` — "Xem tủ" dùng `Navigator.push` → `StoreLockerGridPage`
+
+Booking pages (bỏ picker khi đến từ lưới ô):
+
+- `lib/features/locker_ops/presentation/pages/rent_locker_page.dart` — thêm `initialLockerName`, `initialCellType`; bỏ picker + skip API load khi `initialLockerId != null`; card read-only tủ + card read-only loại ô
+- `lib/features/locker_ops/presentation/pages/send_parcel_page.dart` — thêm `initialLockerName`; bỏ picker + skip API load khi `initialLockerId != null`; card read-only tủ
+
+API service:
+
+- `lib/features/locker_ops/data/locker_ops_service.dart` — thêm `lockersByStore(int storeId)`
+
+Brand colors:
+
+- `lib/features/locker/presentation/pages/locker_detail_map_page.dart` — AppBar/FAB/fallback dùng `AislBrand.navy`
+- `lib/features/locker/presentation/widgets/locker_info_modal.dart` — size card header dùng `AislBrand.brandGradient`; "Đặt dịch vụ" → `AislBrand.navy`
+
+### 2026-06-13 (trước đó)
 
 Routing and USER entry:
 
@@ -38,10 +73,13 @@ Docs:
 | --- | --- | --- |
 | Login/register | Partial | Shared Flutter login now calls `POST /api/auth/login` with `identifier/password`. USER `UserAuthService` gateway methods added. Register UI still needs a focused follow-up because it is shared by all roles. |
 | Verify OTP | Partial | Email OTP service methods added. Existing shared OTP UI still needs integration with backend temp-token completion if used for new users. |
-| Home USER | Merged | Added USER-only `Giat do` shortcut in non-courier `HomePage` branch. |
+| Home USER | Merged | Added USER-only `Giat do` shortcut in non-courier `HomePage` branch. "Xem tất cả" locker → LockerPage (nhất quán với tab Tủ). |
 | Create laundry order | Merged | New `UserLaundryOrderPage`. |
 | Choose service | Partial | UI/service added, but backend `/api/services` route/controller was not confirmed. No mock data added. |
-| Choose locker | Merged | Uses `/api/stores`, `/api/lockers`, `/api/lockers/{lockerId}/boxes/available`. |
+| Xem lưới ô tủ tại địa điểm | **Merged (2026-06-15)** | `StoreLockerGridPage` mới: load tủ theo store (`GET /api/lockers?storeId=X`), lazy-load layout từng tủ (`GET /api/lockers/{id}/layout`), lưới ô 2D theo rowIndex/colIndex, màu theo status, ô DRONE hiện icon máy bay + không cho đặt dịch vụ. Vào từ: tab Tủ → tap địa điểm, cửa hàng → "Xem tủ", home → "Xem tất cả". |
+| Booking thuê tủ (từ lưới ô) | **Merged (2026-06-15)** | Khi vào `RentLockerPage` từ lưới ô (`initialLockerId` có sẵn): bỏ picker chọn tủ, bỏ API load danh sách tủ, hiện card read-only tủ + loại ô đã chọn (có icon khóa). |
+| Booking gửi hàng (từ lưới ô) | **Merged (2026-06-15)** | Khi vào `SendParcelPage` từ lưới ô: bỏ picker chọn tủ, bỏ API load, hiện card read-only. |
+| Choose locker | Merged | Uses `/api/stores`, `/api/lockers`, `/api/lockers/{lockerId}/boxes/available`. Nay thêm `/api/lockers?storeId=X` và `/api/lockers/{id}/layout`. |
 | Payment | Merged | Creates payment via `/api/payments` and opens payment URL/deeplink if returned. |
 | Track status | Merged | Refreshes order status via `/api/orders/{id}/status`. |
 | Order history | Service ready | `UserOrderService.getMyOrders()` added. Existing Flutter `OrderPage` not replaced to protect courier/customer switching. |
@@ -82,6 +120,8 @@ Connected through new USER services:
 - `/api/lockers`
 - `/api/lockers/{lockerId}/boxes`
 - `/api/lockers/{lockerId}/boxes/available`
+- `/api/lockers?storeId={storeId}` *(thêm 2026-06-15 — load tủ theo cửa hàng)*
+- `/api/lockers/{id}/layout` *(thêm 2026-06-15 — lưới ô vật lý, trả về danh sách CellResponse)*
 - `/api/lockers/{id}/report`
 - `/api/orders`
 - `/api/orders/{id}/confirm`

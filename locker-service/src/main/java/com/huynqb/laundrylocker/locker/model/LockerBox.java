@@ -31,9 +31,12 @@ public class LockerBox {
   @Column(length = 30)
   private String size = "MEDIUM";
 
-  // DRONE: hàng 1 chỉ nhận hàng drone thả; STANDARD: đa dịch vụ; XL: ô vali khu trái
+  /**
+   * Loại ô — xem {@link CellType} để biết các giá trị hợp lệ và ngữ nghĩa từng loại.
+   * Mặc định {@link CellType#STANDARD} (đa dịch vụ).
+   */
   @Column(name = "cell_type", nullable = false, length = 30)
-  private String cellType = "STANDARD";
+  private String cellType = CellType.STANDARD;
 
   @Column(name = "row_index")
   private Integer rowIndex;
