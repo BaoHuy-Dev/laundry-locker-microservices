@@ -130,6 +130,10 @@ Endpoint backend hiện có:
 - `POST /api/maintenance/boxes/{id}/return-to-service` (L5): khôi phục ô `OUT_OF_SERVICE`/`CLEANING` về `AVAILABLE`.
 - `GET /api/maintenance/reports/{id}/logs` (L5): nhật ký xử lý (work-log) của phiếu.
 - `POST /api/maintenance/reports/{id}/logs` (L5, body `{note}`): KTV thêm 1 bước xử lý (actor = `X-User-Id`). Bảng mới `repair_logs` (migration V5).
+- `GET /api/maintenance/schedules` (L5): lịch bảo trì phòng ngừa (kèm cờ `due` khi `now >= next_due_at`).
+- `POST /api/maintenance/schedules/{id}/complete` (L5): KTV đánh dấu đã kiểm tra → dời `next_due_at = now + interval_days`.
+- `POST /api/admin/lockers/schedules` (L5, ADMIN, body `{lockerId,title,intervalDays}`): tạo lịch định kỳ. Bảng mới `maintenance_schedules` (migration V6).
+- `DELETE /api/admin/lockers/schedules/{id}` (L5, ADMIN): xóa mềm lịch (active=false).
 
 Ô `OUT_OF_SERVICE`/`CLEANING` tự động bị loại khỏi phân phối (reserve/findAvailable chỉ nhận `AVAILABLE`); không thể ngưng dùng/vệ sinh ô đang `OCCUPIED`/`RESERVED`. Surface: Maintenance mobile (tab Kiểm tra tủ → bottom sheet hành động theo trạng thái ô) và Admin web (sơ đồ tủ `layout-view` → action theo từng ô).
 
