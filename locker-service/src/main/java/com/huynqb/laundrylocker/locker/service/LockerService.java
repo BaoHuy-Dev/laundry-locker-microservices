@@ -138,8 +138,12 @@ public class LockerService {
   @Transactional
   public LockerBoxSummary releaseBox(Long boxId) {
     LockerBox box = findBox(boxId);
-    if ("FAULT".equalsIgnoreCase(box.getStatus())) {
-      // Ô hỏng phải được kỹ thuật clear-fault, release thường không xóa trạng thái hỏng
+    String status = box.getStatus();
+    if ("FAULT".equalsIgnoreCase(status)
+        || "OUT_OF_SERVICE".equalsIgnoreCase(status)
+        || "CLEANING".equalsIgnoreCase(status)) {
+      // Ô hỏng/ngưng dùng/đang vệ sinh phải được kỹ thuật khôi phục chủ động;
+      // release thường (từ luồng đơn) không được tự đưa về AVAILABLE.
       return toSummary(box);
     }
     box.setStatus("AVAILABLE");
@@ -168,6 +172,50 @@ public class LockerService {
     LockerBox box = findBox(boxId);
     box.setStatus("AVAILABLE");
     box.setFaultReason(null);
+    return toCell(boxRepository.save(box));
+  }
+
+  /// Ngưng dùng ô có chủ đích (bảo trì/đóng). Ô bị loại khỏi mọi reserve vì
+  /// reserveBox chỉ nhận từ AVAILABLE. Dùng faultReason làm ghi chú lý do.
+  @Transactional
+  public CellResponse setOutOfService(Long boxId, String reason) {
+    return changeServiceState(boxId, "OUT_OF_SERVICE", reason, "ngưng dùng");
+  }
+
+  /// Đưa ô vào trạng thái đang vệ sinh/khử khuẩn (cũng bị loại khỏi reserve).
+  @Transactional
+  public CellResponse setCleaning(Long boxId) {
+    return changeServiceState(boxId, "CLEANING", null, "vệ sinh");
+  }
+
+  /// Khôi phục ô từ OUT_OF_SERVICE/CLEANING về AVAILABLE. Ô đang FAULT phải
+  /// dùng clear-fault, không dùng đường này.
+  @Transactional
+  public CellResponse returnToService(Long boxId) {
+    LockerBox box = findBox(boxId);
+    String status = box.getStatus();
+    if ("FAULT".equalsIgnoreCase(status)) {
+      throw new com.huynqb.laundrylocker.common.exception.BusinessException(
+          "BOX_IN_FAULT", "Ô đang hỏng — dùng clear-fault để khôi phục");
+    }
+    if (!"OUT_OF_SERVICE".equalsIgnoreCase(status) && !"CLEANING".equalsIgnoreCase(status)) {
+      throw new com.huynqb.laundrylocker.common.exception.BusinessException(
+          "BOX_NOT_OUT_OF_SERVICE", "Ô không ở trạng thái ngưng dùng/vệ sinh");
+    }
+    box.setStatus("AVAILABLE");
+    box.setFaultReason(null);
+    return toCell(boxRepository.save(box));
+  }
+
+  private CellResponse changeServiceState(Long boxId, String target, String reason, String action) {
+    LockerBox box = findBox(boxId);
+    String status = box.getStatus();
+    if ("OCCUPIED".equalsIgnoreCase(status) || "RESERVED".equalsIgnoreCase(status)) {
+      throw new com.huynqb.laundrylocker.common.exception.BusinessException(
+          "BOX_IN_USE", "Ô đang có đơn — không thể " + action);
+    }
+    box.setStatus(target);
+    box.setFaultReason(reason);
     return toCell(boxRepository.save(box));
   }
 

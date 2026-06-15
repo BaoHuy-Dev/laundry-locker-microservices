@@ -125,6 +125,11 @@ Endpoint backend hiện có:
 - `PUT /api/maintenance/reports/{id}/claim`
 - `PUT /api/maintenance/reports/{id}/resolve`
 - `POST /api/maintenance/boxes/{id}/clear-fault`
+- `POST /api/maintenance/boxes/{id}/out-of-service` (L5, body `{reason?}`): ngưng dùng ô có chủ đích.
+- `POST /api/maintenance/boxes/{id}/cleaning` (L5): đánh dấu ô đang vệ sinh/khử khuẩn.
+- `POST /api/maintenance/boxes/{id}/return-to-service` (L5): khôi phục ô `OUT_OF_SERVICE`/`CLEANING` về `AVAILABLE`.
+
+Ô `OUT_OF_SERVICE`/`CLEANING` tự động bị loại khỏi phân phối (reserve/findAvailable chỉ nhận `AVAILABLE`); không thể ngưng dùng/vệ sinh ô đang `OCCUPIED`/`RESERVED`. Surface: Maintenance mobile (tab Kiểm tra tủ → bottom sheet hành động theo trạng thái ô) và Admin web (sơ đồ tủ `layout-view` → action theo từng ô).
 
 Response của `faults` và `reports` hiện trả thêm metadata định vị locker để web/mobile không cần gọi vòng lại khi điều phối kỹ thuật:
 
@@ -340,7 +345,8 @@ Vòng đời cell hiện tại:
 
 ```text
 AVAILABLE -> RESERVED -> OCCUPIED -> AVAILABLE
-AVAILABLE/RESERVED/OCCUPIED -> FAULT -> AVAILABLE
+AVAILABLE/RESERVED/OCCUPIED -> FAULT -> AVAILABLE (clear-fault)
+AVAILABLE/FAULT -> OUT_OF_SERVICE | CLEANING -> AVAILABLE (return-to-service)   # L5
 ```
 
 Hành vi quan trọng:
@@ -1096,7 +1102,7 @@ Tài liệu đặc tả đầy đủ (phân tích as-is bám code + bổ sung to
 
 Các điểm as-is đã xác minh trực tiếp từ code, cần lưu ý vì là lỗ hổng đúng đắn của luồng tủ đang chạy:
 
-- **Trạng thái ô chỉ có 4 giá trị**: `AVAILABLE / RESERVED / OCCUPIED / FAULT` (xem `LockerService`). `EXPIRED` chỉ tồn tại ở cấp order qua `pickupDeadline`, ô không có trạng thái `EXPIRED/OUT_OF_SERVICE/CLEANING`.
+- **Trạng thái ô (cập nhật L5)**: `AVAILABLE / RESERVED / OCCUPIED / FAULT / OUT_OF_SERVICE / CLEANING` (xem `LockerService`). `OUT_OF_SERVICE`/`CLEANING` được thêm ở L5 (bảo trì vận hành) — set qua `/api/maintenance/boxes/{id}/{out-of-service|cleaning}`, khôi phục qua `return-to-service`; ô ở 2 trạng thái này bị loại khỏi reserve. `EXPIRED` vẫn chỉ tồn tại ở cấp order qua `pickupDeadline` (chưa có ở cấp ô).
 - **Ô `RESERVED` không có TTL** và `autoCancelUnconfirmedOrders()` đổi đơn `INITIALIZED`>24h sang `CANCELED` nhưng **không release ô** và **không được `@Scheduled`** → ô có thể kẹt `RESERVED` (Gap G1/G2). `cancel()` thủ công thì có release.
 - **Quá hạn lấy hàng chỉ nhắc + cộng phí**; ô vẫn `OCCUPIED` tới khi có lệnh complete/checkout — chưa có move-to-storage/giải phóng tự động (Gap G3).
 - **Luồng nhận hàng qua shipper/courier (PARCEL_RECEIVE) chưa có code** — SEND hiện chỉ là C2C giữa 2 app-user; chưa có "courier access code" tách với PIN khách (Gap G6).
