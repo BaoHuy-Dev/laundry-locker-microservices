@@ -22,7 +22,7 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO auth_schema.auth_accounts (
     user_id, email, phone_number, password_hash, auth_provider, email_verified, phone_verified, status, last_login_at, created_at, updated_at
 ) VALUES
-    (54, 'binhtntse182370@fpt.edu.vn', '0869371051', '$2a$10$S2LjQzym5drWNMKOdCpbWuZIKwJONRrabq54MiQnweVSvRlHMvf5O', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW(), NOW(), NOW())
+    (54, 'binhtntse182370@fpt.edu.vn', '0869371051', '$2a$10$iYGwq/z2LBYxTd92vFkTieFp8ZUrE.PHapoOqFETmA6tAAZCOXyfS', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW(), NOW(), NOW())
 ON CONFLICT (user_id) DO UPDATE SET
     email = EXCLUDED.email,
     password_hash = EXCLUDED.password_hash,
