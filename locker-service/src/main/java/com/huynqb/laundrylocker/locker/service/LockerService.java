@@ -12,15 +12,19 @@ import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportResponse;
+import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleRequest;
+import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleResponse;
 import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerResponse;
 import com.huynqb.laundrylocker.locker.model.LockerBox;
 import com.huynqb.laundrylocker.locker.model.LockerReport;
+import com.huynqb.laundrylocker.locker.model.MaintenanceSchedule;
 import com.huynqb.laundrylocker.locker.model.RepairLog;
 import com.huynqb.laundrylocker.locker.model.LockerUnit;
 import com.huynqb.laundrylocker.locker.repository.LockerBoxRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerReportRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerUnitRepository;
+import com.huynqb.laundrylocker.locker.repository.MaintenanceScheduleRepository;
 import com.huynqb.laundrylocker.locker.repository.RepairLogRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,6 +49,7 @@ public class LockerService {
   private final LockerBoxRepository boxRepository;
   private final LockerReportRepository reportRepository;
   private final RepairLogRepository repairLogRepository;
+  private final MaintenanceScheduleRepository scheduleRepository;
 
   /// SLA: số giờ tối đa để xử lý một phiếu bảo trì trước khi bị coi là quá hạn.
   @Value("${app.maintenance.sla-hours:4}")
@@ -426,6 +431,72 @@ public class LockerService {
   private RepairLogResponse toRepairLog(RepairLog log) {
     return new RepairLogResponse(
         log.getId(), log.getReportId(), log.getActorUserId(), log.getNote(), log.getCreatedAt());
+  }
+
+  // ---- L5: bảo trì phòng ngừa (lịch kiểm tra định kỳ) ----
+
+  @Transactional
+  public MaintenanceScheduleResponse createSchedule(MaintenanceScheduleRequest request) {
+    lockerRepository
+        .findById(request.lockerId())
+        .orElseThrow(() -> new NotFoundException("Locker", request.lockerId()));
+    MaintenanceSchedule schedule = new MaintenanceSchedule();
+    schedule.setLockerId(request.lockerId());
+    schedule.setTitle(request.title());
+    schedule.setIntervalDays(request.intervalDays());
+    schedule.setNextDueAt(LocalDateTime.now().plusDays(request.intervalDays()));
+    schedule.setActive(true);
+    return toSchedule(scheduleRepository.save(schedule));
+  }
+
+  @Transactional(readOnly = true)
+  public List<MaintenanceScheduleResponse> listSchedules() {
+    return scheduleRepository.findByActiveTrueOrderByNextDueAtAsc().stream()
+        .map(this::toSchedule)
+        .toList();
+  }
+
+  /// KTV đã kiểm tra xong lần này: dời mốc đến hạn = now + intervalDays.
+  @Transactional
+  public MaintenanceScheduleResponse completeSchedule(Long id) {
+    MaintenanceSchedule schedule =
+        scheduleRepository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("MaintenanceSchedule", id));
+    LocalDateTime now = LocalDateTime.now();
+    schedule.setLastDoneAt(now);
+    schedule.setNextDueAt(now.plusDays(schedule.getIntervalDays()));
+    return toSchedule(scheduleRepository.save(schedule));
+  }
+
+  /// Xóa mềm (active=false) để giữ lịch sử.
+  @Transactional
+  public void deleteSchedule(Long id) {
+    MaintenanceSchedule schedule =
+        scheduleRepository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("MaintenanceSchedule", id));
+    schedule.setActive(false);
+    scheduleRepository.save(schedule);
+  }
+
+  private MaintenanceScheduleResponse toSchedule(MaintenanceSchedule s) {
+    LockerUnit locker = lockerRepository.findById(s.getLockerId()).orElse(null);
+    boolean due =
+        Boolean.TRUE.equals(s.getActive())
+            && s.getNextDueAt() != null
+            && !LocalDateTime.now().isBefore(s.getNextDueAt());
+    return new MaintenanceScheduleResponse(
+        s.getId(),
+        s.getLockerId(),
+        locker == null ? null : locker.getName(),
+        locker == null ? null : locker.getCode(),
+        s.getTitle(),
+        s.getIntervalDays(),
+        s.getLastDoneAt(),
+        s.getNextDueAt(),
+        s.getActive(),
+        due);
   }
 
   private LockerStatsResponse toStats(LockerUnit locker) {
