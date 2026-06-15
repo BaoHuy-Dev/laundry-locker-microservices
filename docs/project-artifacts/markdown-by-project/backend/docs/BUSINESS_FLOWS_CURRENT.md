@@ -246,6 +246,11 @@ Endpoint riêng cho admin:
 
 Flow admin login phụ thuộc credential/OTP. Trong dev/test, `/api/auth/login` cũng đã được dùng để lấy token admin khi account có role `ADMIN`.
 
+Luồng 2FA admin (web) và **shape response** (để client chuẩn hoá đúng):
+
+1. `POST /api/admin/auth/login` `{email,password}` → kiểm tra mật khẩu + role `ADMIN`, gửi OTP qua email và trả `{requiresTwoFactor, tempToken, expiresIn, maskedEmail, message}` (trong `data`). OTP dev được log ở `auth-service` (`Development OTP: <code>`); SMTP thật phụ thuộc environment.
+2. `POST /api/admin/auth/verify-2fa` `{tempToken, otpCode}` → trả **payload phẳng** (qua `AuthService.authMap`), **không** lồng trong key `user`: `{accountId, userId, accessToken, refreshToken, tokenType, expiresAt, roles, isNewUser, name?}`. **Không có field `id`** (dùng `userId`) và **không echo `email`** (client tự giữ email đã nhập ở bước 1). Web FE chuẩn hoá `User` từ payload phẳng này (`id ← userId`, `role ← roles`, `fullName ← name`). *(Bug 2026-06-15: FE từng đọc `data.user.id` nên crash `Cannot read properties of undefined (reading 'id')`; đã sửa ở `auth-context.tsx`.)*
+
 ## 4. Gateway Và Ranh Giới Service
 
 Client chỉ nên gọi qua gateway. Port service trực tiếp chỉ dùng debug.
@@ -286,6 +291,11 @@ Endpoint kỹ thuật/vận hành:
 - `/v3/api-docs`: OpenAPI runtime docs cho gateway và từng servlet service, có thể tắt bằng `SPRINGDOC_API_DOCS_ENABLED=false`.
 - `/v3/api-docs/<service-name>`: gateway route aggregate OpenAPI docs cho các service đang có source như `auth-service`, `order-service`, `locker-service`, `payment-service`, `iot-service`.
 - `/swagger-ui/index.html`: Swagger UI tại gateway, gom các OpenAPI docs ở trên; có thể tắt bằng `SPRINGDOC_SWAGGER_UI_ENABLED=false`.
+
+CORS cho web frontend:
+
+- Web admin/FE chạy ở origin `http://localhost:3000` gọi gateway (local `:18080`, mặc định `:8080`). CORS được cấu hình tại **`spring.cloud.gateway.server.webflux.globalcors`**: cho phép origin `http://localhost:3000`, methods `GET,POST,PUT,PATCH,DELETE,OPTIONS`, `allowedHeaders: "*"`, `allowCredentials: true`.
+- **Lưu ý (Spring Cloud Gateway 4.3.x / Spring Cloud 2025.0.x):** prefix cũ `spring.cloud.gateway.globalcors` đã `deprecated` từ gateway 4.3.0 và **không còn bind** vào `GlobalCorsProperties`; đặt CORS ở đó sẽ bị bỏ qua, làm trình duyệt báo `No 'Access-Control-Allow-Origin' header` / "Failed to fetch" khi web đăng nhập (`POST /api/admin/auth/login`). Mọi cấu hình gateway (routes/discovery/globalcors) phải nằm dưới `spring.cloud.gateway.server.webflux.*`. (Fix 2026-06-15.)
 
 Hardening hiện tại:
 
@@ -687,6 +697,11 @@ Flow nghiệp vụ:
 5. Admin xử lý bảo trì/fault reports.
 6. Admin xem order và payment.
 7. Admin trigger scheduler job thủ công khi cần.
+
+Dashboard overview (`GET /api/admin/dashboard/overview`, do `order-service` phục vụ qua `OrderService.statistics()`):
+
+- Trả các metric **order-owned**: `totalOrders`, `ordersToday`, `pendingOrders` (không COMPLETED/CANCELED), `totalRevenue` (sum `totalPrice` của đơn COMPLETED), `revenueToday`, và map `byStatus`.
+- **Chưa** trả các KPI cross-service (`totalUsers`, `totalStores`, `totalLockers`, `activeServices`, `availableBoxes`, `occupiedBoxes`) vì thuộc service khác; web FE normalize default `0` cho các field này (thẻ hiển thị 0 thay vì crash). Cần wire aggregation chéo service nếu muốn số thật. *(Fix 2026-06-15: trước đó FE đọc field `undefined` → crash `Cannot read properties of undefined (reading 'toString')`.)*
 
 Lưu ý hiện tại:
 

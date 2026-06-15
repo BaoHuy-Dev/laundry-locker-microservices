@@ -644,6 +644,8 @@ public class OrderService {
   public Map<String, Object> statistics() {
     Map<String, Object> result = new HashMap<>();
     List<LockerOrder> orders = orderRepository.findAll();
+    var startOfToday = LocalDate.now().atStartOfDay();
+
     result.put("totalOrders", orders.size());
     result.put(
         "byStatus",
@@ -651,6 +653,43 @@ public class OrderService {
             .collect(
                 java.util.stream.Collectors.groupingBy(
                     LockerOrder::getStatus, java.util.stream.Collectors.counting())));
+
+    // Order-owned dashboard metrics (computed from this service's data only).
+    long ordersToday =
+        orders.stream()
+            .filter(o -> o.getCreatedAt() != null && !o.getCreatedAt().isBefore(startOfToday))
+            .count();
+    result.put("ordersToday", ordersToday);
+
+    long pendingOrders =
+        orders.stream()
+            .filter(
+                o -> {
+                  String s = o.getStatus() == null ? "" : o.getStatus().toUpperCase();
+                  return !s.equals("COMPLETED") && !s.equals("CANCELED") && !s.equals("CANCELLED");
+                })
+            .count();
+    result.put("pendingOrders", pendingOrders);
+
+    BigDecimal totalRevenue =
+        orders.stream()
+            .filter(o -> "COMPLETED".equalsIgnoreCase(o.getStatus()))
+            .map(o -> o.getTotalPrice() == null ? BigDecimal.ZERO : o.getTotalPrice())
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    result.put("totalRevenue", totalRevenue);
+
+    BigDecimal revenueToday =
+        orders.stream()
+            .filter(o -> "COMPLETED".equalsIgnoreCase(o.getStatus()))
+            .filter(
+                o -> {
+                  var when = o.getCompletedAt() != null ? o.getCompletedAt() : o.getCreatedAt();
+                  return when != null && !when.isBefore(startOfToday);
+                })
+            .map(o -> o.getTotalPrice() == null ? BigDecimal.ZERO : o.getTotalPrice())
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    result.put("revenueToday", revenueToday);
+
     return result;
   }
 

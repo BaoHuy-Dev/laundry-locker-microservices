@@ -117,6 +117,18 @@ spring:
               predicates:
                 - Path=/api/admin/dashboard/**
 
+          # Global CORS for local development (allow FE at localhost:3000).
+          # NOTE: must live under spring.cloud.gateway.server.webflux.globalcors.
+          # The old spring.cloud.gateway.globalcors prefix is deprecated since
+          # gateway 4.3.0 and no longer binds, so CORS headers were never applied.
+          globalcors:
+            corsConfigurations:
+              "[/**]":
+                allowedOrigins: "http://localhost:3000"
+                allowedMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+                allowedHeaders: "*"
+                allowCredentials: true
+                maxAge: 3600
 app:
   security:
     jwt:
