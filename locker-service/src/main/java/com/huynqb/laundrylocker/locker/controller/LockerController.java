@@ -162,6 +162,25 @@ public class LockerController {
     return ApiResponse.ok("BOX_FAULT_CLEARED", "Box fault cleared", lockerService.clearFault(id));
   }
 
+  @PostMapping("/api/maintenance/boxes/{id}/out-of-service")
+  public ApiResponse<CellResponse> maintenanceOutOfService(
+      @PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+    String reason = body == null ? null : body.get("reason");
+    return ApiResponse.ok(
+        "BOX_OUT_OF_SERVICE", "Box taken out of service", lockerService.setOutOfService(id, reason));
+  }
+
+  @PostMapping("/api/maintenance/boxes/{id}/cleaning")
+  public ApiResponse<CellResponse> maintenanceCleaning(@PathVariable Long id) {
+    return ApiResponse.ok("BOX_CLEANING", "Box marked as cleaning", lockerService.setCleaning(id));
+  }
+
+  @PostMapping("/api/maintenance/boxes/{id}/return-to-service")
+  public ApiResponse<CellResponse> maintenanceReturnToService(@PathVariable Long id) {
+    return ApiResponse.ok(
+        "BOX_RETURNED_TO_SERVICE", "Box returned to service", lockerService.returnToService(id));
+  }
+
   @GetMapping("/internal/lockers/{id}/boxes/find")
   public ApiResponse<CellResponse> findAvailable(
       @PathVariable Long id,
