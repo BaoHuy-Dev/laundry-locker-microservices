@@ -1031,6 +1031,8 @@ App Flutter có gốc từ app cũ (Revoland/courier) nên nhiều màn legacy g
 - Ủy quyền (màn legacy): `/delegations/*` (luồng ủy quyền thật dùng `POST /api/orders/{id}/delegate`).
 - Home: `/advertisements`, `/blogs` (404, đã biết, không chặn).
 - **Tab Đơn hàng** (bottom nav): ĐÃ repoint (2026-06-14, commit `08567d3`) sang `MyLockerOrdersPage` (`locker_ops`, `GET /api/orders/my-orders`) thay cho `OrderPage` legacy (`/orders/me` chết). Tab này giờ hiện đơn tủ thật với đầy đủ action theo state machine. `OrderPage` legacy không còn được route.
+- **Navigation bug fix (2026-06-15)**: `LockerUtilitiesRow` (quick action "Đơn tủ" trên tab Tủ) trước dùng `context.push(AppRouter.myLockerOrders)` → route `/locker/my-orders` ngoài `ShellRoute` → mất bottom nav bar và không có nút quay lại. Đã sửa sang `context.go(AppRouter.orders)` → chuyển tab `/orders` trong `ShellRoute` → bottom nav hiển thị đúng, hành vi tab chuẩn.
+- **UI revamp (2026-06-15)**: Bottom nav frosted-glass không label; `MyLockerOrdersPage` header dùng `BrandHeroHeader(title='Đơn tủ')`; `ProfilePage` cấu trúc đổi sang `Column → [BrandHeroHeader, Expanded(ScrollView)]` khớp layout LockerPage; Home page có wallet card. Không đổi API/route/flow nghiệp vụ.
 - Chi tiết tủ (khi bấm 1 tủ ở tab Tủ): `LockerDetailMapPage` chỉ render bản đồ từ `LockerLocation` (call legacy `getLockerCountBySize` đã bị comment-out), nên KHÔNG gọi endpoint chết — đã chạy. Tủ thiếu toạ độ (vd `LCK-Q1-01`) nay map sang `NaN` → hiện màn "toạ độ không hợp lệ" thân thiện thay vì pin (0,0); tủ có toạ độ (`CAB-DEMO-01`) render bản đồ bình thường.
 
 ### Các khu vực mobile legacy/partial
