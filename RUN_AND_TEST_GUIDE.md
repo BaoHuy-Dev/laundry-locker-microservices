@@ -13,7 +13,7 @@ This guide is for Windows PowerShell. Use `curl.exe` explicitly when using curl 
 - Java 21
 - Maven 3.9+ (`mvn.cmd` on PATH, or `C:\Maven\apache-maven-3.9.16\bin\mvn.cmd`)
 - Docker Desktop
-- Ports: `8080`, `8761`, `8081-8084`, `8086-8090`, `8092`, `15432`, `5672`, `15672`
+- Ports: `18080`, `8761`, `8081-8084`, `8086-8089`, `8092`, `15432`, `5672`, `15672`
 
 Current note: `laundry-service` on `8085` and `partner-service` on `8091` do not have source folders. `docker-compose.override.yml` skips them with profile `missing-source`.
 
@@ -65,7 +65,7 @@ Expected running containers include:
 ## 3. Health Checks
 
 ```powershell
-curl.exe -s -o NUL -w "%{http_code}" http://localhost:8080/actuator/health
+curl.exe -s -o NUL -w "%{http_code}" http://localhost:18080/actuator/health
 Start-Process http://localhost:8761
 Start-Process http://localhost:15672
 ```
@@ -81,7 +81,7 @@ Direct service checks:
 ```powershell
 $services = @{
   "discovery-server" = 8761
-  "api-gateway" = 8080
+  "api-gateway" = 18080
   "auth-service" = 8081
   "user-service" = 8082
   "order-service" = 8083
@@ -103,10 +103,10 @@ $services.GetEnumerator() | Sort-Object Name | ForEach-Object {
 
 ## 4. Authentication Smoke Test
 
-All client traffic goes through `http://localhost:8080`.
+All client traffic goes through `http://localhost:18080`.
 
 ```powershell
-$BASE = "http://localhost:8080"
+$BASE = "http://localhost:18080"
 $email = "customer$((Get-Random))@laundry.test"
 $password = "secret123"
 

@@ -66,7 +66,7 @@ services:
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
       JAVA_OPTS: "-Xms64m -Xmx320m -XX:+UseContainerSupport"
     ports:
-      - "8080:8080"
+      - "${API_GATEWAY_PORT:-18080}:8080"
     depends_on:
       - discovery-server
     networks:

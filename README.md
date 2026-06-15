@@ -9,7 +9,7 @@ This repository is the Java/Spring microservices backend for the Smart Laundry L
 ## Current Snapshot
 
 - Java 21, Spring Boot 3.5.14, Spring Cloud 2025.0.2, Maven multi-module.
-- Gateway at `http://localhost:8080`, Eureka at `http://localhost:8761`.
+- Gateway at `http://localhost:18080`, Eureka at `http://localhost:8761`.
 - PostgreSQL runs on host port `15432`; RabbitMQ runs on `5672` with UI at `http://localhost:15672`.
 - Locker Phase 1 and Phase 2 are implemented: physical cell layout, SEND, RENTAL, signed QR token, PIN/QR access verification, manager APIs, maintenance APIs, RBAC, and schedulers.
 - `laundry-service` and `partner-service` are not present as source modules in the current workspace. They remain reserved in compose/database naming, but `docker-compose.override.yml` places them behind the `missing-source` profile so normal local compose runs skip them.
@@ -55,7 +55,7 @@ Local Docker creates one PostgreSQL database per service through `docker/postgre
 
 ## Gateway Routes
 
-Clients should call the gateway on port `8080`. Direct service ports are for local debugging.
+Clients should call the gateway on host port `18080`. The gateway still runs on container port `8080`; direct service ports are for local debugging.
 
 | Gateway path | Target service |
 |---|---|
@@ -137,7 +137,7 @@ docker compose ps
 
 Useful URLs:
 
-- Gateway: `http://localhost:8080`
+- Gateway: `http://localhost:18080`
 - Eureka: `http://localhost:8761`
 - RabbitMQ UI: `http://localhost:15672` (`guest` / `guest`)
 - PostgreSQL: `localhost:15432` (`postgres` / `postgres`)
@@ -145,7 +145,7 @@ Useful URLs:
 Health check:
 
 ```powershell
-curl.exe -s -o NUL -w "%{http_code}" http://localhost:8080/actuator/health
+curl.exe -s -o NUL -w "%{http_code}" http://localhost:18080/actuator/health
 ```
 
 Expected result: `200`.
@@ -155,7 +155,7 @@ Expected result: `200`.
 All requests below go through the gateway.
 
 ```powershell
-$BASE = "http://localhost:8080"
+$BASE = "http://localhost:18080"
 
 # Register a customer if the local DB is fresh.
 $email = "demo$((Get-Random))@laundry.test"
