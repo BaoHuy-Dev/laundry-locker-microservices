@@ -10,6 +10,8 @@ import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportResponse;
+import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleRequest;
+import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleResponse;
 import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerResponse;
 import com.huynqb.laundrylocker.locker.service.LockerService;
@@ -195,6 +197,30 @@ public class LockerController {
     return ApiResponse.ok(
         "REPAIR_LOG_ADDED", "Repair log added",
         lockerService.addRepairLog(id, body.get("note"), userId));
+  }
+
+  // L5 — bảo trì phòng ngừa (lịch kiểm tra định kỳ)
+  @GetMapping("/api/maintenance/schedules")
+  public ApiResponse<List<MaintenanceScheduleResponse>> maintenanceSchedules() {
+    return ApiResponse.ok(lockerService.listSchedules());
+  }
+
+  @PostMapping("/api/maintenance/schedules/{id}/complete")
+  public ApiResponse<MaintenanceScheduleResponse> maintenanceCompleteSchedule(@PathVariable Long id) {
+    return ApiResponse.ok(
+        "SCHEDULE_COMPLETED", "Inspection completed", lockerService.completeSchedule(id));
+  }
+
+  @PostMapping("/api/admin/lockers/schedules")
+  public ApiResponse<MaintenanceScheduleResponse> adminCreateSchedule(
+      @Valid @RequestBody MaintenanceScheduleRequest request) {
+    return ApiResponse.ok("SCHEDULE_CREATED", "Schedule created", lockerService.createSchedule(request));
+  }
+
+  @DeleteMapping("/api/admin/lockers/schedules/{id}")
+  public ApiResponse<Void> adminDeleteSchedule(@PathVariable Long id) {
+    lockerService.deleteSchedule(id);
+    return ApiResponse.ok("SCHEDULE_DELETED", "Schedule deleted", null);
   }
 
   @GetMapping("/internal/lockers/{id}/boxes/find")
