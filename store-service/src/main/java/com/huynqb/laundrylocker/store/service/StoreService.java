@@ -83,7 +83,6 @@ public class StoreService {
   }
 
   private void apply(StoreLocation store, StoreRequest request) {
-    store.setPartnerId(request.partnerId());
     store.setName(request.name());
     store.setContactPhone(request.contactPhone());
     store.setAddress(request.address());
@@ -101,7 +100,7 @@ public class StoreService {
 
   private StoreResponse toResponse(StoreLocation store, Double distanceKm) {
     return new StoreResponse(
-        store.getId(), store.getPartnerId(), store.getName(), store.getContactPhone(), store.getAddress(),
+        store.getId(), store.getName(), store.getContactPhone(), store.getAddress(),
         store.getLatitude(), store.getLongitude(), store.getImage(), store.getDescription(), store.getActive(),
         distanceKm, store.getStatus());
   }

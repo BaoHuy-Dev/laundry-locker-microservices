@@ -7,9 +7,6 @@ SELECT 'auth_schema.email_otps' AS table_name, COUNT(*) AS row_count FROM auth_s
 
 \connect user_db
 SELECT 'user_schema.user_profiles' AS table_name, COUNT(*) AS row_count FROM user_schema.user_profiles;
-SELECT 'user_schema.roles' AS table_name, COUNT(*) AS row_count FROM user_schema.roles;
-SELECT 'user_schema.permissions' AS table_name, COUNT(*) AS row_count FROM user_schema.permissions;
-SELECT 'user_schema.role_permissions' AS table_name, COUNT(*) AS row_count FROM user_schema.role_permissions;
 SELECT 'user_schema.audit_logs' AS table_name, COUNT(*) AS row_count FROM user_schema.audit_logs;
 
 \connect order_db

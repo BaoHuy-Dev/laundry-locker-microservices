@@ -21,44 +21,9 @@ ON CONFLICT (id) DO UPDATE SET
     roles = EXCLUDED.roles,
     updated_at = NOW();
 
-INSERT INTO user_schema.roles(name, description) VALUES
-    ('USER', 'Customer role'),
-    ('STAFF', 'Staff role'),
-    ('ADMIN', 'Administrator role')
-ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description;
-
-INSERT INTO user_schema.permissions(id, name, description) VALUES
-    (1001, 'USER_READ', 'Read user profile data'),
-    (1002, 'USER_WRITE', 'Create or update user profile data'),
-    (1003, 'ORDER_READ', 'Read order data'),
-    (1004, 'ORDER_WRITE', 'Create or update order data'),
-    (1005, 'LOCKER_MANAGE', 'Manage lockers and boxes'),
-    (1006, 'PAYMENT_MANAGE', 'Manage payments and refunds'),
-    (1007, 'ADMIN_DASHBOARD', 'View admin dashboard')
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    description = EXCLUDED.description;
-
-INSERT INTO user_schema.role_permissions(role_id, permission_id)
-SELECT r.id, p.id
-FROM user_schema.roles r
-JOIN user_schema.permissions p ON p.name IN ('USER_READ', 'ORDER_READ')
-WHERE r.name = 'USER'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO user_schema.role_permissions(role_id, permission_id)
-SELECT r.id, p.id
-FROM user_schema.roles r
-JOIN user_schema.permissions p ON p.name IN ('USER_READ', 'ORDER_READ', 'ORDER_WRITE', 'LOCKER_MANAGE')
-WHERE r.name = 'STAFF'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO user_schema.role_permissions(role_id, permission_id)
-SELECT r.id, p.id
-FROM user_schema.roles r
-JOIN user_schema.permissions p ON TRUE
-WHERE r.name = 'ADMIN'
-ON CONFLICT DO NOTHING;
+-- PA3: bỏ seed roles/permissions/role_permissions — các bảng này đã được drop
+-- (user-service V3). Phân quyền dùng cột user_schema.user_profiles.roles (VARCHAR)
+-- + claim `roles` trong JWT.
 
 INSERT INTO user_schema.audit_logs (
     id, user_id, action, entity_type, entity_id, description, status, created_at
@@ -77,7 +42,6 @@ ON CONFLICT (id) DO UPDATE SET
     status = EXCLUDED.status;
 
 SELECT setval(pg_get_serial_sequence('user_schema.user_profiles', 'id'), GREATEST((SELECT MAX(id) FROM user_schema.user_profiles), 1), true);
-SELECT setval(pg_get_serial_sequence('user_schema.permissions', 'id'), GREATEST((SELECT MAX(id) FROM user_schema.permissions), 1), true);
 SELECT setval(pg_get_serial_sequence('user_schema.audit_logs', 'id'), GREATEST((SELECT MAX(id) FROM user_schema.audit_logs), 1), true);
 
 \echo 'Seeding auth_db'
