@@ -183,7 +183,7 @@ DELETE FROM order_schema.order_status_history WHERE order_id BETWEEN 90001 AND 9
 DELETE FROM order_schema.order_ratings        WHERE order_id BETWEEN 90001 AND 90100;
 DELETE FROM order_schema.order_complaints     WHERE order_id BETWEEN 90001 AND 90100;
 DELETE FROM order_schema.orders               WHERE id       BETWEEN 90001 AND 90100;
-DELETE FROM order_schema.promotions           WHERE code LIKE 'DEMO-PROMO-%';
+DELETE FROM order_schema.promotions           WHERE code LIKE 'PROMO-HCM-%';
 
 INSERT INTO order_schema.promotions
   (code, name, discount_type, discount_value, max_discount_amount, min_order_amount, stackable, status, start_at, end_at, usage_count, created_by_user_id, created_at, updated_at)
@@ -283,7 +283,7 @@ FROM generate_series(1, 100) AS g;
 \connect notification_db
 
 DELETE FROM notification_schema.notifications WHERE title LIKE 'Thong bao demo %';
-DELETE FROM notification_schema.fcm_tokens    WHERE token LIKE 'fcm-demo-token-%';
+DELETE FROM notification_schema.fcm_tokens    WHERE token LIKE 'fcm-token-%';
 
 INSERT INTO notification_schema.notifications
   (user_id, title, message, type, reference_id, reference_type, status, is_read, read_at, created_at)
@@ -334,7 +334,7 @@ FROM generate_series(1, 100) AS g;
 -- =====================================================================
 \connect iot_db
 
-DELETE FROM iot_schema.device_statuses WHERE device_id LIKE 'DEV-DEMO-%';
+DELETE FROM iot_schema.device_statuses WHERE device_id LIKE 'DEV-HCM-%';
 
 INSERT INTO iot_schema.device_statuses (device_id, locker_id, status, last_seen_at, created_at, updated_at)
 SELECT 'DEV-HCM-' || lpad(g::text, 3, '0'), 9000 + g,
