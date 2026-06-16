@@ -29,8 +29,11 @@ Dự án hiện tại là nền tảng Smart Laundry Locker gồm:
 Entrypoint chính của backend:
 
 ```text
-API Gateway: http://localhost:8080
+API Gateway (deploy, dùng chung cả nhóm): http://146.190.84.136:8080
+API Gateway (local khi chạy docker để dev): http://localhost:18080  (host 8080 thường bị chiếm)
 ```
+
+**Chính sách môi trường (chốt 2026-06-16):** cả nhóm dùng chung backend + PostgreSQL đã deploy trên DigitalOcean droplet `146.190.84.136`; không chạy local nữa, không bắt buộc bật docker (chỉ bật docker local khi đang sửa code backend để test). Web FE (`laundry-locker-frontend/fe`) và mobile (`smart-laundry-locker-mobile`) đều cấu hình base URL mặc định về `http://146.190.84.136:8080`. Vì client luôn đi qua gateway, trỏ FE/mobile về server đồng nghĩa dùng luôn database trên server (client không nối DB trực tiếp). Nối DB trực tiếp (DBeaver/psql) dùng `146.190.84.136:15432` nhưng cần mở port `15432` trên cloud firewall trước (hiện chỉ mở `22` + `8080`). Khi backend có code mới merge vào nhánh chính (`develop`), workflow `deploy-droplet.yml` tự deploy lên droplet và Flyway tự migrate DB lúc service khởi động.
 
 Phạm vi hiện tại cần ghi nhớ:
 
@@ -249,7 +252,7 @@ Flow admin login phụ thuộc credential/OTP. Trong dev/test, `/api/auth/login`
 
 Luồng 2FA admin (web) và **shape response** (để client chuẩn hoá đúng):
 
-1. `POST /api/admin/auth/login` `{email,password}` → kiểm tra mật khẩu + role `ADMIN`, gửi OTP qua email và trả `{requiresTwoFactor, tempToken, expiresIn, maskedEmail, message}` (trong `data`). OTP dev được log ở `auth-service` (`Development OTP: <code>`); SMTP thật phụ thuộc environment.
+1. `POST /api/admin/auth/login` `{email,password}` → kiểm tra mật khẩu + role `ADMIN`, gửi OTP qua email và trả `{requiresTwoFactor, tempToken, expiresIn, maskedEmail, message}` (trong `data`). OTP **luôn được log** ở `auth-service` (`Development OTP: <code>`) — dùng để lấy mã khi chưa cấu hình SMTP. **Gửi email thật (2026-06-16):** mail config trong `docker-compose.yml` (auth-service) đã cho overridable qua env — mặc định `localhost:1025` (không gửi được, chỉ log). Để OTP tới email thật, đặt trên droplet (`.env`): `SPRING_MAIL_HOST=smtp.gmail.com`, `SPRING_MAIL_PORT=587`, `SPRING_MAIL_USERNAME=<gmail>`, `SPRING_MAIL_PASSWORD=<app password 16 ký tự>`, `SPRING_MAIL_SMTP_AUTH=true`, `SPRING_MAIL_SMTP_STARTTLS=true` rồi recreate auth-service. `SmtpEmailService` nuốt lỗi gửi mail (warn-log, không chặn flow) nên OTP vẫn dùng được qua log nếu SMTP sai.
 2. `POST /api/admin/auth/verify-2fa` `{tempToken, otpCode}` → trả **payload phẳng** (qua `AuthService.authMap`), **không** lồng trong key `user`: `{accountId, userId, accessToken, refreshToken, tokenType, expiresAt, roles, isNewUser, name?}`. **Không có field `id`** (dùng `userId`) và **không echo `email`** (client tự giữ email đã nhập ở bước 1). Web FE chuẩn hoá `User` từ payload phẳng này (`id ← userId`, `role ← roles`, `fullName ← name`). *(Bug 2026-06-15: FE từng đọc `data.user.id` nên crash `Cannot read properties of undefined (reading 'id')`; đã sửa ở `auth-context.tsx`.)*
 
 ## 4. Gateway Và Ranh Giới Service
@@ -318,7 +321,7 @@ Hardening hiện tại:
 - CI/CD backend hiện có:
   - Backend CI chạy `mvn -B test`.
   - Backend security workflow chạy Dependency Review, CodeQL, generate SBOM artifact, và Trivy image scan cho 12 image có Dockerfile.
-  - Deploy workflow build bằng `mvn -B clean verify`, không skip test khi đóng gói deploy.
+  - Deploy workflow (`deploy-droplet.yml`) tự chạy khi `push` vào nhánh chính `develop` (+ `workflow_dispatch`): build bằng `mvn -B clean verify` (không skip test), đóng gói tarball, SCP/SSH vào droplet rồi `scripts/deploy-from-artifact.sh` chạy `docker compose up -d --build`. Mỗi service tự chạy Flyway migration lúc khởi động ⇒ **merge code mới vào `develop` sẽ tự deploy code + migrate DB trên server** (dữ liệu giữ qua docker volume Postgres).
   - Deploy artifact có SHA-256 checksum và GitHub artifact attestation/provenance; deploy script verify checksum nếu file `.sha256` được upload.
   - Deploy script mặc định chỉ chờ các Eureka apps có source trong repo; `laundry-service`/`partner-service` có thể được thêm lại bằng env `EUREKA_EXPECTED_APPS` khi source thật được khôi phục.
   - Release workflow theo tag `v*` tạo tarball backend, root CycloneDX SBOM, checksum, GitHub provenance attestation, upload artifact và publish GitHub Release.

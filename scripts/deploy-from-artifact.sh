@@ -8,6 +8,14 @@ NEW_DIR="${APP_DIR}.new"
 BACKUP_DIR="${APP_DIR}.previous"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-720}"
 
+# Publish the API gateway on host port 8080 on the droplet. The DigitalOcean
+# cloud firewall only opens 22 + 8080 inbound, so external clients (web/mobile)
+# must reach the gateway on 8080. docker-compose.yml defaults this to 18080 for
+# local dev (where host 8080 is usually occupied); the deploy path overrides it
+# to 8080 here so the gateway is reachable after every deploy without manual env
+# edits (which a deploy would wipe). The health check below also probes :8080.
+export API_GATEWAY_PORT="${API_GATEWAY_PORT:-8080}"
+
 rollback() {
   echo "Rolling back to previous release..."
   if [ -d "$BACKUP_DIR" ]; then
@@ -89,7 +97,6 @@ DEFAULT_EUREKA_APPS=(
   NOTIFICATION-SERVICE
   IOT-SERVICE
   STORE-SERVICE
-  STAFF-SERVICE
   LOYALTY-SERVICE
 )
 
