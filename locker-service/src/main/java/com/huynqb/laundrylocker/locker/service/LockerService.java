@@ -1,13 +1,19 @@
 package com.huynqb.laundrylocker.locker.service;
 
 import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
+import com.huynqb.laundrylocker.common.dto.UserSummary;
 import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
+import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.locker.client.IotClient;
+import com.huynqb.laundrylocker.locker.client.UserClient;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
 import com.huynqb.laundrylocker.locker.dto.FaultCellResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerLayoutResponse;
+import com.huynqb.laundrylocker.locker.dto.LockerReportRatingRequest;
+import com.huynqb.laundrylocker.locker.dto.LockerReportRatingResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
@@ -18,10 +24,12 @@ import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerResponse;
 import com.huynqb.laundrylocker.locker.model.LockerBox;
 import com.huynqb.laundrylocker.locker.model.LockerReport;
+import com.huynqb.laundrylocker.locker.model.LockerReportRating;
 import com.huynqb.laundrylocker.locker.model.MaintenanceSchedule;
 import com.huynqb.laundrylocker.locker.model.RepairLog;
 import com.huynqb.laundrylocker.locker.model.LockerUnit;
 import com.huynqb.laundrylocker.locker.repository.LockerBoxRepository;
+import com.huynqb.laundrylocker.locker.repository.LockerReportRatingRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerReportRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerUnitRepository;
 import com.huynqb.laundrylocker.locker.repository.MaintenanceScheduleRepository;
@@ -44,16 +52,27 @@ import org.springframework.util.StringUtils;
 public class LockerService {
 
   private static final List<String> OPEN_REPORT_STATUSES = List.of("OPEN", "IN_PROGRESS");
+  private static final List<String> SIZE_ORDER = List.of("SMALL", "MEDIUM", "LARGE", "XL");
 
   private final LockerUnitRepository lockerRepository;
   private final LockerBoxRepository boxRepository;
   private final LockerReportRepository reportRepository;
   private final RepairLogRepository repairLogRepository;
   private final MaintenanceScheduleRepository scheduleRepository;
+  private final LockerReportRatingRepository ratingRepository;
+  private final IotClient iotClient;
+  private final UserClient userClient;
 
   /// SLA: số giờ tối đa để xử lý một phiếu bảo trì trước khi bị coi là quá hạn.
   @Value("${app.maintenance.sla-hours:4}")
   private int slaHours;
+
+  /// Backstop TTL cho ô RESERVED — order-service sweep mỗi 15 phút đã release
+  /// ô khi auto-cancel đơn quá `app.order.auto-cancel-hours` (mặc định 24h);
+  /// cửa sổ này nên >= con số đó để không bao giờ release sớm hơn order-service.
+  @Value("${app.locker.reserved-ttl-hours:24}")
+  private int reservedTtlHours;
+
   private final RabbitTemplate rabbitTemplate;
 
   @Transactional
@@ -128,15 +147,31 @@ public class LockerService {
   public LockerBoxSummary reserveBox(Long boxId, String channel) {
     LockerBox box = findBox(boxId);
     if (!"AVAILABLE".equalsIgnoreCase(box.getStatus())) {
-      throw new com.huynqb.laundrylocker.common.exception.BusinessException("BOX_NOT_AVAILABLE", "Box is not available");
+      throw new BusinessException("BOX_NOT_AVAILABLE", "Box is not available");
     }
     // Ô hàng 1 (DRONE) chỉ dành cho luồng drone thả hàng; mọi kênh khác bị chặn
     if ("DRONE".equalsIgnoreCase(box.getCellType()) && !"DRONE".equalsIgnoreCase(channel)) {
-      throw new com.huynqb.laundrylocker.common.exception.BusinessException(
+      throw new BusinessException(
           "DRONE_CELL_RESTRICTED", "This cell is reserved for drone deliveries only");
     }
     box.setStatus("RESERVED");
+    box.setReservedUntil(LocalDateTime.now().plusHours(reservedTtlHours));
     return toSummary(boxRepository.save(box));
+  }
+
+  /// Backstop sweep for boxes stuck RESERVED past their TTL — defense in
+  /// depth in case order-service's own auto-cancel sweep is down. Does not
+  /// touch the order itself; just frees the cell so it isn't lost forever.
+  @Transactional
+  public int sweepExpiredReservations() {
+    List<LockerBox> expired = boxRepository.findByStatusAndReservedUntilBefore("RESERVED", LocalDateTime.now());
+    for (LockerBox box : expired) {
+      box.setStatus("AVAILABLE");
+      box.setReservedUntil(null);
+      boxRepository.save(box);
+      log.warn("Released box {} stuck RESERVED past TTL (backstop sweep)", box.getId());
+    }
+    return expired.size();
   }
 
   @Transactional
@@ -147,6 +182,7 @@ public class LockerService {
           "BOX_NOT_RESERVED", "Box must be reserved before deposit");
     }
     box.setStatus("OCCUPIED");
+    box.setReservedUntil(null);
     return toSummary(boxRepository.save(box));
   }
 
@@ -162,6 +198,7 @@ public class LockerService {
       return toSummary(box);
     }
     box.setStatus("AVAILABLE");
+    box.setReservedUntil(null);
     return toSummary(boxRepository.save(box));
   }
 
@@ -251,18 +288,25 @@ public class LockerService {
   @Transactional(readOnly = true)
   public CellResponse findAvailableBox(Long lockerId, String size, String cellType) {
     String type = StringUtils.hasText(cellType) ? cellType.toUpperCase() : "STANDARD";
-    java.util.Optional<LockerBox> found =
-        StringUtils.hasText(size)
-            ? boxRepository.findFirstByLockerIdAndStatusAndCellTypeAndSizeAndActiveTrueOrderByBoxNumberAsc(
-                lockerId, "AVAILABLE", type, size.toUpperCase())
-            : boxRepository.findFirstByLockerIdAndStatusAndCellTypeAndActiveTrueOrderByBoxNumberAsc(
-                lockerId, "AVAILABLE", type);
-    return found
-        .map(this::toCell)
-        .orElseThrow(
-            () ->
-                new com.huynqb.laundrylocker.common.exception.BusinessException(
-                    "NO_AVAILABLE_BOX", "No available box matching criteria"));
+    if (!StringUtils.hasText(size)) {
+      return boxRepository
+          .findFirstByLockerIdAndStatusAndCellTypeAndActiveTrueOrderByBoxNumberAsc(lockerId, "AVAILABLE", type)
+          .map(this::toCell)
+          .orElseThrow(() -> new BusinessException("NO_AVAILABLE_BOX", "No available box matching criteria"));
+    }
+    // Exact size first; if unavailable, fall back to the next larger size
+    // class instead of failing outright (a slightly bigger box still fits).
+    String requested = size.toUpperCase();
+    int startIndex = Math.max(0, SIZE_ORDER.indexOf(requested));
+    for (int i = startIndex; i < SIZE_ORDER.size(); i++) {
+      var found =
+          boxRepository.findFirstByLockerIdAndStatusAndCellTypeAndSizeAndActiveTrueOrderByBoxNumberAsc(
+              lockerId, "AVAILABLE", type, SIZE_ORDER.get(i));
+      if (found.isPresent()) {
+        return toCell(found.get());
+      }
+    }
+    throw new BusinessException("NO_AVAILABLE_BOX", "No available box matching criteria");
   }
 
   @Transactional(readOnly = true)
@@ -578,6 +622,7 @@ public class LockerService {
         slaDueAt != null
             && !"RESOLVED".equalsIgnoreCase(report.getStatus())
             && LocalDateTime.now().isAfter(slaDueAt);
+    UserSummary reporter = lookupUserQuietly(report.getUserId());
     return new LockerReportResponse(
         report.getId(),
         report.getLockerId(),
@@ -600,7 +645,76 @@ public class LockerService {
         box == null ? null : box.getCellType(),
         slaHours,
         slaDueAt,
-        overdue);
+        overdue,
+        reporter == null ? null : reporter.fullName(),
+        reporter == null ? null : reporter.phoneNumber());
+  }
+
+  // Best-effort: maintenance still needs to see status/SLA even if user-service
+  // is briefly unreachable, so a contact lookup failure must never break the list.
+  private UserSummary lookupUserQuietly(Long userId) {
+    if (userId == null || userId == 0L) {
+      return null;
+    }
+    try {
+      return userClient.getUser(userId).data();
+    } catch (Exception ex) {
+      log.debug("Could not resolve reporter contact for user {}: {}", userId, ex.getMessage());
+      return null;
+    }
+  }
+
+  /// Maintenance/admin emergency override — opens a box without the
+  /// customer's PIN/QR. Delegates the physical unlock + audit log to
+  /// iot-service (which owns the MQTT/access-log infrastructure).
+  public Map<String, Object> forceOpen(Long boxId, Long actorUserId) {
+    LockerBox box = findBox(boxId);
+    var result = iotClient.forceUnlock(new IotClient.ForceUnlockRequest(box.getLockerId(), boxId, actorUserId));
+    return result.data();
+  }
+
+  @Transactional
+  public LockerReportRatingResponse rateReport(Long reportId, Long userId, LockerReportRatingRequest request) {
+    LockerReport report =
+        reportRepository.findById(reportId).orElseThrow(() -> new NotFoundException("LockerReport", reportId));
+    if (!report.getUserId().equals(userId)) {
+      throw new BusinessException("REPORT_NOT_OWNED", "Only the reporting customer can rate this report");
+    }
+    if (!"RESOLVED".equalsIgnoreCase(report.getStatus())) {
+      throw new BusinessException("REPORT_NOT_RESOLVED", "Only resolved reports can be rated");
+    }
+    LockerReportRating rating = ratingRepository.findByReportId(reportId).orElseGet(LockerReportRating::new);
+    rating.setReportId(reportId);
+    rating.setUserId(userId);
+    rating.setRating(request.rating());
+    rating.setComment(request.comment());
+    return toRating(ratingRepository.save(rating));
+  }
+
+  @Transactional(readOnly = true)
+  public LockerReportRatingResponse getReportRating(Long reportId) {
+    return ratingRepository
+        .findByReportId(reportId)
+        .map(this::toRating)
+        .orElseThrow(() -> new NotFoundException("LockerReportRating", reportId));
+  }
+
+  /// Average rating + count across reports a technician has handled — lets
+  /// maintenance see their own feedback without a full analytics dashboard.
+  @Transactional(readOnly = true)
+  public Map<String, Object> myRatingAverage(Long technicianUserId) {
+    List<Long> reportIds = reportRepository.findByAssignedToUserIdOrderByCreatedAtDesc(technicianUserId).stream()
+        .map(LockerReport::getId)
+        .toList();
+    List<LockerReportRating> ratings =
+        reportIds.isEmpty() ? List.of() : ratingRepository.findByReportIdIn(reportIds);
+    double average = ratings.stream().mapToInt(LockerReportRating::getRating).average().orElse(0.0);
+    return Map.of("count", ratings.size(), "average", Math.round(average * 10) / 10.0);
+  }
+
+  private LockerReportRatingResponse toRating(LockerReportRating rating) {
+    return new LockerReportRatingResponse(
+        rating.getId(), rating.getReportId(), rating.getUserId(), rating.getRating(), rating.getComment(), rating.getCreatedAt());
   }
 
   private void publishBoxOpened(LockerBox box) {

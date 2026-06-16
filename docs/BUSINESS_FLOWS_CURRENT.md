@@ -273,7 +273,7 @@ Route ownership của gateway:
 - Locker: `/api/lockers/**`, `/api/boxes/**`, `/api/manage/lockers/**`, `/api/maintenance/**`, `/api/admin/lockers/**`
 - Payment: `/api/payments/**`, `/api/admin/payments/**`
 - Notification: `/api/notifications/**`, `/api/admin/notifications/**`, `/ws`, `/ws/**`
-- IoT: `/api/iot/**`
+- IoT: `/api/iot/**`, `/api/manage/iot/**` (mới 2026-06-16: device health dashboard, role MANAGER/ADMIN)
 - Store: `/api/stores/**`, `/api/admin/stores/**`
 - Staff: `/api/staff/**`
 - Loyalty: `/api/loyalty/**`, `/api/admin/loyalty/**`
@@ -358,12 +358,15 @@ Metadata quan trọng của box/cell:
 - `rowIndex`
 - `colIndex`
 - `faultReason`
+- `reservedUntil` (mới 2026-06-16, không expose qua API — chỉ dùng nội bộ cho backstop sweep, xem dưới)
 
 Loại cell hiện có:
 
 - `DRONE`: ô hàng trên cho drone deposit, chỉ reserve khi `channel=DRONE`.
 - `STANDARD`: ô bình thường cho customer/staff/SEND/LAUNDRY.
 - `XL`: ô lớn hơn cho storage/rental.
+
+`size` hiện có 2 giá trị thật trong demo seed (`MEDIUM` cho ô STANDARD/DRONE, `XL` cho ô vali) — `SMALL`/`LARGE` chỉ tồn tại trong logic fallback của `findAvailableBox` (2026-06-16, thứ tự SMALL→MEDIUM→LARGE→XL khi hết đúng size yêu cầu), chưa có dữ liệu seed thật để minh họa.
 
 Vòng đời cell hiện tại:
 
@@ -375,7 +378,7 @@ AVAILABLE/FAULT -> OUT_OF_SERVICE | CLEANING -> AVAILABLE (return-to-service)   
 
 Hành vi quan trọng:
 
-- `RESERVED`: flow đã giữ ô tủ.
+- `RESERVED`: flow đã giữ ô tủ. **(2026-06-16)** Mỗi lần reserve, `reservedUntil` được set = `now + app.locker.reserved-ttl-hours` (mặc định 24h, cùng cửa sổ `app.order.auto-cancel-hours`). `LockerScheduler.sweepExpiredReservations` (cron mỗi giờ) chỉ là **lưới an toàn**: order-service đã tự release ô khi auto-cancel đơn (sweep mỗi 15 phút) nên đường này hiếm khi cần kích hoạt, chỉ phòng khi sweep bên order-service gặp sự cố.
 - `OCCUPIED`: vật phẩm được xem là đang nằm trong ô tủ.
 - `FAULT`: trạng thái lỗi, chặn reserve bình thường cho đến khi clear.
 - `EXPIRED`: hiện được đại diện ở cấp order/deadline, chưa là cell status riêng.
@@ -624,6 +627,8 @@ Admin/manager/maintenance xem và xử lý:
   - `PUT /api/maintenance/reports/{id}/claim`
   - `PUT /api/maintenance/reports/{id}/resolve`
   - `POST /api/maintenance/boxes/{id}/clear-fault`
+  - `POST /api/maintenance/boxes/{id}/force-open` (mới 2026-06-16: mở ô khẩn cấp không cần PIN khách, luôn ghi audit log — xem mục 19)
+  - `GET /api/maintenance/my-rating-average` (mới 2026-06-16: điểm đánh giá trung bình KTV nhận được)
 
 Flow nghiệp vụ:
 
@@ -631,17 +636,19 @@ Flow nghiệp vụ:
 2. Backend mark cell thành `FAULT`.
 3. Backend tạo/cập nhật locker report với box id và lý do.
 4. Cell bị lỗi bị loại khỏi luồng reserve bình thường.
-5. Backend trả danh sách fault/report kèm locker name/code/address/toạ độ và thông tin ô nếu có.
+5. Backend trả danh sách fault/report kèm locker name/code/address/toạ độ, thông tin ô, và **(mới 2026-06-16)** tên/SĐT khách báo cáo (`reporterName`/`reporterPhone`, tra qua `user-service`, best-effort — không vỡ list nếu lookup lỗi).
 6. Maintenance user xem các report đang mở, ưu tiên theo trạng thái/SLA, và mở chỉ đường tới tủ lỗi.
 7. Maintenance claim report: `OPEN -> IN_PROGRESS`.
 8. Maintenance resolve report.
 9. Backend clear fault và đưa cell về `AVAILABLE`.
+10. **(Mới 2026-06-16)** Sau khi report `RESOLVED`, khách có thể đánh giá 1-5 sao (`POST /api/lockers/reports/{id}/rate`, upsert — đánh giá lại sẽ ghi đè), xem lại bằng `GET /api/lockers/reports/{id}/rating`. Maintenance xem điểm trung bình của chính mình qua `GET /api/maintenance/my-rating-average` (tính trên các report được `assignedToUserId` = mình).
 
 Lưu ý hiện tại:
 
 - `GET /api/maintenance/faults` và `GET /api/maintenance/reports` là nguồn dữ liệu chính cho mobile/web maintenance; client không gọi `/internal/**`.
-- Lịch bảo trì định kỳ, work log của technician, và bảo trì theo tần suất sử dụng vẫn là việc tương lai.
-- **Customer↔Maintenance qua lại (2026-06-16)**: khi maintenance `claim` hoặc `resolve` một report, `LockerService` publish event mới `locker.report.claimed`/`locker.report.resolved` (RabbitMQ exchange `laundry.events`, có binding riêng trong `notification-service`) kèm `userId` của khách đã báo cáo + message tiếng Việt có tên tủ; `notification-service` tạo notification thật (push/STOMP) cho khách. Khách xem trạng thái report của mình qua mobile, màn mới "Báo cáo của tôi" (`GET /api/lockers/my-reports`). Cả `POST /api/lockers/{id}/report` và `POST /api/boxes/{id}/fault` đều ghi vào cùng bảng `locker_reports` nên cùng được loop này phủ. Chưa expose nội dung `repair_logs` (work-log nội bộ KTV) cho khách — có thể làm tiếp nếu muốn loop sâu hơn kiểu chat.
+- Work log của technician (`repair_logs`) vẫn chưa hiện cho khách; bảo trì theo tần suất sử dụng vẫn là việc tương lai. Lịch bảo trì định kỳ (`maintenance_schedules`) đã có cả mobile và web (xem mục 13/21).
+- **Customer↔Maintenance qua lại (2026-06-16)**: khi maintenance `claim` hoặc `resolve` một report, `LockerService` publish event mới `locker.report.claimed`/`locker.report.resolved` (RabbitMQ exchange `laundry.events`, có binding riêng trong `notification-service`) kèm `userId` của khách đã báo cáo + message tiếng Việt có tên tủ; `notification-service` tạo notification thật (push/STOMP) cho khách. Khách xem trạng thái report của mình qua mobile, màn mới "Báo cáo của tôi" (`GET /api/lockers/my-reports`), và giờ có thể đánh giá ngược lại khi report xong — khép kín vòng phản hồi 2 chiều. Cả `POST /api/lockers/{id}/report` và `POST /api/boxes/{id}/fault` đều ghi vào cùng bảng `locker_reports` nên cùng được loop này phủ.
+- **Force-open khẩn cấp (2026-06-16)**: maintenance có thể mở ô không cần PIN khách qua `POST /api/maintenance/boxes/{id}/force-open` (locker-service gọi Feign `IotClient` → `POST /internal/iot/force-unlock` ở iot-service). Mọi lần mở (PIN/QR khách lẫn MASTER override) đều ghi vào bảng audit `box_access_logs` (actor, credential type, kết quả) — xem mục 19.
 
 ## 12. Luồng Manager Operations
 
@@ -693,8 +700,10 @@ Admin sidebar hiện gồm:
 Trang admin locker mới của Phase 2:
 
 - `/admin/lockers`
-- `/admin/lockers/:lockerId`
-- `/admin/maintenance`
+- `/admin/lockers/:lockerId` (`layout-view.tsx` — grid cell + action lifecycle: báo hỏng/đã sửa/ngưng dùng/vệ sinh/khôi phục/**mở khẩn cấp** cho từng ô, không phân biệt trạng thái)
+- `/admin/maintenance` (claim/resolve report, work-log, **2026-06-16**: thêm contact khách trên report, section "Bảo trì định kỳ" tạo/đã-kiểm-tra/xóa lịch, section "Sức khỏe thiết bị" liệt kê cabinet online/offline)
+
+Lưu ý: trang `Admin/lockers/detail.tsx` + `BoxForceOpenModal.tsx` vẫn còn trong codebase nhưng **không được route tới** (`routes-config.tsx` chỉ đăng ký `layout-view.tsx` cho `/admin/lockers/:lockerId`) — đây là code chết, không sửa/xóa trong phiên 2026-06-16 nhưng không nên coi là tính năng đang hoạt động.
 
 Flow nghiệp vụ:
 
@@ -912,12 +921,14 @@ IoT service sở hữu device status và command facade.
 Endpoint:
 
 - `POST /api/iot/device-status`
+- `GET /api/manage/iot/device-status` (mới 2026-06-16: liệt kê toàn bộ device status cho dashboard Manager/Admin — trước đó dữ liệu chỉ được ghi, không có cách đọc lại)
 - `POST /api/iot/unlock`
 - `POST /api/iot/verify-pin`
 - `POST /api/iot/verify-access`
 - `POST /api/iot/pickup`
 - `POST /api/iot/box-status`
 - `POST /internal/iot/device-status`
+- `POST /internal/iot/force-unlock` (mới 2026-06-16: maintenance override, gọi từ `locker-service`, chặn qua gateway public)
 
 Flow nghiệp vụ:
 
@@ -928,12 +939,15 @@ Flow nghiệp vụ:
 5. IoT service chấp nhận/publish lệnh mở qua MQTT facade.
 6. Device báo box status/open result.
 7. Backend cập nhật order/locker state nếu flow đã wire.
+8. **(Mới 2026-06-16)** Mọi lần mở (bước 5 thành công hoặc thất bại) được ghi vào bảng `iot_schema.box_access_logs` (boxId, lockerId, orderId nếu có, actorUserId, credentialType `PIN_OR_QR`|`MASTER`, result, message, thời gian). Maintenance cũng có thể bỏ qua bước 2-4 và gọi trực tiếp force-open (`POST /api/maintenance/boxes/{id}/force-open` → `/internal/iot/force-unlock`) khi cần mở ô không có PIN khách hợp lệ (vd ô FAULT không còn order active) — vẫn ghi audit log với `credentialType=MASTER`.
+9. **(Mới 2026-06-16)** `verifyAccess()` đếm số lần verify sai theo `boxId` (bảng `iot_schema.access_attempts`); quá `app.iot.lockout.max-attempts` (mặc định 5) trong cùng một chuỗi thì khóa box `app.iot.lockout.minutes` (mặc định 15) phút, từ chối mọi verify trong lúc đó kể cả PIN đúng.
 
 Lưu ý hiện tại:
 
 - Occupy từ sensor thật là Phase 3.
 - Python `smart-locker-iot` cần config MQTT broker khớp với backend và chế độ hardware/simulation.
 - Drone vẫn là future channel riêng, chỉ dùng cell `DRONE` khi `channel=DRONE`.
+- **Device health dashboard (2026-06-16)**: heartbeat/online-offline giờ xem được qua `GET /api/manage/iot/device-status` + section "Sức khỏe thiết bị" trong web admin — trước đó dữ liệu được ghi (`POST /api/iot/device-status`) nhưng không ai đọc lại được. Vẫn là poll REST (15s/khi load trang), **chưa** push realtime — event `iot.device.status.changed` vẫn chưa có consumer nào tiêu thụ.
 - **Mô phỏng mở tủ cho mobile (2026-06-16)**: `main.py` (hardware-track) chỉ trả lời lệnh mở sau khi nhận handshake `SETUP_LOCKERS` qua `iot/{macAddress}/command/setup` — chưa có code Java nào gửi handshake này, nên `main.py` (kể cả `SIMULATION=true`, cờ đó chỉ mock tầng serial) sẽ không trả lời `iot-service`. Thêm script độc lập `smart-locker-iot/simulate_demo_cabinet.py` (không sửa `main.py`/serial/setup) subscribe `cabinet/+/command/open` trực tiếp và trả lời đúng payload Java thật gửi (`{commandId, box_id, action, timeout}`, **không có** `lockerId`/`slotIndex` mà `main.py` mong đợi) trên `cabinet/{lockerId}/command/open/result`. Mobile gọi `POST /api/iot/unlock` qua nút "Mở tủ" trong chi tiết đơn. Khi có hardware + setup handshake thật, retire script này và dùng `main.py`; không cần đổi backend vì cùng contract MQTT.
 
 ## 20. RabbitMQ Events
@@ -986,7 +1000,7 @@ Revamp UI luồng tủ customer (2026-06-14):
 
 - 3 màn `locker_ops` (Gửi hàng / Thuê tủ / Đơn tủ của tôi) được đồng bộ về design system `AISLShadcnTheme` (navy + Manrope, bo góc 16, card trắng viền `#E2E8F0`) thay cho palette xanh `opsPrimary` cũ.
 - Design kit dùng chung: `ops_widgets.dart` (status/type color+label, format giá/ngày/`Còn…|Quá hạn…`, `OpsCard/OpsBanner/OpsPrimaryButton/OpsInfoRow/OpsEmptyState`, `AccessCredentials` hiển thị PIN dạng ô bấm-để-copy + QR có khung) và `locker_picker.dart` (chọn tủ qua bottom-sheet).
-- Màn Gửi hàng: stepper 2 giai đoạn (bỏ hàng → người nhận lấy) đúng luồng PIN 2 giai đoạn; banner hướng dẫn; hiển thị phí gửi và hạn nhận có định dạng.
+- Màn Gửi hàng: stepper 2 giai đoạn (bỏ hàng → người nhận lấy) đúng luồng PIN 2 giai đoạn; banner hướng dẫn; hiển thị phí gửi và hạn nhận có định dạng. **2026-06-16**: thêm chọn kích thước hàng (SMALL/MEDIUM/LARGE, mặc định MEDIUM) gửi kèm field `size` cho `POST /api/orders/send` — backend giờ fallback sang size lớn hơn nếu hết đúng size (xem mục 5/19 ghi chú cell).
 - Màn Thuê tủ: card chọn loại ô (STANDARD/XL kèm kích thước+đơn giá), chip giờ nhanh + slider, thẻ giá tính live.
 - Màn Đơn tủ của tôi: card đơn có countdown/cảnh báo quá hạn; detail sheet format ngày/giá, hiện phí phát sinh; **action gate đúng theo trạng thái+loại** (confirm bỏ đồ; hoàn tất; gia hạn/kết thúc thuê; ủy quyền; báo ô lỗi; hủy chỉ khi `INITIALIZED`); nút **Chỉ đường tới tủ** gọi `GET /api/lockers/{id}` rồi mở Google Maps bằng toạ độ hoặc địa chỉ.
 - **2026-06-16**: detail sheet thêm 2 action mới ở đầu danh sách — **"Mở tủ"** (primary, hiện khi có `boxId`+`pinCode` và đơn chưa `COMPLETED`/`CANCELED`; gọi `POST /api/iot/unlock`, hiện snackbar "Đang mở tủ..." vì có thể chờ tới ~20s nếu simulator/hardware không chạy, không tự chain sang confirm/complete) và **"Đặt lại đơn"** (primary, hiện khi `COMPLETED`/`CANCELED`; gọi `POST /api/orders/{id}/reorder`). Dialog báo lỗi ô (`_reportDialog`) sau khi gửi thành công giờ có nút "Xem" trong snackbar dẫn tới màn mới.
@@ -995,6 +1009,13 @@ Revamp UI luồng tủ customer (2026-06-14):
 Màn "Báo cáo của tôi" (mới, 2026-06-16):
 
 - Route `/locker/my-reports` (hằng số `AppRouter.myLockerReports`, không trùng `AppRouter.myReports` route legacy `/maintenance/my-reports`), trang `lib/features/locker_ops/presentation/pages/my_reports_page.dart`. Đọc `GET /api/lockers/my-reports`, hiện card trạng thái (`OPEN/IN_PROGRESS/RESOLVED`) dùng lại `ops_widgets.dart` (`StatusChip`, `OpsCard`, `OpsBanner`). Đây là trang mới trong `locker_ops` (style đơn giản Map<String,dynamic>), **không phải** rewire màn `ReportListPage`/`CreateReportPage` cũ trong `lib/features/maintenance/**` — màn cũ đó dùng kiến trúc clean-arch khác (entity `MaintenanceReport` có field `code/staffNote/photoUrls` không khớp `LockerReportResponse` hiện tại, bắt chọn theo cây Location→Cabinet→Locker cũ và bắt chụp đúng 2 ảnh) nên giữ nguyên không sửa/xoá, không liên kết từ UI mới — đúng tiền lệ tab "Đơn hàng" trước đây cũng repoint sang trang mới thay vì sửa `OrderPage` legacy.
+- **Cập nhật cùng ngày (chiều)**: card report ở trạng thái `RESOLVED` giờ hiện 5 sao để đánh giá (gọi `POST /api/lockers/reports/{id}/rate`) nếu chưa đánh giá, hoặc hiện lại điểm đã chấm (`GET /api/lockers/reports/{id}/rating`, 404 nếu chưa có — `LockerOpsService.getReportRating` bắt riêng case này, trả `null` thay vì throw).
+
+Maintenance home — bổ sung 2026-06-16 (chiều):
+
+- Bottom-sheet hành động của 1 ô (`_cellActions`) giờ luôn có thêm action **"Mở tủ khẩn cấp"** bất kể trạng thái ô — có dialog xác nhận ("hành động sẽ được ghi vào nhật ký") trước khi gọi `POST /api/maintenance/boxes/{id}/force-open`.
+- Report card hiện thêm contact khách báo cáo (`reporterName`/`reporterPhone`) nếu backend trả về.
+- Banner điểm đánh giá trung bình của KTV (`GET /api/maintenance/my-rating-average`) trên tab tổng quan ca trực, chỉ hiện khi đã có ít nhất 1 lượt đánh giá.
 
 Màn Cửa hàng (mới, 2026-06-13):
 

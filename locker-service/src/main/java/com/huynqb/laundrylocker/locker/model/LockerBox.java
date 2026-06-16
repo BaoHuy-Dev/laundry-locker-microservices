@@ -56,6 +56,10 @@ public class LockerBox {
   @Column(nullable = false, length = 30)
   private String status = "AVAILABLE";
 
+  /// Backstop expiry for a RESERVED hold; see LockerScheduler.sweepExpiredReservations.
+  @Column(name = "reserved_until")
+  private LocalDateTime reservedUntil;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
 

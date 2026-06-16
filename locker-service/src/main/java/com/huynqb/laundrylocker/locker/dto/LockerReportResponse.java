@@ -24,4 +24,6 @@ public record LockerReportResponse(
     String cellType,
     Integer slaHours,
     LocalDateTime slaDueAt,
-    Boolean overdue) {}
+    Boolean overdue,
+    String reporterName,
+    String reporterPhone) {}
