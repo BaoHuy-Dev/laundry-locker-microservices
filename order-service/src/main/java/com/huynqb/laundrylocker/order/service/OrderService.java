@@ -484,6 +484,38 @@ public class OrderService {
     if (!Set.of("COMPLETED", "CANCELED").contains(original.getStatus())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Only completed or canceled orders can be reordered");
     }
+    String type = original.getType() == null ? "" : original.getType().toUpperCase();
+    // SEND/RENTAL carry box reservation + pricing rules that the generic create()
+    // path below cannot reproduce (no cellType/hours field on CreateOrderRequest),
+    // so they reorder through the same entry points a fresh booking would use.
+    if ("SEND".equals(type)) {
+      return createSend(
+          new SendOrderRequest(
+              original.getLockerId(),
+              null,
+              null,
+              original.getReceiverPhone(),
+              original.getReceiverName(),
+              original.getCustomerNote(),
+              null,
+              null),
+          userId);
+    }
+    if ("RENTAL".equals(type)) {
+      long hours = 1;
+      if (original.getPickupDeadline() != null && original.getCreatedAt() != null) {
+        hours = Math.min(720, Math.max(1, ChronoUnit.HOURS.between(original.getCreatedAt(), original.getPickupDeadline())));
+      }
+      return createRental(
+          new RentalOrderRequest(
+              original.getLockerId(),
+              null,
+              cellTypeOfRental(original),
+              (int) hours,
+              original.getCustomerNote(),
+              null),
+          userId);
+    }
     List<OrderItemRequest> items =
         detailRepository.findByOrderId(originalOrderId).stream()
             .map(d -> new OrderItemRequest(d.getServiceId(), d.getQuantity(), d.getDescription()))

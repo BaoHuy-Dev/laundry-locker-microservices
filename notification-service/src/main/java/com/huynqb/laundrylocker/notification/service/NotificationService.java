@@ -157,10 +157,14 @@ public class NotificationService {
       case DomainEventNames.ORDER_STATUS_CHANGED -> "Order status changed";
       case DomainEventNames.PAYMENT_COMPLETED -> "Payment completed";
       case DomainEventNames.PAYMENT_FAILED -> "Payment failed";
+      case DomainEventNames.LOCKER_REPORT_CLAIMED -> "Báo cáo đang được xử lý";
+      case DomainEventNames.LOCKER_REPORT_RESOLVED -> "Báo cáo đã được xử lý xong";
       default -> "Notification";
     };
-    String message = event.type() + " event received";
-    create(new NotificationRequest(userId, title, message, event.type(), asLong(payload.get("orderId")), "EVENT"));
+    Object message = payload.getOrDefault("message", event.type() + " event received");
+    Long referenceId = asLong(payload.containsKey("referenceId") ? payload.get("referenceId") : payload.get("orderId"));
+    String referenceType = String.valueOf(payload.getOrDefault("referenceType", "ORDER"));
+    create(new NotificationRequest(userId, title, String.valueOf(message), event.type(), referenceId, referenceType));
   }
 
   private NotificationResponse toResponse(NotificationMessage notification) {
