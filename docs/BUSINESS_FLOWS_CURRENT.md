@@ -29,8 +29,11 @@ Dự án hiện tại là nền tảng Smart Laundry Locker gồm:
 Entrypoint chính của backend:
 
 ```text
-API Gateway: http://localhost:8080
+API Gateway (deploy, dùng chung cả nhóm): http://146.190.84.136:8080
+API Gateway (local khi chạy docker để dev): http://localhost:18080  (host 8080 thường bị chiếm)
 ```
+
+**Chính sách môi trường (chốt 2026-06-16):** cả nhóm dùng chung backend + PostgreSQL đã deploy trên DigitalOcean droplet `146.190.84.136`; không chạy local nữa, không bắt buộc bật docker (chỉ bật docker local khi đang sửa code backend để test). Web FE (`laundry-locker-frontend/fe`) và mobile (`smart-laundry-locker-mobile`) đều cấu hình base URL mặc định về `http://146.190.84.136:8080`. Vì client luôn đi qua gateway, trỏ FE/mobile về server đồng nghĩa dùng luôn database trên server (client không nối DB trực tiếp). Nối DB trực tiếp (DBeaver/psql) dùng `146.190.84.136:15432` nhưng cần mở port `15432` trên cloud firewall trước (hiện chỉ mở `22` + `8080`). Khi backend có code mới merge vào nhánh chính (`develop`), workflow `deploy-droplet.yml` tự deploy lên droplet và Flyway tự migrate DB lúc service khởi động.
 
 Phạm vi hiện tại cần ghi nhớ:
 
@@ -318,7 +321,7 @@ Hardening hiện tại:
 - CI/CD backend hiện có:
   - Backend CI chạy `mvn -B test`.
   - Backend security workflow chạy Dependency Review, CodeQL, generate SBOM artifact, và Trivy image scan cho 12 image có Dockerfile.
-  - Deploy workflow build bằng `mvn -B clean verify`, không skip test khi đóng gói deploy.
+  - Deploy workflow (`deploy-droplet.yml`) tự chạy khi `push` vào nhánh chính `develop` (+ `workflow_dispatch`): build bằng `mvn -B clean verify` (không skip test), đóng gói tarball, SCP/SSH vào droplet rồi `scripts/deploy-from-artifact.sh` chạy `docker compose up -d --build`. Mỗi service tự chạy Flyway migration lúc khởi động ⇒ **merge code mới vào `develop` sẽ tự deploy code + migrate DB trên server** (dữ liệu giữ qua docker volume Postgres).
   - Deploy artifact có SHA-256 checksum và GitHub artifact attestation/provenance; deploy script verify checksum nếu file `.sha256` được upload.
   - Deploy script mặc định chỉ chờ các Eureka apps có source trong repo; `laundry-service`/`partner-service` có thể được thêm lại bằng env `EUREKA_EXPECTED_APPS` khi source thật được khôi phục.
   - Release workflow theo tag `v*` tạo tarball backend, root CycloneDX SBOM, checksum, GitHub provenance attestation, upload artifact và publish GitHub Release.
