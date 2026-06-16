@@ -45,7 +45,7 @@ spring:
             - id: iot-service
               uri: lb://iot-service
               predicates:
-                - Path=/api/iot/**,/internal/iot/**
+                - Path=/api/iot/**,/internal/iot/**,/api/manage/iot/**
             - id: store-service
               uri: lb://store-service
               predicates:

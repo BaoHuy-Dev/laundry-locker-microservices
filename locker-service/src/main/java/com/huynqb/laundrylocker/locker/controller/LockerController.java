@@ -10,6 +10,8 @@ import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRequest;
 import com.huynqb.laundrylocker.locker.dto.LockerReportResponse;
+import com.huynqb.laundrylocker.locker.dto.LockerReportRatingRequest;
+import com.huynqb.laundrylocker.locker.dto.LockerReportRatingResponse;
 import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleRequest;
 import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleResponse;
 import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
@@ -184,6 +186,19 @@ public class LockerController {
         "BOX_RETURNED_TO_SERVICE", "Box returned to service", lockerService.returnToService(id));
   }
 
+  // Emergency override: open a box without the customer's PIN/QR. Always
+  // audited (credential type MASTER) by iot-service's box_access_logs.
+  @PostMapping("/api/maintenance/boxes/{id}/force-open")
+  public ApiResponse<Map<String, Object>> maintenanceForceOpen(
+      @PathVariable Long id, @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok("BOX_FORCE_OPEN_ACCEPTED", "Force open accepted", lockerService.forceOpen(id, userId));
+  }
+
+  @GetMapping("/api/maintenance/my-rating-average")
+  public ApiResponse<Map<String, Object>> maintenanceMyRatingAverage(@RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(lockerService.myRatingAverage(userId));
+  }
+
   @GetMapping("/api/maintenance/reports/{id}/logs")
   public ApiResponse<List<RepairLogResponse>> maintenanceReportLogs(@PathVariable Long id) {
     return ApiResponse.ok(lockerService.repairLogs(id));
@@ -244,6 +259,21 @@ public class LockerController {
   @GetMapping("/api/lockers/my-reports")
   public ApiResponse<List<LockerReportResponse>> myReports(@RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok(lockerService.myReports(userId));
+  }
+
+  // Closes the loop the other way: customer rates how maintenance handled
+  // their RESOLVED report. Owner-only, mirrors order-service's rate()/rating().
+  @PostMapping("/api/lockers/reports/{id}/rate")
+  public ApiResponse<LockerReportRatingResponse> rateReport(
+      @PathVariable Long id,
+      @Valid @RequestBody LockerReportRatingRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("REPORT_RATED", "Report rated", lockerService.rateReport(id, userId, request));
+  }
+
+  @GetMapping("/api/lockers/reports/{id}/rating")
+  public ApiResponse<LockerReportRatingResponse> reportRating(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.getReportRating(id));
   }
 
   @GetMapping("/api/admin/lockers/reports")

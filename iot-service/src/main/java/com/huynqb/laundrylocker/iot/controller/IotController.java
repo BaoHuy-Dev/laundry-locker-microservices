@@ -4,6 +4,7 @@ import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusResponse;
+import com.huynqb.laundrylocker.iot.dto.ForceUnlockRequest;
 import com.huynqb.laundrylocker.iot.dto.PickupRequest;
 import com.huynqb.laundrylocker.iot.dto.PickupResponse;
 import com.huynqb.laundrylocker.iot.dto.UnlockRequest;
@@ -11,8 +12,10 @@ import com.huynqb.laundrylocker.iot.dto.VerifyPinRequest;
 import com.huynqb.laundrylocker.iot.dto.VerifyPinResponse;
 import com.huynqb.laundrylocker.iot.service.IotService;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -29,9 +32,25 @@ public class IotController {
     return ApiResponse.ok("IOT_STATUS_UPDATED", "Device status updated", iotService.updateStatus(request));
   }
 
+  // Operations visibility for Manager/Admin — cabinet heartbeat was collected
+  // but never surfaced anywhere until now.
+  @GetMapping("/api/manage/iot/device-status")
+  public ApiResponse<List<DeviceStatusResponse>> listDeviceStatuses() {
+    return ApiResponse.ok(iotService.listDeviceStatuses());
+  }
+
   @PostMapping("/api/iot/unlock")
-  public ApiResponse<Map<String, Object>> unlock(@Valid @RequestBody UnlockRequest request) {
-    return ApiResponse.ok("IOT_UNLOCK_ACCEPTED", "Unlock command accepted", iotService.unlock(request));
+  public ApiResponse<Map<String, Object>> unlock(
+      @Valid @RequestBody UnlockRequest request,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok("IOT_UNLOCK_ACCEPTED", "Unlock command accepted", iotService.unlock(request, userId));
+  }
+
+  // Service-to-service only (blocked at gateway): maintenance force-open,
+  // called from locker-service's /api/maintenance/boxes/{id}/force-open.
+  @PostMapping("/internal/iot/force-unlock")
+  public ApiResponse<Map<String, Object>> forceUnlock(@Valid @RequestBody ForceUnlockRequest request) {
+    return ApiResponse.ok("IOT_FORCE_UNLOCK_ACCEPTED", "Force unlock accepted", iotService.forceUnlock(request));
   }
 
 
