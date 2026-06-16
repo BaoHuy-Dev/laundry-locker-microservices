@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-14
+> Cập nhật lần cuối: 2026-06-16
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -483,6 +483,8 @@ Hành vi quan trọng:
 - PIN ban đầu dành cho sender deposit.
 - Sau confirm drop, PIN được rotate thành PIN pickup cho receiver.
 - QR token gắn với PIN đang active, nên QR cũ sẽ invalid sau khi rotate PIN.
+- **Mở tủ qua mobile (2026-06-16)**: chi tiết đơn trên mobile có nút "Mở tủ" gọi `POST /api/iot/unlock` (xem mục 19) thay vì chỉ hiện PIN/QR để người dùng tự nhập ở thiết bị cabinet — vẫn 2 bước thủ công riêng (mở tủ rồi mới bấm "Xác nhận đã bỏ hàng"/"Hoàn tất"), không tự động chain.
+- **Đặt lại đơn (2026-06-16)**: `POST /api/orders/{orderId}/reorder` cho đơn SEND `COMPLETED`/`CANCELED` giờ gọi lại `createSend()` (tìm ô trống mới + sinh PIN/QR mới) thay vì hành vi cũ tạo đơn không có ô nào được giữ.
 
 ## 8. Luồng RENTAL
 
@@ -527,6 +529,7 @@ Hành vi quan trọng:
 - PIN rental không bị consume sau một lần mở.
 - Gia hạn rental tính phí theo loại cell thật.
 - Phí quá hạn có thể được `order-service` tính khi pickup/end trễ.
+- **Đặt lại đơn (2026-06-16)**: `POST /api/orders/{orderId}/reorder` cho đơn RENTAL `COMPLETED`/`CANCELED` giờ gọi lại `createRental()` với `cellType` suy từ ô của đơn cũ (`cellTypeOfRental()`) và `hours` suy từ khoảng `createdAt`→`pickupDeadline` của đơn cũ (clamp 1-720, fallback 1h) — trước đó tạo đơn không có ô/giá `0`/không hạn thuê.
 
 ## 9. Luồng Truy Cập Bằng PIN Và QR
 
@@ -635,6 +638,7 @@ Lưu ý hiện tại:
 
 - `GET /api/maintenance/faults` và `GET /api/maintenance/reports` là nguồn dữ liệu chính cho mobile/web maintenance; client không gọi `/internal/**`.
 - Lịch bảo trì định kỳ, work log của technician, và bảo trì theo tần suất sử dụng vẫn là việc tương lai.
+- **Customer↔Maintenance qua lại (2026-06-16)**: khi maintenance `claim` hoặc `resolve` một report, `LockerService` publish event mới `locker.report.claimed`/`locker.report.resolved` (RabbitMQ exchange `laundry.events`, có binding riêng trong `notification-service`) kèm `userId` của khách đã báo cáo + message tiếng Việt có tên tủ; `notification-service` tạo notification thật (push/STOMP) cho khách. Khách xem trạng thái report của mình qua mobile, màn mới "Báo cáo của tôi" (`GET /api/lockers/my-reports`). Cả `POST /api/lockers/{id}/report` và `POST /api/boxes/{id}/fault` đều ghi vào cùng bảng `locker_reports` nên cùng được loop này phủ. Chưa expose nội dung `repair_logs` (work-log nội bộ KTV) cho khách — có thể làm tiếp nếu muốn loop sâu hơn kiểu chat.
 
 ## 12. Luồng Manager Operations
 
@@ -927,6 +931,7 @@ Lưu ý hiện tại:
 - Occupy từ sensor thật là Phase 3.
 - Python `smart-locker-iot` cần config MQTT broker khớp với backend và chế độ hardware/simulation.
 - Drone vẫn là future channel riêng, chỉ dùng cell `DRONE` khi `channel=DRONE`.
+- **Mô phỏng mở tủ cho mobile (2026-06-16)**: `main.py` (hardware-track) chỉ trả lời lệnh mở sau khi nhận handshake `SETUP_LOCKERS` qua `iot/{macAddress}/command/setup` — chưa có code Java nào gửi handshake này, nên `main.py` (kể cả `SIMULATION=true`, cờ đó chỉ mock tầng serial) sẽ không trả lời `iot-service`. Thêm script độc lập `smart-locker-iot/simulate_demo_cabinet.py` (không sửa `main.py`/serial/setup) subscribe `cabinet/+/command/open` trực tiếp và trả lời đúng payload Java thật gửi (`{commandId, box_id, action, timeout}`, **không có** `lockerId`/`slotIndex` mà `main.py` mong đợi) trên `cabinet/{lockerId}/command/open/result`. Mobile gọi `POST /api/iot/unlock` qua nút "Mở tủ" trong chi tiết đơn. Khi có hardware + setup handshake thật, retire script này và dùng `main.py`; không cần đổi backend vì cùng contract MQTT.
 
 ## 20. RabbitMQ Events
 
@@ -981,7 +986,12 @@ Revamp UI luồng tủ customer (2026-06-14):
 - Màn Gửi hàng: stepper 2 giai đoạn (bỏ hàng → người nhận lấy) đúng luồng PIN 2 giai đoạn; banner hướng dẫn; hiển thị phí gửi và hạn nhận có định dạng.
 - Màn Thuê tủ: card chọn loại ô (STANDARD/XL kèm kích thước+đơn giá), chip giờ nhanh + slider, thẻ giá tính live.
 - Màn Đơn tủ của tôi: card đơn có countdown/cảnh báo quá hạn; detail sheet format ngày/giá, hiện phí phát sinh; **action gate đúng theo trạng thái+loại** (confirm bỏ đồ; hoàn tất; gia hạn/kết thúc thuê; ủy quyền; báo ô lỗi; hủy chỉ khi `INITIALIZED`); nút **Chỉ đường tới tủ** gọi `GET /api/lockers/{id}` rồi mở Google Maps bằng toạ độ hoặc địa chỉ.
+- **2026-06-16**: detail sheet thêm 2 action mới ở đầu danh sách — **"Mở tủ"** (primary, hiện khi có `boxId`+`pinCode` và đơn chưa `COMPLETED`/`CANCELED`; gọi `POST /api/iot/unlock`, hiện snackbar "Đang mở tủ..." vì có thể chờ tới ~20s nếu simulator/hardware không chạy, không tự chain sang confirm/complete) và **"Đặt lại đơn"** (primary, hiện khi `COMPLETED`/`CANCELED`; gọi `POST /api/orders/{id}/reorder`). Dialog báo lỗi ô (`_reportDialog`) sau khi gửi thành công giờ có nút "Xem" trong snackbar dẫn tới màn mới.
 - `flutter analyze` 0 error (debt info/warning cũ không đổi). Chưa smoke trên emulator phiên này.
+
+Màn "Báo cáo của tôi" (mới, 2026-06-16):
+
+- Route `/locker/my-reports` (hằng số `AppRouter.myLockerReports`, không trùng `AppRouter.myReports` route legacy `/maintenance/my-reports`), trang `lib/features/locker_ops/presentation/pages/my_reports_page.dart`. Đọc `GET /api/lockers/my-reports`, hiện card trạng thái (`OPEN/IN_PROGRESS/RESOLVED`) dùng lại `ops_widgets.dart` (`StatusChip`, `OpsCard`, `OpsBanner`). Đây là trang mới trong `locker_ops` (style đơn giản Map<String,dynamic>), **không phải** rewire màn `ReportListPage`/`CreateReportPage` cũ trong `lib/features/maintenance/**` — màn cũ đó dùng kiến trúc clean-arch khác (entity `MaintenanceReport` có field `code/staffNote/photoUrls` không khớp `LockerReportResponse` hiện tại, bắt chọn theo cây Location→Cabinet→Locker cũ và bắt chụp đúng 2 ảnh) nên giữ nguyên không sửa/xoá, không liên kết từ UI mới — đúng tiền lệ tab "Đơn hàng" trước đây cũng repoint sang trang mới thay vì sửa `OrderPage` legacy.
 
 Màn Cửa hàng (mới, 2026-06-13):
 
