@@ -1013,6 +1013,7 @@ Maintenance home — bổ sung 2026-06-16 (chiều):
 - Bottom-sheet hành động của 1 ô (`_cellActions`) giờ luôn có thêm action **"Mở tủ khẩn cấp"** bất kể trạng thái ô — có dialog xác nhận ("hành động sẽ được ghi vào nhật ký") trước khi gọi `POST /api/maintenance/boxes/{id}/force-open`.
 - Report card hiện thêm contact khách báo cáo (`reporterName`/`reporterPhone`) nếu backend trả về.
 - Banner điểm đánh giá trung bình của KTV (`GET /api/maintenance/my-rating-average`) trên tab tổng quan ca trực, chỉ hiện khi đã có ít nhất 1 lượt đánh giá.
+- **Làm lại UI (tối 2026-06-16, visual only)**: màn hình này trước đó là màn duy nhất chưa qua lần revamp design system (AppBar `#7F1D1D` cứng, `Card`/`Container` tự vẽ tay). Đã chuyển sang `BrandHeroHeader` + `OpsCard`/`OpsSectionLabel`/`OpsEmptyState`/`OpsBanner` đồng bộ với các màn customer; locker picker đổi sang `LockerPickerField` dùng lại từ Gửi hàng/Thuê tủ; cell-action bottom sheet đổi sang widget dùng chung mới `OpsSheetAction` (promote từ `_SheetAction` private của `my_locker_orders_page.dart` lên `ops_widgets.dart`, có thêm tham số `color` để giữ 5 màu hành động khác nhau). **Giữ nguyên 100% chức năng** — 4 tab, tên method/state, mọi endpoint gọi đều không đổi. `flutter analyze` 0 lỗi; chưa xem trực quan trên emulator phiên này.
 
 Màn Cửa hàng (mới, 2026-06-13):
 
