@@ -85,10 +85,16 @@ services:
       SPRING_DATASOURCE_PASSWORD: auth_pass
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
-      SPRING_MAIL_HOST: localhost
-      SPRING_MAIL_PORT: 1025
-      SPRING_MAIL_USERNAME: noreply@laundry.test
-      SPRING_MAIL_PASSWORD: ""
+      # SMTP overridable từ env/.env trên droplet để gửi OTP qua email thật.
+      # Mặc định localhost:1025 (mail-catcher dev, không auth/TLS) → giữ nguyên hành vi cũ.
+      # Gửi thật qua Gmail: đặt SPRING_MAIL_HOST=smtp.gmail.com, PORT=587,
+      # USERNAME=<gmail>, PASSWORD=<app password 16 ký tự>, SMTP_AUTH=true, STARTTLS=true.
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-localhost}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-1025}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-noreply@laundry.test}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_SMTP_AUTH:-false}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_SMTP_STARTTLS:-false}
       MANAGEMENT_HEALTH_MAIL_ENABLED: false
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
