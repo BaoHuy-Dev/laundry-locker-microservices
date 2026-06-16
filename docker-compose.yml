@@ -95,6 +95,9 @@ services:
       SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_SMTP_AUTH:-false}
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_SMTP_STARTTLS:-false}
+      # From/sender address. Một số relay (Brevo) bắt From phải là sender đã verify,
+      # khác với SMTP login → đặt APP_MAIL_FROM=<email đã verify>. Trống thì dùng SMTP username.
+      APP_MAIL_FROM: ${APP_MAIL_FROM:-}
       MANAGEMENT_HEALTH_MAIL_ENABLED: false
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka

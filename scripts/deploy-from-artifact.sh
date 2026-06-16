@@ -110,6 +110,13 @@ rm -rf "$NEW_DIR"
 mkdir -p "$NEW_DIR"
 tar -xzf "$ARCHIVE" -C "$NEW_DIR"
 
+# Preserve operator-managed .env (SMTP creds, API_GATEWAY_PORT, etc.) across deploys.
+# The artifact tarball does not contain .env, so without this each deploy would reset
+# the operator's runtime config back to compose defaults.
+if [ -f "$APP_DIR/.env" ]; then
+  cp "$APP_DIR/.env" "$NEW_DIR/.env"
+fi
+
 cd "$NEW_DIR"
 docker compose config >/tmp/laundry-locker-compose-check.yml
 

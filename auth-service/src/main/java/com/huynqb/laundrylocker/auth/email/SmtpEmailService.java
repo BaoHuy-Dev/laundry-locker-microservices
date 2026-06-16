@@ -10,6 +10,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 @Service
@@ -18,15 +19,26 @@ public class SmtpEmailService implements EmailService {
 
   private final JavaMailSender mailSender;
 
+  // Sender (From) address. Some relays (e.g. Brevo) require From to be a verified
+  // sender that differs from the SMTP login, so allow configuring it independently
+  // via app.mail.from; fall back to the SMTP username (fine for Gmail/SES where the
+  // login is itself the sender).
+  @Value("${app.mail.from:}")
+  private String configuredFrom;
+
   @Value("${spring.mail.username:noreply@example.com}")
-  private String fromEmail;
+  private String mailUsername;
+
+  private String fromEmail() {
+    return StringUtils.hasText(configuredFrom) ? configuredFrom : mailUsername;
+  }
 
   @Override
   @Async
   public void sendSimpleEmail(String to, String subject, String text) {
     try {
       SimpleMailMessage message = new SimpleMailMessage();
-      message.setFrom(fromEmail);
+      message.setFrom(fromEmail());
       message.setTo(to);
       message.setSubject(subject);
       message.setText(text);
@@ -41,7 +53,7 @@ public class SmtpEmailService implements EmailService {
     try {
       MimeMessage message = mailSender.createMimeMessage();
       MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-      helper.setFrom(fromEmail);
+      helper.setFrom(fromEmail());
       helper.setTo(to);
       helper.setSubject(subject);
       helper.setText(htmlContent, true);
