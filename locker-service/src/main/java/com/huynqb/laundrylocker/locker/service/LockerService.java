@@ -385,7 +385,10 @@ public class LockerService {
     report.setStatus("IN_PROGRESS");
     report.setAssignedToUserId(userId);
     report.setAssignedAt(java.time.LocalDateTime.now());
-    return toReport(reportRepository.save(report));
+    LockerReport saved = reportRepository.save(report);
+    publishReportNotification(saved, DomainEventNames.LOCKER_REPORT_CLAIMED,
+        "đang được đội bảo trì xử lý");
+    return toReport(saved);
   }
 
   // Resolving a report tied to a faulty cell also returns the cell to service —
@@ -406,7 +409,10 @@ public class LockerService {
             boxRepository.save(box);
           });
     }
-    return toReport(reportRepository.save(report));
+    LockerReport saved = reportRepository.save(report);
+    publishReportNotification(saved, DomainEventNames.LOCKER_REPORT_RESOLVED,
+        "đã được xử lý xong");
+    return toReport(saved);
   }
 
   /// L5: kỹ thuật viên thêm 1 dòng nhật ký xử lý vào phiếu bảo trì.
@@ -608,6 +614,33 @@ public class LockerService {
               Map.of("lockerId", box.getLockerId(), "boxId", box.getId(), "boxNumber", box.getBoxNumber())));
     } catch (AmqpException ex) {
       log.warn("Could not publish locker.box.opened for box {}: {}", box.getId(), ex.getMessage());
+    }
+  }
+
+  // Lets the reporting customer hear back when maintenance claims/resolves their
+  // ticket — notification-service turns this into an in-app + push notification.
+  private void publishReportNotification(LockerReport report, String eventType, String messageSuffix) {
+    if (report.getUserId() == null || report.getUserId() == 0L) {
+      return;
+    }
+    LockerUnit locker = lockerRepository.findById(report.getLockerId()).orElse(null);
+    String lockerLabel = locker == null ? ("#" + report.getLockerId()) : locker.getName();
+    String message = "Báo cáo lỗi tủ " + lockerLabel + " của bạn " + messageSuffix + ".";
+    try {
+      rabbitTemplate.convertAndSend(
+          DomainEventNames.EXCHANGE,
+          eventType,
+          DomainEvent.of(
+              eventType,
+              "locker-service",
+              Map.of(
+                  "userId", report.getUserId(),
+                  "referenceId", report.getId(),
+                  "referenceType", "LOCKER_REPORT",
+                  "lockerId", report.getLockerId(),
+                  "message", message)));
+    } catch (AmqpException ex) {
+      log.warn("Could not publish {} for report {}: {}", eventType, report.getId(), ex.getMessage());
     }
   }
 }

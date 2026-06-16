@@ -42,6 +42,16 @@ public class RabbitConfig {
   }
 
   @Bean
+  Binding reportClaimedBinding(Queue notificationEventsQueue, TopicExchange laundryEventsExchange) {
+    return BindingBuilder.bind(notificationEventsQueue).to(laundryEventsExchange).with(DomainEventNames.LOCKER_REPORT_CLAIMED);
+  }
+
+  @Bean
+  Binding reportResolvedBinding(Queue notificationEventsQueue, TopicExchange laundryEventsExchange) {
+    return BindingBuilder.bind(notificationEventsQueue).to(laundryEventsExchange).with(DomainEventNames.LOCKER_REPORT_RESOLVED);
+  }
+
+  @Bean
   MessageConverter domainEventMessageConverter() {
     SimpleMessageConverter converter = new SimpleMessageConverter();
     converter.setAllowedListPatterns(
