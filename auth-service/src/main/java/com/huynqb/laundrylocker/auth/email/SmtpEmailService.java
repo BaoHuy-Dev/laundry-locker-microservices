@@ -49,6 +49,7 @@ public class SmtpEmailService implements EmailService {
   }
 
   @Override
+  @Async
   public void sendHtmlEmail(String to, String subject, String htmlContent) {
     try {
       MimeMessage message = mailSender.createMimeMessage();
