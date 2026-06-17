@@ -51,7 +51,7 @@ public class EmailOtpService {
             .otp-container::before { content: ''; position: absolute; top: -1px; left: -1px; width: 10px; height: 10px; border-top: 2px solid #00a3ff; border-left: 2px solid #00a3ff; }
             .otp-container::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-bottom: 2px solid #00a3ff; border-right: 2px solid #00a3ff; }
             .otp-label { font-family: 'Orbitron', sans-serif; font-size: 10px; color: #00a3ff; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 15px; }
-            .otp-code { font-family: 'Orbitron', monospace; font-size: 48px; font-weight: 700; color: #ffffff; letter-spacing: 12px; text-shadow: 0 0 15px rgba(0, 163, 255, 0.5); }
+            .otp-code { font-family: 'Orbitron', monospace; font-size: 36px; font-weight: 700; color: #ffffff; letter-spacing: 8px; text-shadow: 0 0 15px rgba(0, 163, 255, 0.5); white-space: nowrap; }
             .expiry { font-size: 13px; color: #f43f5e; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; background: rgba(244, 63, 94, 0.1); padding: 8px 16px; border-radius: 20px; }
             .footer { padding: 30px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.05); background: #03070d; }
             .footer-text { font-size: 12px; color: #4b6a8e; line-height: 1.6; margin: 0; }
