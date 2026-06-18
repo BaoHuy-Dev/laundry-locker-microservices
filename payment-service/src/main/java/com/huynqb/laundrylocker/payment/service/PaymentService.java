@@ -5,9 +5,11 @@ import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
 import com.huynqb.laundrylocker.common.security.SecuritySecrets;
 import com.huynqb.laundrylocker.payment.dto.CreatePaymentRequest;
+import com.huynqb.laundrylocker.payment.dto.CreateTopupRequest;
 import com.huynqb.laundrylocker.payment.dto.PaymentResponse;
 import com.huynqb.laundrylocker.payment.dto.RefundRequest;
 import com.huynqb.laundrylocker.payment.dto.RefundResponse;
+import com.huynqb.laundrylocker.payment.dto.TopupResponse;
 import com.huynqb.laundrylocker.payment.dto.UpdatePaymentStatusRequest;
 import com.huynqb.laundrylocker.payment.model.PaymentRecord;
 import com.huynqb.laundrylocker.payment.model.RefundRecord;
@@ -115,9 +117,7 @@ public class PaymentService {
   public PaymentResponse handleVnPayReturn(Map<String, String> params) {
     String txnRef = params.get("vnp_TxnRef");
     PaymentRecord payment =
-        repository.findAll().stream()
-            .filter(p -> txnRef != null && txnRef.equals(p.getReferenceId()))
-            .findFirst()
+        repository.findByReferenceId(txnRef)
             .orElseThrow(() -> new NotFoundException("Payment", -1L));
     payment.setReferenceTransactionId(params.get("vnp_TransactionNo"));
     boolean success = verifyVnPay(params) && "00".equals(params.get("vnp_ResponseCode"));
@@ -125,6 +125,44 @@ public class PaymentService {
     PaymentRecord saved = repository.save(payment);
     publish(success ? DomainEventNames.PAYMENT_COMPLETED : DomainEventNames.PAYMENT_FAILED, saved);
     return toResponse(saved);
+  }
+
+  @Transactional
+  public TopupResponse createTopupUrl(Long userId, CreateTopupRequest request) {
+    String txnRef = "TOPUP_" + userId + "_" + System.currentTimeMillis();
+    String effectiveReturnUrl = StringUtils.hasText(request.returnUrl()) ? request.returnUrl() : vnpayReturnUrl;
+
+    Map<String, String> params = new TreeMap<>();
+    params.put("vnp_Version", "2.1.0");
+    params.put("vnp_Command", "pay");
+    params.put("vnp_TmnCode", vnpayTmnCode);
+    params.put("vnp_Amount", request.amount().multiply(BigDecimal.valueOf(100)).toBigInteger().toString());
+    params.put("vnp_CurrCode", "VND");
+    params.put("vnp_TxnRef", txnRef);
+    params.put("vnp_OrderInfo", "Nap tien vao vi " + request.amount().toPlainString() + " VND");
+    params.put("vnp_OrderType", "other");
+    params.put("vnp_Locale", StringUtils.hasText(request.locale()) ? request.locale() : "vn");
+    params.put("vnp_ReturnUrl", effectiveReturnUrl);
+    params.put("vnp_IpAddr", "127.0.0.1");
+    params.put("vnp_CreateDate", DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
+    if (StringUtils.hasText(request.bankCode())) {
+      params.put("vnp_BankCode", request.bankCode());
+    }
+    String hashData = query(params);
+    params.put("vnp_SecureHash", hmac("HmacSHA512", vnpayHashSecret, hashData));
+    String paymentUrl = vnpayPayUrl + "?" + query(params);
+
+    PaymentRecord payment = new PaymentRecord();
+    payment.setOrderId(0L);
+    payment.setUserId(userId);
+    payment.setAmount(request.amount());
+    payment.setMethod("VNPAY_TOPUP");
+    payment.setReferenceId(txnRef);
+    payment.setUrl(paymentUrl);
+    payment.setDescription("Nạp tiền ví qua VNPay");
+    repository.save(payment);
+
+    return new TopupResponse(paymentUrl, txnRef);
   }
 
   @Transactional
