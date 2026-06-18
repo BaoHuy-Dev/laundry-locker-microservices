@@ -56,6 +56,12 @@ public class Promotion {
   @Column(name = "usage_count", nullable = false)
   private Integer usageCount = 0;
 
+  @Column(name = "image_url", length = 500)
+  private String imageUrl;
+
+  @Column(name = "description", length = 1000)
+  private String description;
+
   @Column(name = "created_by_user_id")
   private Long createdByUserId;
 

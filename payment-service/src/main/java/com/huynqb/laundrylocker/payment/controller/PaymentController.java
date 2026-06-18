@@ -2,9 +2,11 @@ package com.huynqb.laundrylocker.payment.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.payment.dto.CreatePaymentRequest;
+import com.huynqb.laundrylocker.payment.dto.CreateTopupRequest;
 import com.huynqb.laundrylocker.payment.dto.PaymentResponse;
 import com.huynqb.laundrylocker.payment.dto.RefundRequest;
 import com.huynqb.laundrylocker.payment.dto.RefundResponse;
+import com.huynqb.laundrylocker.payment.dto.TopupResponse;
 import com.huynqb.laundrylocker.payment.dto.UpdatePaymentStatusRequest;
 import com.huynqb.laundrylocker.payment.service.PaymentService;
 import jakarta.validation.Valid;
@@ -26,6 +28,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
 
   private final PaymentService paymentService;
+
+  @PostMapping("/api/payments/topup/create")
+  public ApiResponse<TopupResponse> createTopup(
+      @Valid @RequestBody CreateTopupRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("TOPUP_URL_CREATED", "Topup URL created", paymentService.createTopupUrl(userId, request));
+  }
+
+  // Alias callback path that matches what the mobile WebView detects
+  @GetMapping("/payments/vnpay/callback")
+  public ApiResponse<PaymentResponse> vnpayCallback(@RequestParam Map<String, String> params) {
+    return ApiResponse.ok("PAYMENT_RETURN_PROCESSED", "VNPay callback processed", paymentService.handleVnPayReturn(params));
+  }
 
   @PostMapping("/api/payments")
   public ApiResponse<PaymentResponse> create(@Valid @RequestBody CreatePaymentRequest request) {

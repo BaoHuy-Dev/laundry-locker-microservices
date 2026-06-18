@@ -173,7 +173,8 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
         || path.equals("/swagger-ui.html")
         || path.startsWith("/webjars")
         || path.startsWith("/api/payments/vnpay")
-        || path.startsWith("/api/payments/momo")) {
+        || path.startsWith("/api/payments/momo")
+        || path.startsWith("/payments/vnpay/callback")) {
       return true;
     }
     // Catalogue browsing is anonymous; any mutation requires a JWT.
