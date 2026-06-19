@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-16
+> Cập nhật lần cuối: 2026-06-18 (session 2)
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -271,7 +271,7 @@ Route ownership của gateway:
 - User: `/api/user/**`, `/api/users/**`, `/api/admin/users/**`, `/api/admin/audit-logs/**`
 - Order: `/api/orders/**`, `/api/manage/orders/**`, `/api/admin/orders/**`, `/api/admin/scheduler/**`, `/api/admin/dashboard/**`, `/api/promotions/**`, `/api/admin/promotions/**`
 - Locker: `/api/lockers/**`, `/api/boxes/**`, `/api/manage/lockers/**`, `/api/maintenance/**`, `/api/admin/lockers/**`
-- Payment: `/api/payments/**`, `/api/admin/payments/**`
+- Payment: `/api/payments/**`, `/api/admin/payments/**`, `/payments/vnpay/callback` (public alias cho mobile WebView VNPay topup callback, thêm 2026-06-18)
 - Notification: `/api/notifications/**`, `/api/admin/notifications/**`, `/ws`, `/ws/**`
 - IoT: `/api/iot/**`, `/api/manage/iot/**` (mới 2026-06-16: device health dashboard, role MANAGER/ADMIN)
 - Store: `/api/stores/**`, `/api/admin/stores/**`
@@ -749,6 +749,8 @@ Payment service sở hữu payment records và refund records.
 
 Endpoint customer/public:
 
+- `POST /api/payments/topup/create` **(mới 2026-06-18, auth required)**: tạo VNPay URL nạp ví. Body: `{amount: decimal ≥1000, returnUrl?, bankCode?, locale?}`. Response: `{paymentUrl, txnRef}`. userId lấy từ `X-User-Id` header (inject bởi gateway).
+- `GET /payments/vnpay/callback` **(mới 2026-06-18, PUBLIC)**: alias callback path để mobile WebView detect VNPay redirect. Cùng handler với `/api/payments/vnpay/return`. Route qua gateway không cần JWT.
 - `POST /api/payments`
 - `POST /api/payments/create`
 - `PATCH /api/payments/{id}/status`
@@ -785,6 +787,7 @@ Lưu ý hiện tại:
 - Credential provider production và đối soát phụ thuộc environment.
 - UX thanh toán cho SEND/RENTAL chưa hoàn tất end-to-end; order service đã expose flags/giá, nhưng product flow thanh toán cuối cùng cần làm tiếp.
 - Khi chạy profile `prod`/`production`, payment service fail-fast nếu VNPay/MoMo config còn là demo, sandbox, localhost hoặc default placeholder.
+- **(2026-06-18) Wallet topup VNPay**: flow tạo URL và ghi nhận callback COMPLETED đã có, nhưng **số dư user KHÔNG thay đổi** — không có wallet/balance service. Xem mục 26 để biết design và TODO đầy đủ.
 
 ## 16. Luồng Thông Báo
 
@@ -1060,7 +1063,7 @@ App Flutter có gốc từ app cũ (Revoland/courier) nên nhiều màn legacy g
 
 **Feature mobile legacy CHƯA wire backend hiện tại (gọi endpoint chết, nên ẩn hoặc dựng lại sau):**
 
-- Ví/nạp tiền: `/wallet/balance`, `/payments/topup/*`, `/payments/transactions*` (không có backend ví).
+- Ví/nạp tiền: `POST /api/payments/topup/create` đã có backend **(2026-06-18)**; `GET /wallet/balance` và `GET /payments/transactions*` vẫn chưa có (không có wallet service) — xem mục 26 để hoàn thiện.
 - Khuôn mặt/QR-login: `/auth/ai/*`, `/auth/face-verify`, `/auth/qr/confirm` (không có AI service).
 - Courier/giao hàng + đăng ký nhân viên: `/courier/*`, `/orders/courier/*`, `/staff-applications`.
 - Ủy quyền (màn legacy): `/delegations/*` (luồng ủy quyền thật dùng `POST /api/orders/{id}/delegate`).
@@ -1082,7 +1085,7 @@ App vẫn còn route/feature cho:
 - Courier dispatch/delivery.
 - Face verify/registration.
 - Transactions/top-up.
-- Vouchers.
+- Vouchers (route `/my-vouchers` còn tồn tại nhưng chip "Ưu đãi" trên home đã redirect về `/promotions` — xem mục 27).
 - User laundry order.
 - QR login scanner.
 
@@ -1090,7 +1093,37 @@ Không nên xem các feature trên là hoàn tất với backend hiện tại n�
 
 Lỗi không chặn demo hiện tại:
 
-- Home có thể gọi endpoint legacy như `/advertisements`, `/blogs`, `/wallet/balance`; backend hiện tại có thể trả `404`.
+- Home có thể gọi endpoint legacy như `/advertisements`, `/blogs`, `/wallet/balance`; backend hiện tại có thể trả `404`. **(2026-06-19)** Đã short-circuit ở client (không gọi nữa) — xem mục "Tạm ẩn tính năng" bên dưới.
+
+### Sửa lỗi đỏ khi chạy trên web (2026-06-19)
+
+Khi chạy `flutter run -d chrome`, app báo nhiều lỗi đỏ + đổ thông tin nhạy cảm ra console. Đã sửa:
+
+- **Firebase trên web**: bọc init bằng `if (!kIsWeb)` trong `main.dart` — web chưa cấu hình `DefaultFirebaseOptions` nên trước đó ném lỗi đỏ "DefaultFirebaseOptions have not been configured for web". FCM chỉ chạy trên Android/iOS.
+- **Dio logger**: `PrettyDioLogger` tắt `requestHeader/requestBody/responseBody` (`dio_client.dart`), chỉ còn dòng request + lỗi. Trước đó in cả `accessToken`/`refreshToken` + toàn bộ body ra console (rủi ro lộ token + nhiễu).
+- **RenderFlex overflow màn Đăng nhập**: Row "Đăng nhập nhanh (DEV)" tràn ~68px khi viewport hẹp (vd màn chia đôi với DevTools); bọc Text giữa vào `Flexible` + `ellipsis` (`login_screen.dart`). Không xảy ra ở bề rộng mặc định.
+- **Logo launcher**: icon trong project ĐÃ là logo navy đúng (`mipmap-*/ic_launcher.png`); nếu máy còn hiện icon Flutter mặc định là do APK build cũ → cần `flutter build apk` + cài lại (gỡ app cũ nếu launcher cache icon).
+
+### Tạm ẩn tính năng backend chưa có (2026-06-19)
+
+Để hết "lỗi báo đỏ" trên Network/log và không hiển thị màn rỗng/sai cho người dùng, các tính năng mobile gọi endpoint **chưa tồn tại ở backend** đã được **tạm ẩn ở mức UI** bằng cờ trong `lib/core/config/feature_flags.dart` (tất cả mặc định `false`; chỉ cần đổi `true` để bật lại khi backend sẵn sàng — **không xóa route/page nào**):
+
+| Cờ | Tính năng ẩn | Endpoint thiếu | Nơi ẩn |
+|---|---|---|---|
+| `walletEnabled` | Ví/số dư | `GET /wallet/balance` | Card "Số dư ví" ở home header + section ví ở courier home; `WalletProvider.getWalletBalance()` short-circuit (không gọi mạng) |
+| `transactionsEnabled` | Nạp tiền + lịch sử giao dịch | `GET /payments/transactions` | Menu "Giao dịch" ở Profile (route `/transactions`, `/top-up` còn nhưng không có entry-point) |
+| `subscriptionEnabled` | Gói dịch vụ/subscription | `/plans/customer`, `/pricings`, `/subscriptions/*` | Menu "Gói dịch vụ" ở Profile |
+| `vouchersEnabled` | Kho voucher cá nhân | `GET /promotions/vouchers/my` | Menu "Ưu đãi & Quà tặng" ở Profile |
+| `homeContentFeedEnabled` | Quảng cáo + blog trang chủ | `/advertisements`, `/blogs` | `HomeRepository` short-circuit (trả rỗng, không gọi mạng) |
+
+Lưu ý quan trọng:
+- Trang **"Ưu đãi"** (PromotionsPage, `GET /api/promotions/active`) **vẫn hoạt động** và KHÔNG bị ẩn — chip "Ưu đãi" + section Flash Sale ở home dùng endpoint thật này.
+- Flow **SEND/RENTAL thật** (`locker_ops`) không phụ thuộc ví nên không bị ảnh hưởng. Các màn thanh toán legacy phụ thuộc ví (`confirm_rent_page`/`locker_action_page`) là code chết, không reachable từ UI.
+- Khi backend bổ sung wallet service (xem mục 26), bật `walletEnabled`/`transactionsEnabled` lại; tương tự cho subscription/voucher/ads-blog khi có service tương ứng.
+
+### Logo app (2026-06-19)
+
+Đổi logo app sang logo tủ khóa nền navy người dùng cung cấp: `assets/images/logo.png` (dùng cho splash/onboarding/appbar) + regen launcher icon Android (`mipmap-*/ic_launcher.png`, mọi mật độ) và iOS (`AppIcon.appiconset/*`) qua `flutter_launcher_icons` (đổi `pubspec.yaml` `flutter_launcher_icons.android` → `true` để khớp manifest `@mipmap/ic_launcher`). Không đổi API/flow nghiệp vụ.
 
 ## 22. Luồng Web Frontend
 
@@ -1193,3 +1226,174 @@ Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ t
 - **L1 (phần order-layer) — ĐÃ LÀM** trên branch `fix/locker-reservation-ttl-and-release`: `autoCancelUnconfirmedOrders` giờ **release ô** khi hủy và chạy transition đầy đủ (history + event + notify); thêm job `@Scheduled` (`OrderScheduler.sweepUnconfirmedReservations`, cron mặc định mỗi 15 phút). Đóng **G1** (auto-cancel chưa @Scheduled) và **G2** (ô kẹt `RESERVED` của đơn bỏ dở) ở mức hành vi. Cửa sổ giữ chỗ cấu hình `app.order.auto-cancel-hours` (mặc định 24h). Verify: `mvn -pl order-service -am test` BUILD SUCCESS. *(Phần cell-level `reserved_until` TTL trong locker-service vẫn là follow-up.)*
 - **Mobile UI luồng tủ — ĐÃ LÀM** trên branch `feat/locker-customer-ui-revamp` (xem mục 21).
 - L2–L7: chưa làm.
+
+## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18)
+
+> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | Wallet/balance update ❌ | Test thực tế ❌
+
+### Endpoint đã implement
+
+```
+POST /api/payments/topup/create
+  Auth: Bearer JWT required (X-User-Id inject tự động bởi JwtGatewayFilter từ claims.getSubject())
+  Body: { amount: decimal (min 1000), returnUrl?: string, bankCode?: string, locale?: string }
+  Response: { paymentUrl: string, txnRef: string }
+
+GET /payments/vnpay/callback  (PUBLIC — không cần JWT)
+  VNPay redirect browser/WebView về đây sau thanh toán
+  Mobile WebView detect URL chứa /payments/vnpay/callback → đóng WebView, báo thành công
+  Cùng logic handler với GET /api/payments/vnpay/return
+```
+
+### Flow nghiệp vụ hiện tại (đã có code)
+
+```
+1. User chọn số tiền (20k–1M VND) trên màn hình NẠP TIỀN (top_up_page.dart)
+2. Mobile POST /api/payments/topup/create → nhận { paymentUrl, txnRef } từ VNPay sandbox
+3. App mở WebView với paymentUrl (trang thanh toán VNPay)
+4. User hoàn tất thanh toán trên VNPay (nhập OTP/chọn ngân hàng)
+5. VNPay redirect WebView đến /payments/vnpay/callback?vnp_*=...
+6. Spring Boot payment-service xử lý callback:
+   - Verify VNPay HMAC signature
+   - findByReferenceId(txnRef) → cập nhật PaymentRecord status = COMPLETED
+7. Mobile WebView detect url.contains('/payments/vnpay/callback') → đóng WebView
+8. App hiện thông báo thành công
+9. [THIẾU] App refresh wallet balance (GET /api/wallet/balance — CHƯA IMPLEMENT)
+```
+
+### Thiết kế kỹ thuật quan trọng
+
+- `orderId = 0L` là sentinel value cho topup (DB constraint `order_id NOT NULL` được giữ, dùng 0 thay null)
+- `method = "VNPAY_TOPUP"` để phân biệt với payment thông thường của order
+- `txnRef = "TOPUP_{userId}_{System.currentTimeMillis()}"` — pattern từ reference backend aisl_backend
+- `returnUrl` từ mobile = `{apiBaseUrl}/payments/vnpay/callback` → phải route qua gateway về payment-service
+- Flyway V2 thêm index `idx_payments_reference_id` trên `payment_schema.payments(reference_id)` để callback lookup nhanh (thay `findAll().stream()` trước đó)
+
+### Database
+
+- Table: `payment_schema.payments`
+- `order_id = 0` (sentinel, không có order thật)
+- `method = "VNPAY_TOPUP"`
+- `reference_id = txnRef = "TOPUP_{userId}_{timestamp}"`
+- Flyway: `V2__allow_topup_payments.sql` (chỉ thêm index, không đổi schema)
+
+### Routing (api-gateway)
+
+- `/api/payments/**` → payment-service (route cũ)
+- `/payments/vnpay/callback` → payment-service (**thêm 2026-06-18**, PUBLIC)
+- `/payments/vnpay/callback` đã thêm vào `isPublic()` của `JwtGatewayFilter` (không yêu cầu JWT)
+
+### Files đã thay đổi
+
+**Backend — laundry-locker-microservices (Spring Boot, backend chính):**
+
+| File | Loại | Thay đổi |
+|---|---|---|
+| `payment-service/.../dto/CreateTopupRequest.java` | MỚI | record: `amount @NotNull @Min(1000)`, `returnUrl`, `bankCode`, `locale` |
+| `payment-service/.../dto/TopupResponse.java` | MỚI | record: `paymentUrl`, `txnRef` |
+| `payment-service/.../repository/PaymentRepository.java` | SỬA | thêm `Optional<PaymentRecord> findByReferenceId(String referenceId)` |
+| `payment-service/.../service/PaymentService.java` | SỬA | thêm `createTopupUrl(Long userId, CreateTopupRequest)`, fix `handleVnPayReturn` dùng index |
+| `payment-service/.../controller/PaymentController.java` | SỬA | thêm `POST /api/payments/topup/create` và `GET /payments/vnpay/callback` |
+| `payment-service/.../db/migration/V2__allow_topup_payments.sql` | MỚI | `CREATE INDEX IF NOT EXISTS idx_payments_reference_id` |
+| `api-gateway/.../resources/application.yml` | SỬA | thêm `/payments/vnpay/callback` vào route predicates của payment-service |
+| `api-gateway/.../JwtGatewayFilter.java` | SỬA | thêm `path.startsWith("/payments/vnpay/callback")` vào `isPublic()` |
+
+**Mobile — smart-laundry-locker-mobile (Flutter):**
+
+| File | Loại | Thay đổi |
+|---|---|---|
+| `lib/features/transactions/infrastructure/data_sources/top_up_remote_data_source_impl.dart` | SỬA | `_path`: `/payments/topup/create` → `/api/payments/topup/create` |
+| `lib/features/transactions/infrastructure/repositories/top_up_repository_impl.dart` | SỬA | Thêm catch cho `NotFoundException`, `ServerException`, `NetworkException`, `ValidationException`, `AuthenticationException` (thay `UnknownFailure(e.toString())` generic) |
+
+### TODO bắt buộc cho developer tiếp theo
+
+**[P0 — CHẶN TÍNH NĂNG]** Sau khi VNPay callback COMPLETED, balance user không thay đổi. Cần implement wallet/balance service:
+
+1. **Chọn kiến trúc wallet**: thêm cột `balance DECIMAL` vào `user_profiles` (user-service) HOẶC tạo `wallet-service` riêng với bảng `wallets(user_id, balance)`. Khuyến nghị: thêm vào user-service để đơn giản.
+
+2. **Publish RabbitMQ event sau topup COMPLETED**: trong `PaymentService.handleVnPayReturn()`, khi `vnp_ResponseCode = "00"` và `method = "VNPAY_TOPUP"`, publish event:
+   ```json
+   { "eventName": "wallet.topup.completed", "userId": <long>, "amount": <decimal>, "txnRef": "TOPUP_..." }
+   ```
+   lên exchange `laundry.events`.
+
+3. **Consumer trong user-service (hoặc wallet-service)**: subscribe routing key `wallet.topup.completed`, cộng `amount` vào `balance` của user tương ứng. **Thêm idempotency**: check `payment.reference_id` đã được process chưa trước khi cộng (tránh double-credit nếu callback retry).
+
+4. **Implement `GET /api/wallet/balance`**: endpoint trả `{ balance: decimal, currency: "VND" }` cho mobile đọc số dư sau topup.
+
+5. **Mobile**: sau khi WebView đóng (topup success), gọi `GET /api/wallet/balance` và cập nhật UI wallet card trên home.
+
+**[P1 — TEST]** Test với VNPay sandbox thật:
+- Set `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` trong payment-service config
+- Local test với device thật: cần `ngrok http 8080` → dùng ngrok URL làm `API_BASE_URL` trong mobile `.env` (KHÔNG commit)
+- VNPay sandbox merchant cần whitelist URL domain
+
+**[P2 — OPTIONAL]** Thêm màn lịch sử giao dịch ví (gọi `GET /api/payments?method=VNPAY_TOPUP` hoặc endpoint riêng)
+
+---
+
+## 27. Home Page Redesign — Flash Sale & Promotions (2026-06-18)
+
+### Thay đổi UI mobile (customer home)
+
+| Khu vực | Trước | Sau |
+|---|---|---|
+| Dưới wallet card | `_buildWelcomeCard` → `_buildStoreSection` (legacy) | `_buildPopularLockersSection` (horizontal scroll locker cards) |
+| Cuối trang | `_buildTodayServicesSection` (3 service plan cards cứng) | `_buildFlashSaleSection` (horizontal scroll promotion cards từ API thật) |
+| Chip "Ưu đãi" | Navigate → `/my-vouchers` (gọi `/promotions/vouchers/my` — endpoint CHẾT) | Navigate → `/promotions` (gọi `GET /api/promotions/active` — endpoint THẬT) |
+
+### Promotions API (đã tồn tại trong order-service)
+
+| Endpoint | Auth | Mô tả |
+|---|---|---|
+| `GET /api/promotions/active` | Public (không cần JWT) | Trả `List<Promotion>` đang hiệu lực (`status=ACTIVE` + trong khoảng `startAt`–`endAt`) |
+| `GET /api/promotions/validate/{code}` | Public | Validate và tính discount cho 1 mã |
+| `POST /api/admin/promotions` | ADMIN | Tạo promotion mới |
+| `GET /api/admin/promotions` | ADMIN | Lấy tất cả promotions (admin) |
+
+**Route gateway**: `/api/promotions/**` → `order-service` (đã có sẵn).
+
+**Promotion entity fields** (sau migration V4 — 2026-06-18):
+```
+id, code, name, description (NEW), imageUrl (NEW),
+discountType (FIXED_AMOUNT|PERCENTAGE), discountValue,
+maxDiscountAmount, minOrderAmount, stackable,
+status (ACTIVE|INACTIVE), startAt, endAt, usageCount
+```
+
+### Mobile: Promotions feature (lib/features/promotions/)
+
+```
+data/
+  models/promotion_model.dart        — PromotionModel, discountLabel, expiryLabel, shortDiscountLabel
+  repositories/promotion_repository.dart — GET /api/promotions/active
+presentation/
+  providers/promotion_provider.dart  — ChangeNotifierProvider (Riverpod legacy), promotionNotifierProvider
+  pages/promotions_page.dart         — Trang full list ưu đãi, có copy-code, countdown, image/gradient
+```
+
+**Provider init**: `home_page.dart` initState + `_onRefresh` đều gọi `ref.read(promotionNotifierProvider).load()`.
+
+### Flash Sale cards (home)
+
+- Width 260×175px, horizontal scroll
+- Background: `imageUrl` nếu admin set, fallback gradient từ `_gradients[]`
+- Badge cam "FLASH SALE ⚡" (top-left) + badge đỏ discount (top-right, e.g. "-30%" hoặc "-50Kđ")
+- Bottom: tên promotion + countdown expiry + code chip (tap = copy to clipboard + SnackBar)
+- Empty state: `SizedBox.shrink()` — ẩn hoàn toàn section nếu không có promotions
+
+### Lỗi "Ưu đãi" chip cũ (đã fix)
+
+`VoucherRepository.getMyVouchers()` gọi `/promotions/vouchers/my` — endpoint này **không tồn tại** trong backend. Đã fix bằng cách đổi chip → `/promotions` dùng `GET /api/promotions/active` thật.
+
+Route `/my-vouchers` + `MyVouchersPage` vẫn còn trong code nhưng không còn được navigate từ home chip — giữ lại cho tương lai nếu cần implement user-specific voucher assignment.
+
+### Backend migration V4 (order-service)
+
+File: `order-service/src/main/resources/db/migration/V4__promotions_image_description.sql`
+```sql
+ALTER TABLE order_schema.promotions ADD COLUMN IF NOT EXISTS image_url VARCHAR(500);
+ALTER TABLE order_schema.promotions ADD COLUMN IF NOT EXISTS description VARCHAR(1000);
+```
+
+Chạy tự động khi deploy (Flyway). Idempotent nhờ `IF NOT EXISTS`.
