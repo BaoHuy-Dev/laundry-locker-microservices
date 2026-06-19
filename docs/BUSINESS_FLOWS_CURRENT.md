@@ -1093,7 +1093,37 @@ Không nên xem các feature trên là hoàn tất với backend hiện tại n�
 
 Lỗi không chặn demo hiện tại:
 
-- Home có thể gọi endpoint legacy như `/advertisements`, `/blogs`, `/wallet/balance`; backend hiện tại có thể trả `404`.
+- Home có thể gọi endpoint legacy như `/advertisements`, `/blogs`, `/wallet/balance`; backend hiện tại có thể trả `404`. **(2026-06-19)** Đã short-circuit ở client (không gọi nữa) — xem mục "Tạm ẩn tính năng" bên dưới.
+
+### Sửa lỗi đỏ khi chạy trên web (2026-06-19)
+
+Khi chạy `flutter run -d chrome`, app báo nhiều lỗi đỏ + đổ thông tin nhạy cảm ra console. Đã sửa:
+
+- **Firebase trên web**: bọc init bằng `if (!kIsWeb)` trong `main.dart` — web chưa cấu hình `DefaultFirebaseOptions` nên trước đó ném lỗi đỏ "DefaultFirebaseOptions have not been configured for web". FCM chỉ chạy trên Android/iOS.
+- **Dio logger**: `PrettyDioLogger` tắt `requestHeader/requestBody/responseBody` (`dio_client.dart`), chỉ còn dòng request + lỗi. Trước đó in cả `accessToken`/`refreshToken` + toàn bộ body ra console (rủi ro lộ token + nhiễu).
+- **RenderFlex overflow màn Đăng nhập**: Row "Đăng nhập nhanh (DEV)" tràn ~68px khi viewport hẹp (vd màn chia đôi với DevTools); bọc Text giữa vào `Flexible` + `ellipsis` (`login_screen.dart`). Không xảy ra ở bề rộng mặc định.
+- **Logo launcher**: icon trong project ĐÃ là logo navy đúng (`mipmap-*/ic_launcher.png`); nếu máy còn hiện icon Flutter mặc định là do APK build cũ → cần `flutter build apk` + cài lại (gỡ app cũ nếu launcher cache icon).
+
+### Tạm ẩn tính năng backend chưa có (2026-06-19)
+
+Để hết "lỗi báo đỏ" trên Network/log và không hiển thị màn rỗng/sai cho người dùng, các tính năng mobile gọi endpoint **chưa tồn tại ở backend** đã được **tạm ẩn ở mức UI** bằng cờ trong `lib/core/config/feature_flags.dart` (tất cả mặc định `false`; chỉ cần đổi `true` để bật lại khi backend sẵn sàng — **không xóa route/page nào**):
+
+| Cờ | Tính năng ẩn | Endpoint thiếu | Nơi ẩn |
+|---|---|---|---|
+| `walletEnabled` | Ví/số dư | `GET /wallet/balance` | Card "Số dư ví" ở home header + section ví ở courier home; `WalletProvider.getWalletBalance()` short-circuit (không gọi mạng) |
+| `transactionsEnabled` | Nạp tiền + lịch sử giao dịch | `GET /payments/transactions` | Menu "Giao dịch" ở Profile (route `/transactions`, `/top-up` còn nhưng không có entry-point) |
+| `subscriptionEnabled` | Gói dịch vụ/subscription | `/plans/customer`, `/pricings`, `/subscriptions/*` | Menu "Gói dịch vụ" ở Profile |
+| `vouchersEnabled` | Kho voucher cá nhân | `GET /promotions/vouchers/my` | Menu "Ưu đãi & Quà tặng" ở Profile |
+| `homeContentFeedEnabled` | Quảng cáo + blog trang chủ | `/advertisements`, `/blogs` | `HomeRepository` short-circuit (trả rỗng, không gọi mạng) |
+
+Lưu ý quan trọng:
+- Trang **"Ưu đãi"** (PromotionsPage, `GET /api/promotions/active`) **vẫn hoạt động** và KHÔNG bị ẩn — chip "Ưu đãi" + section Flash Sale ở home dùng endpoint thật này.
+- Flow **SEND/RENTAL thật** (`locker_ops`) không phụ thuộc ví nên không bị ảnh hưởng. Các màn thanh toán legacy phụ thuộc ví (`confirm_rent_page`/`locker_action_page`) là code chết, không reachable từ UI.
+- Khi backend bổ sung wallet service (xem mục 26), bật `walletEnabled`/`transactionsEnabled` lại; tương tự cho subscription/voucher/ads-blog khi có service tương ứng.
+
+### Logo app (2026-06-19)
+
+Đổi logo app sang logo tủ khóa nền navy người dùng cung cấp: `assets/images/logo.png` (dùng cho splash/onboarding/appbar) + regen launcher icon Android (`mipmap-*/ic_launcher.png`, mọi mật độ) và iOS (`AppIcon.appiconset/*`) qua `flutter_launcher_icons` (đổi `pubspec.yaml` `flutter_launcher_icons.android` → `true` để khớp manifest `@mipmap/ic_launcher`). Không đổi API/flow nghiệp vụ.
 
 ## 22. Luồng Web Frontend
 
