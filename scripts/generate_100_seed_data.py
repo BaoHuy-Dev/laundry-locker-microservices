@@ -47,7 +47,9 @@ def main():
         email = f"user{user_id}@laundry.test"
         role = random.choice(["CUSTOMER", "CUSTOMER", "CUSTOMER", "MANAGER", "MAINTENANCE"])
         avatar = f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_id}"
-        users_sql.append(f"INSERT INTO user_schema.user_profiles (id, phone, email, full_name, avatar_url, roles, status, created_at, updated_at) VALUES ({user_id}, '{phone}', '{email}', {escape_sql(name)}, '{avatar}', '{role}', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);")
+        first_name = name.split()[0] if " " in name else name
+        last_name = name.split(" ", 1)[1] if " " in name else ""
+        users_sql.append(f"INSERT INTO user_schema.user_profiles (id, phone_number, email, first_name, last_name, image_url, roles, status, created_at, updated_at) VALUES ({user_id}, '{phone}', '{email}', {escape_sql(first_name)}, {escape_sql(last_name)}, '{avatar}', '{role}', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);")
     output.extend(users_sql)
     output.append("")
 
@@ -62,9 +64,9 @@ def main():
         auth_id = base_id + i
         user_id = base_id + i
         phone = f"09100{i:05d}"
-        auth_sql.append(f"INSERT INTO auth_schema.auth_accounts (id, user_id, identifier, password_hash, provider, is_email_verified, is_phone_verified, status, created_at, updated_at) VALUES ({auth_id}, {user_id}, '{phone}', '{demo_hash}', 'LOCAL', true, true, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);")
-        auth_sql.append(f"INSERT INTO auth_schema.refresh_tokens (id, account_id, token, expires_at, created_at) VALUES ({auth_id}, {auth_id}, '{uuid.uuid4()}', CURRENT_TIMESTAMP + INTERVAL '30 days', CURRENT_TIMESTAMP);")
-        auth_sql.append(f"INSERT INTO auth_schema.email_otps (id, email, otp_hash, expires_at, created_at) VALUES ({auth_id}, 'user{user_id}@laundry.test', 'hash', CURRENT_TIMESTAMP + INTERVAL '5 minutes', CURRENT_TIMESTAMP);")
+        auth_sql.append(f"INSERT INTO auth_schema.auth_accounts (id, user_id, email, phone_number, password_hash, auth_provider, email_verified, phone_verified, status, created_at, updated_at) VALUES ({auth_id}, {user_id}, 'user{user_id}@laundry.test', '{phone}', '{demo_hash}', 'LOCAL', true, true, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);")
+        auth_sql.append(f"INSERT INTO auth_schema.refresh_tokens (id, account_id, token_hash, expires_at, created_at) VALUES ({auth_id}, {auth_id}, '{uuid.uuid4()}', CURRENT_TIMESTAMP + INTERVAL '30 days', CURRENT_TIMESTAMP);")
+        auth_sql.append(f"INSERT INTO auth_schema.email_otps (id, email, otp_hash, purpose, expires_at, created_at) VALUES ({auth_id}, 'user{user_id}@laundry.test', 'hash', 'VERIFY_EMAIL', CURRENT_TIMESTAMP + INTERVAL '5 minutes', CURRENT_TIMESTAMP);")
     output.extend(auth_sql)
     output.append("")
 
