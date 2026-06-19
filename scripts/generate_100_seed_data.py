@@ -172,9 +172,9 @@ def main():
         locker_id = base_id + i
         box_id = base_id + i
         user_id = base_id + i
-        iot_sql.append(f"INSERT INTO iot_schema.device_statuses (id, locker_id, is_online, last_seen_at) VALUES ({iot_id}, {locker_id}, true, CURRENT_TIMESTAMP);")
-        iot_sql.append(f"INSERT INTO iot_schema.box_access_logs (id, box_id, actor_id, credential_type, result, created_at) VALUES ({iot_id}, {box_id}, {user_id}, 'PIN', 'SUCCESS', CURRENT_TIMESTAMP);")
-        iot_sql.append(f"INSERT INTO iot_schema.access_attempts (id, box_id, attempts, last_attempt_at) VALUES ({iot_id}, {box_id}, 1, CURRENT_TIMESTAMP);")
+        iot_sql.append(f"INSERT INTO iot_schema.device_statuses (id, device_id, locker_id, status, last_seen_at) VALUES ({iot_id}, 'dev_{iot_id}', {locker_id}, 'ONLINE', CURRENT_TIMESTAMP);")
+        iot_sql.append(f"INSERT INTO iot_schema.box_access_logs (id, box_id, actor_user_id, credential_type, result, created_at) VALUES ({iot_id}, {box_id}, {user_id}, 'PIN', 'SUCCESS', CURRENT_TIMESTAMP);")
+        iot_sql.append(f"INSERT INTO iot_schema.access_attempts (box_id, failed_count) VALUES ({box_id}, 1);")
     output.extend(iot_sql)
     output.append("")
 
@@ -186,8 +186,8 @@ def main():
     for i in range(count):
         noti_id = base_id + i
         user_id = base_id + i
-        noti_sql.append(f"INSERT INTO notification_schema.notifications (id, user_id, title, body, is_read, type, created_at) VALUES ({noti_id}, {user_id}, 'Title', 'Body', false, 'ORDER_UPDATE', CURRENT_TIMESTAMP);")
-        noti_sql.append(f"INSERT INTO notification_schema.fcm_tokens (id, user_id, token, device_id, created_at) VALUES ({noti_id}, {user_id}, 'fcm_{noti_id}', 'dev_{noti_id}', CURRENT_TIMESTAMP);")
+        noti_sql.append(f"INSERT INTO notification_schema.notifications (id, user_id, title, message, is_read, type, created_at) VALUES ({noti_id}, {user_id}, 'Title', 'Message body', false, 'ORDER_UPDATE', CURRENT_TIMESTAMP);")
+        noti_sql.append(f"INSERT INTO notification_schema.fcm_tokens (id, user_id, token, device_type, created_at) VALUES ({noti_id}, {user_id}, 'fcm_{noti_id}', 'ANDROID', CURRENT_TIMESTAMP);")
     output.extend(noti_sql)
     output.append("")
 
