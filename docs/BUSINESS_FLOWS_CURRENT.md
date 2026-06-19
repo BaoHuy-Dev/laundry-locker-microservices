@@ -1115,6 +1115,7 @@ Khi chạy `flutter run -d chrome`, app báo nhiều lỗi đỏ + đổ thông 
 | `subscriptionEnabled` | Gói dịch vụ/subscription | `/plans/customer`, `/pricings`, `/subscriptions/*` | Menu "Gói dịch vụ" ở Profile |
 | `vouchersEnabled` | Kho voucher cá nhân | `GET /promotions/vouchers/my` | Menu "Ưu đãi & Quà tặng" ở Profile |
 | `homeContentFeedEnabled` | Quảng cáo + blog trang chủ | `/advertisements`, `/blogs` | `HomeRepository` short-circuit (trả rỗng, không gọi mạng) |
+| `faceRecognitionEnabled` | Nhận diện khuôn mặt (đăng ký/đăng nhập) | `/api/auth/ai/registered/{id}`, `/api/auth/ai/register`, `/api/auth/ai/verify` (trả **500**) | `ProfileProvider._getFaceRegistrationStatus` short-circuit (không gọi mạng) + ẩn menu "Đăng ký khuôn mặt" ở Profile (2026-06-19) |
 
 Lưu ý quan trọng:
 - Trang **"Ưu đãi"** (PromotionsPage, `GET /api/promotions/active`) **vẫn hoạt động** và KHÔNG bị ẩn — chip "Ưu đãi" + section Flash Sale ở home dùng endpoint thật này.
