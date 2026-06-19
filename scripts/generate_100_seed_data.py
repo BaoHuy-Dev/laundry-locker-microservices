@@ -156,8 +156,9 @@ def main():
         pay_id = base_id + i
         order_id = base_id + i
         amount = random.randint(10, 50) * 1000
-        payment_sql.append(f"INSERT INTO payment_schema.payments (id, order_id, amount, method, status, provider_txn_id, created_at, updated_at) VALUES ({pay_id}, {order_id}, {amount}, 'VNPAY', 'COMPLETED', 'TXN{10000+i}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);")
-        payment_sql.append(f"INSERT INTO payment_schema.refunds (id, payment_id, amount, reason, status, created_at) VALUES ({pay_id}, {pay_id}, {amount}, 'Khách yêu cầu huỷ', 'COMPLETED', CURRENT_TIMESTAMP);")
+        user_id = base_id + i
+        payment_sql.append(f"INSERT INTO payment_schema.payments (id, order_id, user_id, amount, method, status, reference_transaction_id, created_at, updated_at) VALUES ({pay_id}, {order_id}, {user_id}, {amount}, 'VNPAY', 'COMPLETED', 'TXN{10000+i}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);")
+        payment_sql.append(f"INSERT INTO payment_schema.refunds (id, payment_id, order_id, amount, reason, status, requested_at) VALUES ({pay_id}, {pay_id}, {order_id}, {amount}, 'Khách yêu cầu huỷ', 'COMPLETED', CURRENT_TIMESTAMP);")
     output.extend(payment_sql)
     output.append("")
 
@@ -165,7 +166,7 @@ def main():
     output.append("\\connect iot_db")
     output.append("DELETE FROM iot_schema.device_statuses WHERE id >= 10000;")
     output.append("DELETE FROM iot_schema.box_access_logs WHERE id >= 10000;")
-    output.append("DELETE FROM iot_schema.access_attempts WHERE id >= 10000;")
+    output.append("DELETE FROM iot_schema.access_attempts WHERE box_id >= 10000;")
     iot_sql = []
     for i in range(count):
         iot_id = base_id + i
