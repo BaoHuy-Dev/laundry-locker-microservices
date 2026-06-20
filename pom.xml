@@ -41,12 +41,18 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- CVE patches: override Spring Boot managed versions -->
         <tomcat.version>10.1.55</tomcat.version>
-        <netty.version>4.1.133.Final</netty.version>
+        <netty.version>4.1.135.Final</netty.version>
         <postgresql.version>42.7.11</postgresql.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- CVE patch: firebase-admin pulls grpc-netty-shaded 1.67.1, override to 1.75.0 -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty-shaded</artifactId>
+                <version>1.75.0</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
