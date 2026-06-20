@@ -342,8 +342,37 @@ SELECT 'DEV-DEMO-' || lpad(g::text, 3, '0'), 9000 + g,
        NOW() - ((g % 60) || ' minutes')::interval, NOW(), NOW()
 FROM generate_series(1, 100) AS g;
 
+-- =====================================================================
+-- STAFF test account (password = 12345678, same bcrypt as accounts above)
+--   STAFF       staff@lockr.test      user_id 9005
+--   TECHNICIAN  tech@lockr.test       user_id 9006
+-- =====================================================================
+\connect user_db
+
+DELETE FROM user_schema.user_profiles
+ WHERE id IN (9005, 9006)
+    OR email IN ('staff@lockr.test', 'tech@lockr.test');
+
+INSERT INTO user_schema.user_profiles
+  (id, email, phone_number, first_name, last_name, birthday, image_url, status, roles, created_at, updated_at)
+VALUES
+  (9005, 'staff@lockr.test',       '0980000005', 'Demo',  'Staff',       DATE '1995-05-05', NULL, 'ACTIVE', 'STAFF',       NOW(), NOW()),
+  (9006, 'tech@lockr.test',        '0980000006', 'Demo',  'Technician',  DATE '1993-06-06', NULL, 'ACTIVE', 'TECHNICIAN',  NOW(), NOW());
+
+\connect auth_db
+
+DELETE FROM auth_schema.auth_accounts
+ WHERE user_id IN (9005, 9006)
+    OR email IN ('staff@lockr.test', 'tech@lockr.test');
+
+INSERT INTO auth_schema.auth_accounts
+  (user_id, email, phone_number, password_hash, auth_provider, email_verified, phone_verified, status, last_login_at, created_at, updated_at)
+VALUES
+  (9005, 'staff@lockr.test',  '0980000005', :'pw', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW(), NOW(), NOW()),
+  (9006, 'tech@lockr.test',   '0980000006', :'pw', 'LOCAL', TRUE, TRUE, 'ACTIVE', NOW(), NOW(), NOW());
+
 \echo '====================================================================='
 \echo ' FULL DEMO SEED applied.'
-\echo '   4 accounts (pw 12345678): admin/customer/maintenance/manager + 100 bulk'
+\echo '   6 accounts (pw 12345678): admin/customer/maintenance/manager/staff/technician + 100 bulk'
 \echo '   stores 100, lockers 100, boxes 900, orders 100, payments 100, etc.'
 \echo '====================================================================='
