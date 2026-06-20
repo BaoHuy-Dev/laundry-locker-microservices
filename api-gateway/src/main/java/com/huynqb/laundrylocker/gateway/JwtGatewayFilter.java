@@ -141,6 +141,12 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
     if (path.startsWith("/api/maintenance")) {
       return hasAny(roles, "MAINTENANCE", "ADMIN");
     }
+    if (path.startsWith("/api/staff")) {
+      return hasAny(roles, "STAFF", "ADMIN");
+    }
+    if (path.startsWith("/api/technician")) {
+      return hasAny(roles, "TECHNICIAN", "ADMIN");
+    }
     return true;
   }
 
