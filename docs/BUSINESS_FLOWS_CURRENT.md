@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-18 (session 2)
+> Cập nhật lần cuối: 2026-06-20 (PA4 — STAFF+TECHNICIAN roles)
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -150,25 +150,34 @@ Response của `faults` và `reports` hiện trả thêm metadata định vị l
 
 ### Staff
 
-> **ĐÃ GỠ HOÀN TOÀN (PA3 đợt 2, 2026-06-15)**: `staff-service` (module Maven + container + route gateway `/api/staff/**`) và DB `staff_db`/bảng `staff_assignments` đã bị xóa — không luồng nào dùng (order-service xử lý SEND/RENTAL/LAUNDRY trực tiếp). Cũng giải phóng 1 JVM trên droplet. Phần mô tả endpoint bên dưới chỉ còn giá trị lịch sử.
+> **Tái tạo (PA4, 2026-06-20)**: `staff-service` riêng đã bị gỡ (PA3 2026-06-15), nhưng RBAC path `/api/staff/**` đã được thêm lại dưới dạng controllers nhẹ trong locker-service và order-service. Không có DB riêng, không có service riêng. `StaffController` trong locker-service và `StaffOrderController` trong order-service reuse hoàn toàn service methods sẵn có.
 
-Dùng cho các flow vận hành cũ/legacy:
+Gateway yêu cầu `STAFF` hoặc `ADMIN` cho `/api/staff/**`.
 
-- Gán staff cho đơn.
-- Liệt kê đơn của staff theo trạng thái.
-- Mở ô tủ thông qua staff facade.
+Endpoint backend hiện có (read-only):
+
+- `GET /api/staff/lockers` — locker list (optionally filtered by `?storeId=`) → locker-service
+- `GET /api/staff/lockers/{id}/layout` — grid layout ô tủ → locker-service
+- `GET /api/staff/lockers/stats` — occupancy stats (optionally filtered by `?storeId=`) → locker-service
+- `GET /api/staff/orders` — active orders (optionally filtered by `?status=&type=&lockerId=`) → order-service
+
+Test account: `staff@lockr.test` / `12345678` (user_id 9005).
+
+### Technician
+
+> **Mới (PA4, 2026-06-20)**: Role TECHNICIAN mới, dùng cho nhân viên kỹ thuật IoT. `TechnicianController` trong iot-service reuse `DeviceStatusRepository` và `BoxAccessLogRepository`.
+
+Gateway yêu cầu `TECHNICIAN` hoặc `ADMIN` cho `/api/technician/**`.
 
 Endpoint backend hiện có:
 
-- `POST /api/staff/assignments`
-- `POST /api/staff/orders/{orderId}/assign`
-- `GET /api/staff/orders/my-assigned`
-- `GET /api/staff/orders`
-- `GET /api/staff/orders/waiting`
-- `GET /api/staff/orders/processing`
-- `GET /api/staff/orders/ready`
-- `GET /api/staff/lockers`
-- `POST /api/staff/unlock-box`
+- `GET /api/technician/devices` — danh sách tất cả IoT device và trạng thái hiện tại
+- `GET /api/technician/devices/{id}` — chi tiết một device (health, last-seen, status)
+- `PUT /api/technician/devices/{id}/status` — override thủ công trạng thái device (`{status: "ONLINE"|"OFFLINE"|"ERROR"}`)
+- `GET /api/technician/devices/{id}/logs` — audit log (box_access_logs) của locker được device gắn với, mới nhất trước
+- `POST /api/technician/devices/{id}/restart` — publish lệnh restart qua MQTT (best-effort), luôn ghi audit log dù MQTT thất bại
+
+Test account: `tech@lockr.test` / `12345678` (user_id 9006).
 
 ### Partner (đã gỡ)
 
