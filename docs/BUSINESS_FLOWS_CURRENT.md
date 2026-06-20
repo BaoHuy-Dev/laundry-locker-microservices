@@ -228,7 +228,7 @@ Hành vi backend (`AuthService.firebaseLogin`):
 
 Lưu trữ: bảng mới `auth_schema.social_identities(account_id, provider, provider_user_id)` unique `(provider, provider_user_id)` — migration `auth-service V2__auth_social_identities.sql`. `password_hash` giữ `NOT NULL` (social/phone dùng random hash).
 
-Khởi tạo Firebase Admin: `app.firebase.credentials-json` (`FIREBASE_CREDENTIALS_JSON`, nội dung service account JSON). `FirebaseConfig` fail-soft khi thiếu credential (chỉ log warn, không chặn boot). **Facebook** chưa bật ở mobile (backend đã sẵn sàng nhận mọi `sign_in_provider`).
+Khởi tạo Firebase Admin: `app.firebase.credentials-json` (`FIREBASE_CREDENTIALS_JSON`, nội dung service account JSON). `FirebaseConfig` fail-soft khi thiếu credential (chỉ log warn, không chặn boot). **Facebook (2026-06-21)** đã wire ở mobile (`flutter_facebook_auth` + native config strings.xml/AndroidManifest, `signInWithFacebook()` → Firebase credential → cùng endpoint `/api/auth/firebase`); chạy thật khi đã bật Facebook provider trong Firebase (App ID/Secret) + thêm OAuth redirect URI. Backend không cần đổi (nhận mọi `sign_in_provider`).
 
 Mobile (`smart-laundry-locker-mobile`): `firebase_auth` + `google_sign_in` (v7) trong `FirebaseAuthService`; UI nút Google + dialog phone-OTP trong `auth_bottom_sheet.dart` (cả tab Đăng nhập lẫn Đăng ký) → `LoginProvider.loginWithGoogle()/sendPhoneOtp()/confirmPhoneOtp()` → `POST /api/auth/firebase`.
 
