@@ -5,6 +5,7 @@ import com.huynqb.laundrylocker.common.dto.UserSummary;
 import com.huynqb.laundrylocker.user.client.AuthClient;
 import com.huynqb.laundrylocker.user.client.NotificationClient;
 import com.huynqb.laundrylocker.user.dto.UserProfileRequest;
+import com.huynqb.laundrylocker.user.dto.AdminCreateUserRequest;
 import com.huynqb.laundrylocker.user.service.UserProfileService;
 import java.util.HashMap;
 import java.util.List;
@@ -122,8 +123,31 @@ public class UserController {
   }
 
   @PostMapping("/api/admin/users")
-  public ApiResponse<UserSummary> adminCreate(@RequestBody UserProfileRequest request) {
-    return create(request);
+  public ApiResponse<UserSummary> adminCreate(@RequestBody AdminCreateUserRequest request) {
+    UserProfileRequest profileRequest = new UserProfileRequest(
+        request.email(),
+        request.phoneNumber(),
+        request.firstName(),
+        request.lastName(),
+        request.birthday(),
+        request.imageUrl(),
+        request.status(),
+        request.roles()
+    );
+    UserSummary user = userProfileService.create(profileRequest);
+    try {
+      Map<String, Object> payload = new HashMap<>();
+      payload.put("userId", user.id());
+      payload.put("email", user.email());
+      payload.put("phoneNumber", user.phoneNumber());
+      payload.put("password", request.password());
+      payload.put("roles", request.roles());
+      authClient.createAccount(payload);
+    } catch (Exception ex) {
+      userProfileService.delete(user.id());
+      throw new com.huynqb.laundrylocker.common.exception.BusinessException("ACCOUNT_CREATION_FAILED", "Failed to create auth account: " + ex.getMessage());
+    }
+    return ApiResponse.ok("USER_CREATED", "User created", user);
   }
 
   @GetMapping("/api/admin/users/{id}")

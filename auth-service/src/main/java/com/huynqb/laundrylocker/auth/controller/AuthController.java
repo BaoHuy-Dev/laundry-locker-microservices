@@ -5,6 +5,8 @@ import com.huynqb.laundrylocker.auth.dto.LoginRequest;
 import com.huynqb.laundrylocker.auth.dto.LogoutRequest;
 import com.huynqb.laundrylocker.auth.dto.RefreshTokenRequest;
 import com.huynqb.laundrylocker.auth.dto.RegisterRequest;
+import com.huynqb.laundrylocker.auth.dto.CreateAccountRequest;
+import com.huynqb.laundrylocker.auth.dto.FirebaseLoginRequest;
 import com.huynqb.laundrylocker.auth.service.AuthService;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import jakarta.validation.Valid;
@@ -31,6 +33,11 @@ public class AuthController {
   @PostMapping("/api/auth/login")
   public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
     return ApiResponse.ok("AUTH_LOGIN_OK", "Login successful", authService.login(request));
+  }
+
+  @PostMapping("/api/auth/firebase")
+  public ApiResponse<AuthResponse> firebaseLogin(@Valid @RequestBody FirebaseLoginRequest request) {
+    return ApiResponse.ok("AUTH_LOGIN_OK", "Firebase login successful", authService.firebaseLogin(request.idToken()));
   }
 
   @PostMapping("/api/auth/refresh-token")
@@ -117,6 +124,11 @@ public class AuthController {
   @GetMapping("/internal/auth/accounts/{id}")
   public ApiResponse<AuthResponse> getAccount(@PathVariable Long id) {
     return ApiResponse.ok(authService.getAccount(id));
+  }
+
+  @PostMapping("/internal/auth/accounts")
+  public ApiResponse<AuthResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
+    return ApiResponse.ok("AUTH_ACCOUNT_CREATED", "Account created", authService.createAccount(request));
   }
 
   @PostMapping("/internal/auth/users/{userId}/password")

@@ -78,6 +78,8 @@ resilience4j:
         slow-call-rate-threshold: ${APP_RESILIENCE4J_CB_SLOW_CALL_RATE_THRESHOLD:80}
 
 app:
+  firebase:
+    credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
   security:
     jwt:
       secret: ${APP_SECURITY_JWT_SECRET:laundry-locker-microservices-secret-key-change-me-please-32chars}

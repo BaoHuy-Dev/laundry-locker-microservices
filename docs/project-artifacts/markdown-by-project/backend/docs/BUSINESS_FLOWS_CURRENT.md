@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-18 (session 2)
+> Cập nhật lần cuối: 2026-06-21
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -68,6 +68,8 @@ Tên role hiện chưa đồng nhất hoàn toàn:
 - Backend mặc định role mới là `CUSTOMER`.
 - Một số seed/demo profile đang dùng `USER`.
 - Flutter routing xem mọi role không phải `MANAGER`/`MAINTENANCE` là customer home.
+
+**Cấp phát role (2026-06-20):** khách tự đăng ký trên mobile (email/phone/Google qua Firebase) **chỉ ra `CUSTOMER`**. Các role vận hành `ADMIN`/`MANAGER`/`MAINTENANCE` **chỉ do admin web tạo** (`POST /api/admin/users`, tạo cả `auth_account` để login được) — xem mục 3.
 
 ### Admin
 
@@ -197,7 +199,7 @@ Client gọi:
 POST /api/auth/register
 ```
 
-Body gồm email/phone/password và role tuỳ chọn.
+Body gồm email/phone/password (field `roles` nếu có **bị bỏ qua**).
 
 Hành vi backend:
 
@@ -205,6 +207,47 @@ Hành vi backend:
 2. `auth-service` gọi internal provisioning endpoint của `user-service`.
 3. `user-service` tạo profile trong `user_profiles`.
 4. `auth-service` cấp access token và refresh token.
+
+**Self-register chỉ ra role `CUSTOMER` (2026-06-20).** `AuthService.register()` ép `roles = {CUSTOMER}` bất kể client gửi gì (trước đó honor `roles` client → ai cũng tự đăng ký `ADMIN`). Đường cho phép roles tùy ý đã tách riêng thành `provisionWithRoles()` (nội bộ) + `createAccount()` (dùng cho admin tạo role khác, xem dưới).
+
+### Đăng Ký / Đăng Nhập Nhanh Qua Firebase (mobile)
+
+Mobile dùng **Firebase Auth làm identity broker thống nhất** cho cả số điện thoại (OTP) và Google; mọi provider đều sinh **một Firebase ID token**. Backend chỉ có một endpoint verify:
+
+```http
+POST /api/auth/firebase
+{ "idToken": "<firebase-id-token>" }
+```
+
+Hành vi backend (`AuthService.firebaseLogin`):
+
+1. `FirebaseAuth.verifyIdToken(idToken)` → lấy `uid`, `sign_in_provider` (`phone`/`google.com`/...), `phone_number`, `email`, `name`. idToken sai → `AUTH_FIREBASE_INVALID`.
+2. Tra `social_identities(provider, uid)`; nếu có → login account đã link.
+3. Nếu chưa link → tìm account theo email/phone để **link** vào account cũ; nếu vẫn chưa có → provision user `CUSTOMER` + tạo `auth_account` (password random) rồi lưu `social_identities`.
+4. Cấp `AuthResponse` (accessToken/refreshToken/roles).
+
+Lưu trữ: bảng mới `auth_schema.social_identities(account_id, provider, provider_user_id)` unique `(provider, provider_user_id)` — migration `auth-service V2__auth_social_identities.sql`. `password_hash` giữ `NOT NULL` (social/phone dùng random hash).
+
+Khởi tạo Firebase Admin: `app.firebase.credentials-json` (`FIREBASE_CREDENTIALS_JSON`, nội dung service account JSON). `FirebaseConfig` fail-soft khi thiếu credential (chỉ log warn, không chặn boot). **Facebook** chưa bật ở mobile (backend đã sẵn sàng nhận mọi `sign_in_provider`).
+
+Mobile (`smart-laundry-locker-mobile`): `firebase_auth` + `google_sign_in` (v7) trong `FirebaseAuthService`; UI nút Google + dialog phone-OTP trong `auth_bottom_sheet.dart` (cả tab Đăng nhập lẫn Đăng ký) → `LoginProvider.loginWithGoogle()/sendPhoneOtp()/confirmPhoneOtp()` → `POST /api/auth/firebase`.
+
+### Tài Khoản Do Admin Tạo (ADMIN / MANAGER / MAINTENANCE)
+
+Self-register **không** tạo được role vận hành. Admin web tạo qua:
+
+```http
+POST /api/admin/users   (role ADMIN)
+{ email, phoneNumber, firstName, lastName, password, roles:["MANAGER"|"MAINTENANCE"|"ADMIN"|"CUSTOMER"] }
+```
+
+Hành vi (`user-service UserController.adminCreate`, 2026-06-20):
+
+1. Tạo `user_profile` (`UserProfileService.create`).
+2. Gọi Feign `AuthClient.createAccount` → `POST /internal/auth/accounts` ở `auth-service` → tạo `auth_account` có password hash thật cho `userId` (validate roles ∈ {CUSTOMER, ADMIN, MANAGER, MAINTENANCE}).
+3. Nếu tạo auth account lỗi → **xóa profile vừa tạo** (compensate) + ném `ACCOUNT_CREATION_FAILED` (tránh profile mồ côi không login được).
+
+Trước thay đổi này, `POST /api/admin/users` chỉ tạo `user_profile` (không có `auth_account`) → manager/maintenance admin tạo ra **không đăng nhập được**. Web `CreateUserModal` đã đổi danh sách role sang `CUSTOMER/ADMIN/MANAGER/MAINTENANCE` (bỏ stale `USER/STAFF/MODERATOR/PARTNER`); `RoleNameSchema` (Zod) mở rộng để không chặn role mới.
 
 ### Đăng Nhập
 

@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 @FeignClient(name = "auth-service", path = "/internal/auth")
 public interface AuthClient {
 
+  @PostMapping("/accounts")
+  ApiResponse<Map<String, Object>> createAccount(@RequestBody Map<String, Object> request);
+
   @PostMapping("/users/{userId}/password")
   ApiResponse<Void> changePassword(@PathVariable Long userId, @RequestBody Map<String, Object> request);
 }
