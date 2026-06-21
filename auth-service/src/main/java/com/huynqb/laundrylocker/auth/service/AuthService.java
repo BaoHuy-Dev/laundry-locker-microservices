@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -219,6 +220,25 @@ public class AuthService {
     AuthAccount account = findAccount(id);
     UserSummary user = userClient.getUser(account.getUserId()).data();
     return new AuthResponse(account.getId(), account.getUserId(), null, null, "Bearer", null, user.roles());
+  }
+
+  /** Provider + verification info per userId, for admin user listing (service-to-service). */
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> accountsByUsers(List<Long> userIds) {
+    if (userIds == null || userIds.isEmpty()) {
+      return List.of();
+    }
+    return authAccountRepository.findByUserIdIn(userIds).stream()
+        .map(
+            account -> {
+              Map<String, Object> info = new HashMap<>();
+              info.put("userId", account.getUserId());
+              info.put("provider", account.getAuthProvider());
+              info.put("emailVerified", account.getEmailVerified());
+              info.put("status", account.getStatus());
+              return info;
+            })
+        .toList();
   }
 
   @Transactional
