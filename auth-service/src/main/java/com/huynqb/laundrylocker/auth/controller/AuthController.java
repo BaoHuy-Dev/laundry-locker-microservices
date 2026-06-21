@@ -10,6 +10,7 @@ import com.huynqb.laundrylocker.auth.dto.FirebaseLoginRequest;
 import com.huynqb.laundrylocker.auth.service.AuthService;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -129,6 +131,11 @@ public class AuthController {
   @PostMapping("/internal/auth/accounts")
   public ApiResponse<AuthResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
     return ApiResponse.ok("AUTH_ACCOUNT_CREATED", "Account created", authService.createAccount(request));
+  }
+
+  @GetMapping("/internal/auth/accounts/by-users")
+  public ApiResponse<List<Map<String, Object>>> accountsByUsers(@RequestParam List<Long> userIds) {
+    return ApiResponse.ok(authService.accountsByUsers(userIds));
   }
 
   @PostMapping("/internal/auth/users/{userId}/password")

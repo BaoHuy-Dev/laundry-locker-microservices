@@ -573,10 +573,13 @@ public class LockerService {
   }
 
   private LockerResponse toResponse(LockerUnit locker) {
+    int totalBoxes = (int) boxRepository.countByLockerId(locker.getId());
+    int availableBoxes =
+        (int) boxRepository.countByLockerIdAndStatusAndActiveTrue(locker.getId(), "AVAILABLE");
     return new LockerResponse(
         locker.getId(), locker.getStoreId(), locker.getCode(), locker.getName(), locker.getStatus(),
         locker.getAddress(), locker.getLatitude(), locker.getLongitude(),
-        locker.getLandingPad(), locker.getLandingMarkerId());
+        locker.getLandingPad(), locker.getLandingMarkerId(), totalBoxes, availableBoxes);
   }
 
   private LockerBoxSummary toSummary(LockerBox box) {

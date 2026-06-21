@@ -118,8 +118,36 @@ public class UserController {
   }
 
   @GetMapping("/api/admin/users")
-  public ApiResponse<List<UserSummary>> adminUsers() {
-    return list();
+  public ApiResponse<List<com.huynqb.laundrylocker.user.dto.AdminUserView>> adminUsers() {
+    List<com.huynqb.laundrylocker.user.dto.AdminUserView> views = userProfileService.listAdminViews();
+    // Best-effort enrich with auth provider/email-verified (never break the list on lookup failure).
+    try {
+      List<Long> ids = views.stream().map(com.huynqb.laundrylocker.user.dto.AdminUserView::id).toList();
+      if (!ids.isEmpty()) {
+        Map<Long, Map<String, Object>> byUser =
+            authClient.accountsByUsers(ids).data().stream()
+                .filter(m -> m.get("userId") != null)
+                .collect(
+                    java.util.stream.Collectors.toMap(
+                        m -> Long.valueOf(m.get("userId").toString()), m -> m, (a, b) -> a));
+        views =
+            views.stream()
+                .map(
+                    v -> {
+                      Map<String, Object> a = byUser.get(v.id());
+                      if (a == null) {
+                        return v;
+                      }
+                      String provider = a.get("provider") == null ? null : a.get("provider").toString();
+                      Boolean verified = a.get("emailVerified") instanceof Boolean b ? b : null;
+                      return v.withAuth(provider, verified);
+                    })
+                .toList();
+      }
+    } catch (Exception ignored) {
+      // auth-service unavailable -> return profile-only views
+    }
+    return ApiResponse.ok(views);
   }
 
   @PostMapping("/api/admin/users")
