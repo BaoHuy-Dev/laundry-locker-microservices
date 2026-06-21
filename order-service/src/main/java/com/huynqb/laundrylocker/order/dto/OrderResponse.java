@@ -30,6 +30,7 @@ public record OrderResponse(
     String nextAction,
     String nextActionMessage,
     Boolean paymentRequired,
+    String paymentStatus,
     Boolean overtime,
     LocalDateTime pickupDeadline,
     LocalDateTime returnedAt,
