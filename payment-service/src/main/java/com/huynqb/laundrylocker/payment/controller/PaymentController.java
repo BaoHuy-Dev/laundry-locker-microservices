@@ -1,6 +1,7 @@
 package com.huynqb.laundrylocker.payment.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.payment.dto.CheckoutRequest;
 import com.huynqb.laundrylocker.payment.dto.CreatePaymentRequest;
 import com.huynqb.laundrylocker.payment.dto.CreateTopupRequest;
 import com.huynqb.laundrylocker.payment.dto.PaymentResponse;
@@ -10,6 +11,7 @@ import com.huynqb.laundrylocker.payment.dto.TopupResponse;
 import com.huynqb.laundrylocker.payment.dto.UpdatePaymentStatusRequest;
 import com.huynqb.laundrylocker.payment.service.PaymentService;
 import jakarta.validation.Valid;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +42,12 @@ public class PaymentController {
   @GetMapping("/payments/vnpay/callback")
   public ApiResponse<PaymentResponse> vnpayCallback(@RequestParam Map<String, String> params) {
     return ApiResponse.ok("PAYMENT_RETURN_PROCESSED", "VNPay callback processed", paymentService.handleVnPayReturn(params));
+  }
+
+  @PostMapping("/api/payments/checkout")
+  public ApiResponse<PaymentResponse> checkout(
+      @Valid @RequestBody CheckoutRequest request, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok("PAYMENT_CHECKOUT", "Checkout processed", paymentService.checkout(userId, request));
   }
 
   @PostMapping("/api/payments")
@@ -85,13 +93,17 @@ public class PaymentController {
   }
 
   @PostMapping("/api/payments/momo/callback")
-  public ApiResponse<Void> momoCallback(@RequestBody Map<String, Object> params) {
-    return ApiResponse.ok("MOMO_CALLBACK_RECEIVED", "MoMo callback received");
+  public ApiResponse<PaymentResponse> momoCallback(@RequestBody Map<String, Object> params) {
+    Map<String, String> stringParams = new HashMap<>();
+    params.forEach((k, v) -> stringParams.put(k, v == null ? null : v.toString()));
+    return ApiResponse.ok(
+        "MOMO_CALLBACK_PROCESSED", "MoMo callback processed", paymentService.handleMomoCallback(stringParams));
   }
 
   @GetMapping("/api/payments/momo/return")
-  public ApiResponse<Void> momoReturn() {
-    return ApiResponse.ok("MOMO_RETURN_RECEIVED", "MoMo return received");
+  public ApiResponse<PaymentResponse> momoReturn(@RequestParam Map<String, String> params) {
+    return ApiResponse.ok(
+        "MOMO_RETURN_PROCESSED", "MoMo return processed", paymentService.handleMomoCallback(params));
   }
 
   @PostMapping("/api/payments/{paymentId}/refund")

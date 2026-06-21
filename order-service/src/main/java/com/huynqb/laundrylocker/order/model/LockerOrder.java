@@ -62,6 +62,12 @@ public class LockerOrder {
   @Column(nullable = false, length = 30)
   private String status = "INITIALIZED";
 
+  @Column(name = "payment_status", nullable = false, length = 20)
+  private String paymentStatus = "UNPAID"; // UNPAID | PAID | REFUNDED
+
+  @Column(name = "paid_at")
+  private LocalDateTime paidAt;
+
   @Column(name = "actual_weight", precision = 10, scale = 2)
   private BigDecimal actualWeight;
 

@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-18 (session 2)
+> Cập nhật lần cuối: 2026-06-21
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -68,6 +68,8 @@ Tên role hiện chưa đồng nhất hoàn toàn:
 - Backend mặc định role mới là `CUSTOMER`.
 - Một số seed/demo profile đang dùng `USER`.
 - Flutter routing xem mọi role không phải `MANAGER`/`MAINTENANCE` là customer home.
+
+**Cấp phát role (2026-06-20):** khách tự đăng ký trên mobile (email/phone/Google qua Firebase) **chỉ ra `CUSTOMER`**. Các role vận hành `ADMIN`/`MANAGER`/`MAINTENANCE` **chỉ do admin web tạo** (`POST /api/admin/users`, tạo cả `auth_account` để login được) — xem mục 3.
 
 ### Admin
 
@@ -197,7 +199,7 @@ Client gọi:
 POST /api/auth/register
 ```
 
-Body gồm email/phone/password và role tuỳ chọn.
+Body gồm email/phone/password (field `roles` nếu có **bị bỏ qua**).
 
 Hành vi backend:
 
@@ -205,6 +207,47 @@ Hành vi backend:
 2. `auth-service` gọi internal provisioning endpoint của `user-service`.
 3. `user-service` tạo profile trong `user_profiles`.
 4. `auth-service` cấp access token và refresh token.
+
+**Self-register chỉ ra role `CUSTOMER` (2026-06-20).** `AuthService.register()` ép `roles = {CUSTOMER}` bất kể client gửi gì (trước đó honor `roles` client → ai cũng tự đăng ký `ADMIN`). Đường cho phép roles tùy ý đã tách riêng thành `provisionWithRoles()` (nội bộ) + `createAccount()` (dùng cho admin tạo role khác, xem dưới).
+
+### Đăng Ký / Đăng Nhập Nhanh Qua Firebase (mobile)
+
+Mobile dùng **Firebase Auth làm identity broker thống nhất** cho cả số điện thoại (OTP) và Google; mọi provider đều sinh **một Firebase ID token**. Backend chỉ có một endpoint verify:
+
+```http
+POST /api/auth/firebase
+{ "idToken": "<firebase-id-token>" }
+```
+
+Hành vi backend (`AuthService.firebaseLogin`):
+
+1. `FirebaseAuth.verifyIdToken(idToken)` → lấy `uid`, `sign_in_provider` (`phone`/`google.com`/...), `phone_number`, `email`, `name`. idToken sai → `AUTH_FIREBASE_INVALID`.
+2. Tra `social_identities(provider, uid)`; nếu có → login account đã link.
+3. Nếu chưa link → tìm account theo email/phone để **link** vào account cũ; nếu vẫn chưa có → provision user `CUSTOMER` + tạo `auth_account` (password random) rồi lưu `social_identities`.
+4. Cấp `AuthResponse` (accessToken/refreshToken/roles).
+
+Lưu trữ: bảng mới `auth_schema.social_identities(account_id, provider, provider_user_id)` unique `(provider, provider_user_id)` — migration `auth-service V2__auth_social_identities.sql`. `password_hash` giữ `NOT NULL` (social/phone dùng random hash).
+
+Khởi tạo Firebase Admin: `app.firebase.credentials-json` (`FIREBASE_CREDENTIALS_JSON`, nội dung service account JSON). `FirebaseConfig` fail-soft khi thiếu credential (chỉ log warn, không chặn boot). **Facebook (2026-06-21)** đã wire ở mobile (`flutter_facebook_auth` + native config strings.xml/AndroidManifest, `signInWithFacebook()` → Firebase credential → cùng endpoint `/api/auth/firebase`); chạy thật khi đã bật Facebook provider trong Firebase (App ID/Secret) + thêm OAuth redirect URI. Backend không cần đổi (nhận mọi `sign_in_provider`).
+
+Mobile (`smart-laundry-locker-mobile`): `firebase_auth` + `google_sign_in` (v7) trong `FirebaseAuthService`; UI nút Google + dialog phone-OTP trong `auth_bottom_sheet.dart` (cả tab Đăng nhập lẫn Đăng ký) → `LoginProvider.loginWithGoogle()/sendPhoneOtp()/confirmPhoneOtp()` → `POST /api/auth/firebase`.
+
+### Tài Khoản Do Admin Tạo (ADMIN / MANAGER / MAINTENANCE)
+
+Self-register **không** tạo được role vận hành. Admin web tạo qua:
+
+```http
+POST /api/admin/users   (role ADMIN)
+{ email, phoneNumber, firstName, lastName, password, roles:["MANAGER"|"MAINTENANCE"|"ADMIN"|"CUSTOMER"] }
+```
+
+Hành vi (`user-service UserController.adminCreate`, 2026-06-20):
+
+1. Tạo `user_profile` (`UserProfileService.create`).
+2. Gọi Feign `AuthClient.createAccount` → `POST /internal/auth/accounts` ở `auth-service` → tạo `auth_account` có password hash thật cho `userId` (validate roles ∈ {CUSTOMER, ADMIN, MANAGER, MAINTENANCE}).
+3. Nếu tạo auth account lỗi → **xóa profile vừa tạo** (compensate) + ném `ACCOUNT_CREATION_FAILED` (tránh profile mồ côi không login được).
+
+Trước thay đổi này, `POST /api/admin/users` chỉ tạo `user_profile` (không có `auth_account`) → manager/maintenance admin tạo ra **không đăng nhập được**. Web `CreateUserModal` đã đổi danh sách role sang `CUSTOMER/ADMIN/MANAGER/MAINTENANCE` (bỏ stale `USER/STAFF/MODERATOR/PARTNER`); `RoleNameSchema` (Zod) mở rộng để không chặn role mới.
 
 ### Đăng Nhập
 
@@ -752,6 +795,8 @@ Endpoint customer/public:
 
 - `POST /api/payments/topup/create` **(mới 2026-06-18, auth required)**: tạo VNPay URL nạp ví. Body: `{amount: decimal ≥1000, returnUrl?, bankCode?, locale?}`. Response: `{paymentUrl, txnRef}`. userId lấy từ `X-User-Id` header (inject bởi gateway).
 - `GET /payments/vnpay/callback` **(mới 2026-06-18, PUBLIC)**: alias callback path để mobile WebView detect VNPay redirect. Cùng handler với `/api/payments/vnpay/return`. Route qua gateway không cần JWT.
+- `POST /api/payments/checkout` **(mới 2026-06-21, auth)**: thanh toán đơn. Body `{orderId, method: WALLET|VNPAY|MOMO|CASH, bankCode?, returnUrl?, language?}`. WALLET/CASH settle ngay (COMPLETED + event); VNPAY/MOMO trả `url`/`deeplink`/`qr` để redirect. Amount lấy từ order-service (không tin client); chặn double-pay.
+- `GET /api/wallet`, `GET /api/wallet/transactions` **(mới 2026-06-21, auth)**: số dư ví + lịch sử (userId từ `X-User-Id`).
 - `POST /api/payments`
 - `POST /api/payments/create`
 - `PATCH /api/payments/{id}/status`
@@ -768,6 +813,7 @@ Endpoint customer/public:
 
 Endpoint admin:
 
+- `GET /api/admin/wallet/{userId}`, `GET /api/admin/wallet/{userId}/transactions`, `POST /api/admin/wallet/{userId}/adjust` **(mới 2026-06-21)**: xem số dư/lịch sử ví + điều chỉnh (body `{amount, reason}`; dương = cộng, âm = trừ). Web admin: nút "Ví" trong bảng Users mở modal số dư + cộng/trừ.
 - `GET /api/admin/payments`
 - `PATCH /api/admin/payments/{id}/status`
 - `GET /api/admin/payments/{paymentId}`
@@ -788,7 +834,7 @@ Lưu ý hiện tại:
 - Credential provider production và đối soát phụ thuộc environment.
 - UX thanh toán cho SEND/RENTAL chưa hoàn tất end-to-end; order service đã expose flags/giá, nhưng product flow thanh toán cuối cùng cần làm tiếp.
 - Khi chạy profile `prod`/`production`, payment service fail-fast nếu VNPay/MoMo config còn là demo, sandbox, localhost hoặc default placeholder.
-- **(2026-06-18) Wallet topup VNPay**: flow tạo URL và ghi nhận callback COMPLETED đã có, nhưng **số dư user KHÔNG thay đổi** — không có wallet/balance service. Xem mục 26 để biết design và TODO đầy đủ.
+- **(2026-06-18 → 2026-06-21) Wallet topup VNPay → ĐÃ NỐI VÍ**: nạp VNPay thành công giờ **cộng số dư ví** (bảng `payment_schema.wallets` + `wallet_transactions`, migration **V3**; idempotent theo `txnRef`). Thêm **thanh toán đơn** `POST /api/payments/checkout` (Ví/VNPay/MoMo/Tiền mặt). order-service **lắng nghe `PAYMENT_COMPLETED`** (queue `order.payment.events`) → set đơn `payment_status=PAID`+`paid_at` (migration order **V5**). **MoMo** có tích hợp thật (`MomoService`: AIO v2 create + HMAC SHA256 + verify IPN), kích hoạt khi cấu hình `MOMO_*` env (chưa cấu hình → checkout MoMo báo `MOMO_NOT_CONFIGURED`, không chặn boot). Thanh toán hiện **không bắt buộc** (chưa chặn cấp PIN). Hoàn tiền/điều chỉnh admin → cộng/trừ ví. Mobile: cờ `walletEnabled/transactionsEnabled` đã bật, số dư đọc `GET /api/wallet`. Xem mục 26.
 
 ## 16. Luồng Thông Báo
 
@@ -1229,9 +1275,11 @@ Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ t
 - **Mobile UI luồng tủ — ĐÃ LÀM** trên branch `feat/locker-customer-ui-revamp` (xem mục 21).
 - L2–L7: chưa làm.
 
-## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18)
+## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18, cập nhật 2026-06-21)
 
-> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | Wallet/balance update ❌ | Test thực tế ❌
+> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | **Wallet/balance update ✅ (2026-06-21)** | Test thực tế (sandbox) ⏳
+>
+> **(2026-06-21) Ví đã hoàn thiện**: bảng `payment_schema.wallets` + `wallet_transactions` (migration V3). `PaymentService.handleVnPayReturn` cộng ví khi topup COMPLETED (idempotent theo `txnRef`). Thanh toán đơn đa hình thức qua `POST /api/payments/checkout` (WALLET trừ ví tức thì / VNPAY / MOMO / CASH). order-service nghe `PAYMENT_COMPLETED` → đơn `payment_status=PAID`. MoMo thật (`MomoService`) gated theo env. Admin điều chỉnh ví `POST /api/admin/wallet/{userId}/adjust`. Mobile bật lại cờ ví + đọc `GET /api/wallet`.
 
 ### Endpoint đã implement
 
