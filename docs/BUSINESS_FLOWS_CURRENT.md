@@ -795,6 +795,8 @@ Endpoint customer/public:
 
 - `POST /api/payments/topup/create` **(mới 2026-06-18, auth required)**: tạo VNPay URL nạp ví. Body: `{amount: decimal ≥1000, returnUrl?, bankCode?, locale?}`. Response: `{paymentUrl, txnRef}`. userId lấy từ `X-User-Id` header (inject bởi gateway).
 - `GET /payments/vnpay/callback` **(mới 2026-06-18, PUBLIC)**: alias callback path để mobile WebView detect VNPay redirect. Cùng handler với `/api/payments/vnpay/return`. Route qua gateway không cần JWT.
+- `POST /api/payments/checkout` **(mới 2026-06-21, auth)**: thanh toán đơn. Body `{orderId, method: WALLET|VNPAY|MOMO|CASH, bankCode?, returnUrl?, language?}`. WALLET/CASH settle ngay (COMPLETED + event); VNPAY/MOMO trả `url`/`deeplink`/`qr` để redirect. Amount lấy từ order-service (không tin client); chặn double-pay.
+- `GET /api/wallet`, `GET /api/wallet/transactions` **(mới 2026-06-21, auth)**: số dư ví + lịch sử (userId từ `X-User-Id`).
 - `POST /api/payments`
 - `POST /api/payments/create`
 - `PATCH /api/payments/{id}/status`
@@ -811,6 +813,7 @@ Endpoint customer/public:
 
 Endpoint admin:
 
+- `GET /api/admin/wallet/{userId}`, `GET /api/admin/wallet/{userId}/transactions`, `POST /api/admin/wallet/{userId}/adjust` **(mới 2026-06-21)**: xem số dư/lịch sử ví + điều chỉnh (body `{amount, reason}`; dương = cộng, âm = trừ). Web admin: nút "Ví" trong bảng Users mở modal số dư + cộng/trừ.
 - `GET /api/admin/payments`
 - `PATCH /api/admin/payments/{id}/status`
 - `GET /api/admin/payments/{paymentId}`
@@ -831,7 +834,7 @@ Lưu ý hiện tại:
 - Credential provider production và đối soát phụ thuộc environment.
 - UX thanh toán cho SEND/RENTAL chưa hoàn tất end-to-end; order service đã expose flags/giá, nhưng product flow thanh toán cuối cùng cần làm tiếp.
 - Khi chạy profile `prod`/`production`, payment service fail-fast nếu VNPay/MoMo config còn là demo, sandbox, localhost hoặc default placeholder.
-- **(2026-06-18) Wallet topup VNPay**: flow tạo URL và ghi nhận callback COMPLETED đã có, nhưng **số dư user KHÔNG thay đổi** — không có wallet/balance service. Xem mục 26 để biết design và TODO đầy đủ.
+- **(2026-06-18 → 2026-06-21) Wallet topup VNPay → ĐÃ NỐI VÍ**: nạp VNPay thành công giờ **cộng số dư ví** (bảng `payment_schema.wallets` + `wallet_transactions`, migration **V3**; idempotent theo `txnRef`). Thêm **thanh toán đơn** `POST /api/payments/checkout` (Ví/VNPay/MoMo/Tiền mặt). order-service **lắng nghe `PAYMENT_COMPLETED`** (queue `order.payment.events`) → set đơn `payment_status=PAID`+`paid_at` (migration order **V5**). **MoMo** có tích hợp thật (`MomoService`: AIO v2 create + HMAC SHA256 + verify IPN), kích hoạt khi cấu hình `MOMO_*` env (chưa cấu hình → checkout MoMo báo `MOMO_NOT_CONFIGURED`, không chặn boot). Thanh toán hiện **không bắt buộc** (chưa chặn cấp PIN). Hoàn tiền/điều chỉnh admin → cộng/trừ ví. Mobile: cờ `walletEnabled/transactionsEnabled` đã bật, số dư đọc `GET /api/wallet`. Xem mục 26.
 
 ## 16. Luồng Thông Báo
 
@@ -1272,9 +1275,11 @@ Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ t
 - **Mobile UI luồng tủ — ĐÃ LÀM** trên branch `feat/locker-customer-ui-revamp` (xem mục 21).
 - L2–L7: chưa làm.
 
-## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18)
+## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18, cập nhật 2026-06-21)
 
-> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | Wallet/balance update ❌ | Test thực tế ❌
+> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | **Wallet/balance update ✅ (2026-06-21)** | Test thực tế (sandbox) ⏳
+>
+> **(2026-06-21) Ví đã hoàn thiện**: bảng `payment_schema.wallets` + `wallet_transactions` (migration V3). `PaymentService.handleVnPayReturn` cộng ví khi topup COMPLETED (idempotent theo `txnRef`). Thanh toán đơn đa hình thức qua `POST /api/payments/checkout` (WALLET trừ ví tức thì / VNPAY / MOMO / CASH). order-service nghe `PAYMENT_COMPLETED` → đơn `payment_status=PAID`. MoMo thật (`MomoService`) gated theo env. Admin điều chỉnh ví `POST /api/admin/wallet/{userId}/adjust`. Mobile bật lại cờ ví + đọc `GET /api/wallet`.
 
 ### Endpoint đã implement
 
