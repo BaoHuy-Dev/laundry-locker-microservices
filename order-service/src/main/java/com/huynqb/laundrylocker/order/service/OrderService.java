@@ -1118,6 +1118,7 @@ public class OrderService {
         nextAction(order),
         nextActionMessage(order),
         paymentRequired(order),
+        order.getPaymentStatus(),
         order.getPickupDeadline() != null && LocalDateTime.now().isAfter(order.getPickupDeadline()),
         order.getPickupDeadline(),
         order.getReturnedAt(),

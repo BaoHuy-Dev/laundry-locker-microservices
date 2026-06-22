@@ -55,6 +55,28 @@ public class UserProfileService {
     return userProfileRepository.findAll().stream().map(this::toSummary).toList();
   }
 
+  @Transactional(readOnly = true)
+  public List<com.huynqb.laundrylocker.user.dto.AdminUserView> listAdminViews() {
+    return userProfileRepository.findAll().stream()
+        .map(
+            u ->
+                new com.huynqb.laundrylocker.user.dto.AdminUserView(
+                    u.getId(),
+                    u.getEmail(),
+                    u.getPhoneNumber(),
+                    ((u.getFirstName() == null ? "" : u.getFirstName())
+                            + " "
+                            + (u.getLastName() == null ? "" : u.getLastName()))
+                        .trim(),
+                    u.getStatus(),
+                    parseRoles(u.getRoles()),
+                    u.getCreatedAt(),
+                    null,
+                    null,
+                    u.getImageUrl()))
+        .toList();
+  }
+
   @Transactional
   public void delete(Long id) {
     userProfileRepository.delete(find(id));

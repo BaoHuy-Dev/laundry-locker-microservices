@@ -843,7 +843,7 @@ Lưu ý hiện tại:
 - Credential provider production và đối soát phụ thuộc environment.
 - UX thanh toán cho SEND/RENTAL chưa hoàn tất end-to-end; order service đã expose flags/giá, nhưng product flow thanh toán cuối cùng cần làm tiếp.
 - Khi chạy profile `prod`/`production`, payment service fail-fast nếu VNPay/MoMo config còn là demo, sandbox, localhost hoặc default placeholder.
-- **(2026-06-18 → 2026-06-21) Wallet topup VNPay → ĐÃ NỐI VÍ**: nạp VNPay thành công giờ **cộng số dư ví** (bảng `payment_schema.wallets` + `wallet_transactions`, migration **V3**; idempotent theo `txnRef`). Thêm **thanh toán đơn** `POST /api/payments/checkout` (Ví/VNPay/MoMo/Tiền mặt). order-service **lắng nghe `PAYMENT_COMPLETED`** (queue `order.payment.events`) → set đơn `payment_status=PAID`+`paid_at` (migration order **V5**). **MoMo** có tích hợp thật (`MomoService`: AIO v2 create + HMAC SHA256 + verify IPN), kích hoạt khi cấu hình `MOMO_*` env (chưa cấu hình → checkout MoMo báo `MOMO_NOT_CONFIGURED`, không chặn boot). Thanh toán hiện **không bắt buộc** (chưa chặn cấp PIN). Hoàn tiền/điều chỉnh admin → cộng/trừ ví. Mobile: cờ `walletEnabled/transactionsEnabled` đã bật, số dư đọc `GET /api/wallet`. Xem mục 26.
+- **(2026-06-18 → 2026-06-21) Wallet topup VNPay → ĐÃ NỐI VÍ**: nạp VNPay thành công giờ **cộng số dư ví** (bảng `payment_schema.wallets` + `wallet_transactions`, migration **V3**; idempotent theo `txnRef`). Thêm **thanh toán đơn** `POST /api/payments/checkout` (Ví/VNPay/MoMo/Tiền mặt). order-service **lắng nghe `PAYMENT_COMPLETED`** (queue `order.payment.events`) → set đơn `payment_status=PAID`+`paid_at` (migration order **V5**). **MoMo** có tích hợp thật (`MomoService`: AIO v2 create + HMAC SHA256 + verify IPN), kích hoạt khi cấu hình `MOMO_*` env (chưa cấu hình → checkout MoMo báo `MOMO_NOT_CONFIGURED`, không chặn boot). Thanh toán hiện **không bắt buộc** (chưa chặn cấp PIN). Hoàn tiền/điều chỉnh admin → cộng/trừ ví. `OrderResponse` thêm field `paymentStatus` (UNPAID/PAID/REFUNDED) để client biết đơn đã trả chưa. Mobile: cờ `walletEnabled/transactionsEnabled` đã bật, số dư đọc `GET /api/wallet`; **nút "Thanh toán" trong chi tiết đơn (locker_ops `my_locker_orders_page`)** mở bộ chọn Ví/VNPay/MoMo/Tiền mặt → `POST /api/payments/checkout` (Ví/Tiền mặt tức thì; VNPay/MoMo mở WebView). Xem mục 26.
 
 ## 16. Luồng Thông Báo
 
@@ -1182,6 +1182,75 @@ Lưu ý quan trọng:
 
 Đổi logo app sang logo tủ khóa nền navy người dùng cung cấp: `assets/images/logo.png` (dùng cho splash/onboarding/appbar) + regen launcher icon Android (`mipmap-*/ic_launcher.png`, mọi mật độ) và iOS (`AppIcon.appiconset/*`) qua `flutter_launcher_icons` (đổi `pubspec.yaml` `flutter_launcher_icons.android` → `true` để khớp manifest `@mipmap/ic_launcher`). Không đổi API/flow nghiệp vụ.
 
+### Realtime auto-refresh qua AppEventBus (2026-06-22)
+
+`lib/core/services/app_event_bus.dart` — singleton `StreamController<AppEvent>.broadcast()`:
+
+- Event types: `OrderChangedEvent(orderId?)`, `PaymentCompletedEvent(orderId?)`, `PaymentFailedEvent(orderId?)`, `WalletUpdatedEvent`, `ReportUpdatedEvent(reportId?)`.
+
+`NotificationProvider` parse field `actionType` từ cả 2 nguồn thông báo, emit lên `AppEventBus`:
+
+| actionType | Event emit |
+|---|---|
+| `ORDER_STATUS_CHANGED` | `OrderChangedEvent(orderId: referenceId)` |
+| `PAYMENT_COMPLETED` | `PaymentCompletedEvent(orderId)` + `WalletUpdatedEvent` |
+| `PAYMENT_FAILED` | `PaymentFailedEvent(orderId)` |
+| `LOCKER_REPORT_CLAIMED` / `LOCKER_REPORT_RESOLVED` | `ReportUpdatedEvent(reportId)` |
+
+Nguồn parse:
+- **STOMP WebSocket**: `notification.dataPayload?.actionType` + `notification.dataPayload?.referenceId`
+- **FCM push**: `message.data['type']` + `message.data['referenceId']`
+
+Consumers (subscribe trong `initState`/constructor, hủy trong `dispose` bằng `StreamSubscription.cancel()`):
+
+- `OrderPage`: reload `OrderProvider.refresh()` khi nhận `OrderChangedEvent` hoặc `PaymentCompletedEvent`.
+- `CustomerOrderDetailPage`: gọi `fetchOrderDetail(currentId)` khi nhận `OrderChangedEvent` khớp `orderId` (hoặc `orderId == null` — broadcast toàn bộ).
+- `WalletProvider` (constructor): gọi `getWalletBalance()` khi nhận `WalletUpdatedEvent` hoặc `PaymentCompletedEvent`.
+
+Kết quả: App tự refresh màn Đơn hàng, Chi tiết đơn, Số dư ví khi backend thay đổi trạng thái qua STOMP hoặc FCM push — không cần pull-to-refresh thủ công.
+
+### Trang chi tiết Voucher và Promotion (2026-06-22)
+
+**VoucherDetailPage** (`lib/features/vouchers/presentation/pages/voucher_detail_page.dart`, MỚI):
+
+- Dùng cho `VoucherModel` (từ `/promotions/vouchers/my` khi có backend, hiện wired từ `MyVouchersPage`).
+- Ticket card gradient (màu khi `UNUSED`, xám khi `USED`/`EXPIRED`) với notch divider hai bên (`_NotchPainter`).
+- Code chip bấm-để-copy (`Clipboard.setData` + `SnackBar` xác nhận).
+- Bảng thông tin: loại giảm, giảm tối đa, đơn tối thiểu, hiệu lực từ, hạn dùng, trạng thái.
+- Back navigation: `context.pop()`.
+- Wired từ `MyVouchersPage`: mỗi card bọc trong `GestureDetector` → `Navigator.of(context, rootNavigator: true).push(VoucherDetailPage(voucher: voucher))`.
+
+**PromotionDetailPage** (`lib/features/promotions/presentation/pages/promotion_detail_page.dart`, MỚI):
+
+- Dùng cho `PromotionModel` (từ `GET /api/promotions/active`).
+- Banner ảnh 180px (`CachedNetworkImage` + gradient overlay tối từ dưới lên; fallback gradient khi không có ảnh).
+- Chip "Flash Sale ⚡" + badge giảm giá + tên promotion trên ảnh.
+- Ticket banner gradient (6 màu, chọn theo `promo.id % 6`): text phần thưởng + hạn dùng.
+- Code chip bấm-để-copy.
+- Bảng thông tin: mức giảm, tối đa, đơn tối thiểu, bắt đầu, kết thúc, trạng thái (dùng getter `isExpired` mới thêm vào `PromotionModel`: `endAt?.isBefore(DateTime.now())`).
+- 3 steps "Cách sử dụng": copy mã → nhập khi thanh toán → giảm được áp dụng.
+- Back navigation: `Navigator.of(context).pop()`.
+
+Wiring điều hướng:
+
+| Nguồn | Cách push | Lý do |
+|---|---|---|
+| `PromotionsPage` (`/promotions`, ngoài ShellRoute) | `Navigator.of(ctx).push(MaterialPageRoute)` | Đã ở root navigator — push thường là đủ |
+| `_FlashSaleCard` trên home (trong ShellRoute `/home`) | `Navigator.of(context, rootNavigator: true).push(MaterialPageRoute)` | Phải dùng rootNavigator để phủ qua bottom nav bar |
+
+Lỗi trước khi fix: `_FlashSaleCard.onTap` gọi `context.push(AppRouter.promotions)` (mở trang danh sách, không phải chi tiết); `_buildPromoCard` trong `PromotionsPage` không có `onTap` — tap vào card không làm gì.
+
+### 10 mock ô tủ per locker (2026-06-22)
+
+`_LockerCardState._enrichLayout(Map<String, dynamic> raw)` — static method trong `store_lockers_page.dart`:
+
+- Chạy sau khi `GET /api/lockers/{id}/layout` thành công (nếu trả <10 ô) hoặc thất bại (hiển thị demo grid thay vì màn trắng).
+- Grid 2×5 (2 hàng × 5 cột, tổng 10 ô):
+  - **Row 0** (col 0–4): 5 STANDARD cells, size `SMALL/MEDIUM/LARGE/MEDIUM/SMALL`, status `AVAILABLE/OCCUPIED/AVAILABLE/RESERVED/AVAILABLE`.
+  - **Row 1** col 0–1: 2 STANDARD (`AVAILABLE/OCCUPIED`); col 2–4: 3 DRONE (`AVAILABLE/LARGE`).
+- Giữ ô thật (từ API) ở đúng vị trí theo `rowIndex`/`colIndex`, chỉ lấp các vị trí còn trống bằng mock.
+- Kết quả: Lưới ô tủ luôn hiện đủ 10 ô demo, kể cả khi seed backend CAB-DEMO-01 chỉ trả về 1 ô.
+
 ## 22. Luồng Web Frontend
 
 Flow giá trị cao hiện tại của React app:
@@ -1456,3 +1525,18 @@ ALTER TABLE order_schema.promotions ADD COLUMN IF NOT EXISTS description VARCHAR
 ```
 
 Chạy tự động khi deploy (Flyway). Idempotent nhờ `IF NOT EXISTS`.
+
+### Cập nhật 2026-06-22: Tap vào Flash Sale card và PromotionsPage dẫn thẳng vào PromotionDetailPage
+
+**Trước**: `_FlashSaleCard.onTap` (home, ShellRoute) gọi `context.push(AppRouter.promotions)` → mở trang danh sách, không phải trang chi tiết. `_buildPromoCard` trong `PromotionsPage` không có `onTap` — tap card không làm gì.
+
+**Sau**:
+
+- `_FlashSaleCard.onTap`: `Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PromotionDetailPage(promo: promo)))` — `rootNavigator: true` vì `_FlashSaleCard` nằm trong ShellRoute (tab `/home`), phải phủ qua bottom nav bar.
+- `PromotionsPage` item: bọc `_buildPromoCard` trong `GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => Navigator.of(ctx).push(...))` — `PromotionsPage` nằm ở route `/promotions` ngoài ShellRoute nên push thường là đủ.
+- `PromotionModel` thêm getter `isExpired`: `bool get isExpired { if (endAt == null) return false; return endAt!.isBefore(DateTime.now()); }` — dùng trong `PromotionDetailPage` để hiển thị trạng thái "Hết hạn".
+- `PromotionDetailPage` (MỚI) — xem mục 21 subsection "Trang chi tiết Voucher và Promotion".
+
+**MyVouchersPage → VoucherDetailPage**: Mỗi voucher card trong `MyVouchersPage` bọc trong `GestureDetector` → `Navigator.of(context, rootNavigator: true).push(VoucherDetailPage(voucher: voucher))`. `VoucherDetailPage` (MỚI) — xem mục 21 subsection "Trang chi tiết Voucher và Promotion".
+
+Route `/my-vouchers` + `MyVouchersPage` vẫn gated bởi cờ `vouchersEnabled = false` (backend chưa có endpoint) — khi bật lại thì VoucherDetailPage đã sẵn sàng.

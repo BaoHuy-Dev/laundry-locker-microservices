@@ -153,7 +153,7 @@ public class PaymentService {
         payment.setStatus("COMPLETED");
       }
       case "CASH" -> payment.setStatus("COMPLETED");
-      case "VNPAY" -> payment.setUrl(buildVnPayUrl(payment, request.bankCode(), request.language()));
+      case "VNPAY" -> payment.setUrl(buildVnPayUrl(payment, request.bankCode(), request.language(), request.returnUrl()));
       case "MOMO" -> momoService.createPayment(payment, request.returnUrl());
       default -> throw new BusinessException("PAYMENT_METHOD_INVALID", "Phương thức thanh toán không hợp lệ: " + method);
     }
@@ -331,6 +331,11 @@ public class PaymentService {
   }
 
   private String buildVnPayUrl(PaymentRecord payment, String bankCode, String language) {
+    return buildVnPayUrl(payment, bankCode, language, null);
+  }
+
+  private String buildVnPayUrl(
+      PaymentRecord payment, String bankCode, String language, String returnUrl) {
     Map<String, String> params = new TreeMap<>();
     params.put("vnp_Version", "2.1.0");
     params.put("vnp_Command", "pay");
@@ -341,7 +346,7 @@ public class PaymentService {
     params.put("vnp_OrderInfo", "Thanh toan don hang " + payment.getOrderId());
     params.put("vnp_OrderType", "other");
     params.put("vnp_Locale", StringUtils.hasText(language) ? language : "vn");
-    params.put("vnp_ReturnUrl", vnpayReturnUrl);
+    params.put("vnp_ReturnUrl", StringUtils.hasText(returnUrl) ? returnUrl : vnpayReturnUrl);
     params.put("vnp_IpAddr", "127.0.0.1");
     params.put("vnp_CreateDate", DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
     if (StringUtils.hasText(bankCode)) {

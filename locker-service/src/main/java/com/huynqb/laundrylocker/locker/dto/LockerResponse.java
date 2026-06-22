@@ -10,4 +10,6 @@ public record LockerResponse(
     Double latitude,
     Double longitude,
     Boolean landingPad,
-    String landingMarkerId) {}
+    String landingMarkerId,
+    Integer totalBoxes,
+    Integer availableBoxes) {}
