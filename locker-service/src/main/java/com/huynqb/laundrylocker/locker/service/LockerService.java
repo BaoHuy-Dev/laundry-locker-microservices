@@ -596,16 +596,17 @@ public class LockerService {
     if (!DroneStatus.ALL.contains(status)) {
       throw new BusinessException("DRONE_STATUS_INVALID", "Unknown drone status: " + status);
     }
-    if (DroneStatus.FAULT.equals(status) && !StringUtils.hasText(reason)) {
+    boolean fault = DroneStatus.FAULT.equals(status);
+    if (fault && !StringUtils.hasText(reason)) {
       throw new BusinessException("DRONE_FAULT_REASON_REQUIRED", "A reason is required to mark a drone as FAULT");
     }
     DroneUnit unit = findDroneUnit(id);
     String previousStatus = unit.getStatus();
     unit.setStatus(status);
-    unit.setFaultReason(DroneStatus.FAULT.equals(status) ? reason : null);
+    unit.setFaultReason(fault ? reason : null);
     DroneUnit saved = droneUnitRepository.save(unit);
     String note = "Chuyển trạng thái %s → %s%s"
-        .formatted(previousStatus, status, StringUtils.hasText(reason) ? ": " + reason : "");
+        .formatted(previousStatus, status, fault && StringUtils.hasText(reason) ? ": " + reason : "");
     appendDroneLog(saved.getId(), note, actorUserId);
     return toDroneUnit(saved);
   }
