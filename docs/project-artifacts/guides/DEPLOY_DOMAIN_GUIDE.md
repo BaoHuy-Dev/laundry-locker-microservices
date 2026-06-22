@@ -57,6 +57,15 @@ Repo FE: `laundry-locker-frontend` (branch `main`), code thật nằm trong thư
 
 SSH vào droplet rồi chạy. Gateway đang chạy ở host port **8080** (qua docker-compose).
 
+> ⚠️ **QUAN TRỌNG — port gateway**: gateway publish ra host port theo
+> `API_GATEWAY_PORT` (mặc định **18080**), KHÔNG phải 8080. Kiểm tra port thật:
+> ```bash
+> docker port ll-ms-api-gateway          # vd: 8080/tcp -> 0.0.0.0:18080
+> ```
+> Dùng đúng port đó trong `proxy_pass` bên dưới. Trỏ sai port → Nginx trả **502
+> Bad Gateway** (trình duyệt báo nhầm thành lỗi CORS vì trang 502 không có header
+> Access-Control). Droplet hiện tại dùng **18080**.
+
 ```bash
 # 1) Cài nginx + certbot
 sudo apt update
@@ -71,7 +80,7 @@ server {
     client_max_body_size 20m;               # cho upload ảnh (face/avatar)
 
     location / {
-        proxy_pass http://127.0.0.1:8080;   # <-- gateway host port (mặc định 8080)
+        proxy_pass http://127.0.0.1:18080;  # <-- gateway host port (docker port ll-ms-api-gateway)
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
