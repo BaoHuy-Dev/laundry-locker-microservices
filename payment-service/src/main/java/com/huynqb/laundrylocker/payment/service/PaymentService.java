@@ -1,9 +1,13 @@
 package com.huynqb.laundrylocker.payment.service;
 
+import com.huynqb.laundrylocker.common.dto.OrderSummary;
 import com.huynqb.laundrylocker.common.event.DomainEvent;
 import com.huynqb.laundrylocker.common.event.DomainEventNames;
+import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
 import com.huynqb.laundrylocker.common.security.SecuritySecrets;
+import com.huynqb.laundrylocker.payment.client.OrderClient;
+import com.huynqb.laundrylocker.payment.dto.CheckoutRequest;
 import com.huynqb.laundrylocker.payment.dto.CreatePaymentRequest;
 import com.huynqb.laundrylocker.payment.dto.CreateTopupRequest;
 import com.huynqb.laundrylocker.payment.dto.PaymentResponse;
@@ -49,6 +53,9 @@ public class PaymentService {
   private final RefundRepository refundRepository;
   private final RabbitTemplate rabbitTemplate;
   private final Environment environment;
+  private final WalletService walletService;
+  private final OrderClient orderClient;
+  private final MomoService momoService;
 
   @Value("${vnpay.pay-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
   private String vnpayPayUrl;
@@ -88,11 +95,69 @@ public class PaymentService {
     if ("VNPAY".equals(payment.getMethod())) {
       payment.setUrl(buildVnPayUrl(payment, request.bankCode(), request.language()));
     } else if ("MOMO".equals(payment.getMethod())) {
-      payment.setUrl(momoRedirectUrl + "?orderId=" + payment.getReferenceId());
-      payment.setDeeplink(payment.getUrl());
+      momoService.createPayment(payment, null);
     } else if ("CASH".equals(payment.getMethod())) {
       payment.setStatus("COMPLETED");
     }
+    PaymentRecord saved = repository.save(payment);
+    if ("COMPLETED".equals(saved.getStatus())) {
+      publish(DomainEventNames.PAYMENT_COMPLETED, saved);
+    }
+    return toResponse(saved);
+  }
+
+  /**
+   * Pay for an existing order with the chosen method.
+   * WALLET/CASH settle immediately (status COMPLETED + event); VNPAY/MOMO return a redirect URL
+   * and settle later via the provider callback. The amount is taken from the order (authoritative),
+   * not the client.
+   */
+  @Transactional
+  public PaymentResponse checkout(Long userId, CheckoutRequest request) {
+    OrderSummary order;
+    try {
+      order = orderClient.getOrder(request.orderId()).data();
+    } catch (Exception ex) {
+      throw new BusinessException("ORDER_LOOKUP_FAILED", "Không lấy được thông tin đơn: " + ex.getMessage());
+    }
+    if (order == null) {
+      throw new NotFoundException("Order", request.orderId());
+    }
+    BigDecimal amount = order.totalPrice() == null ? BigDecimal.ZERO : order.totalPrice();
+
+    boolean alreadyPaid =
+        repository.findByOrderId(request.orderId()).stream()
+            .anyMatch(p -> "COMPLETED".equals(p.getStatus()));
+    if (alreadyPaid) {
+      throw new BusinessException("ORDER_ALREADY_PAID", "Đơn này đã được thanh toán");
+    }
+
+    String method = request.method() == null ? "" : request.method().toUpperCase();
+    PaymentRecord payment = new PaymentRecord();
+    payment.setOrderId(request.orderId());
+    payment.setUserId(userId);
+    payment.setAmount(amount);
+    payment.setMethod(method);
+    payment.setReferenceId(generateReference(request.orderId()));
+    payment.setContent("Thanh toan don " + request.orderId());
+    payment.setDescription("Thanh toán đơn #" + request.orderId());
+
+    switch (method) {
+      case "WALLET" -> {
+        walletService.debit(
+            userId,
+            amount,
+            WalletService.SOURCE_ORDER_PAYMENT,
+            "ORDERPAY-" + request.orderId(),
+            "Thanh toán đơn #" + request.orderId());
+        payment.setStatus("COMPLETED");
+      }
+      case "CASH" -> payment.setStatus("COMPLETED");
+      case "VNPAY" -> payment.setUrl(buildVnPayUrl(payment, request.bankCode(), request.language(), request.returnUrl()));
+      case "MOMO" -> momoService.createPayment(payment, request.returnUrl());
+      default -> throw new BusinessException("PAYMENT_METHOD_INVALID", "Phương thức thanh toán không hợp lệ: " + method);
+    }
+
     PaymentRecord saved = repository.save(payment);
     if ("COMPLETED".equals(saved.getStatus())) {
       publish(DomainEventNames.PAYMENT_COMPLETED, saved);
@@ -121,6 +186,29 @@ public class PaymentService {
             .orElseThrow(() -> new NotFoundException("Payment", -1L));
     payment.setReferenceTransactionId(params.get("vnp_TransactionNo"));
     boolean success = verifyVnPay(params) && "00".equals(params.get("vnp_ResponseCode"));
+    payment.setStatus(success ? "COMPLETED" : "FAILED");
+    PaymentRecord saved = repository.save(payment);
+    // Wallet top-up: credit the user's balance once VNPay confirms (idempotent by txnRef,
+    // so VNPay return + IPN both firing won't double-credit).
+    if (success && "VNPAY_TOPUP".equals(saved.getMethod())) {
+      walletService.credit(
+          saved.getUserId(),
+          saved.getAmount(),
+          WalletService.SOURCE_TOPUP,
+          saved.getReferenceId(),
+          "Nạp ví qua VNPay");
+    }
+    publish(success ? DomainEventNames.PAYMENT_COMPLETED : DomainEventNames.PAYMENT_FAILED, saved);
+    return toResponse(saved);
+  }
+
+  @Transactional
+  public PaymentResponse handleMomoCallback(Map<String, String> params) {
+    String momoOrderId = params.get("orderId"); // MoMo orderId == our referenceId
+    PaymentRecord payment =
+        repository.findByReferenceId(momoOrderId).orElseThrow(() -> new NotFoundException("Payment", -1L));
+    payment.setReferenceTransactionId(params.get("transId"));
+    boolean success = momoService.verifyIpn(params) && momoService.isSuccess(params);
     payment.setStatus(success ? "COMPLETED" : "FAILED");
     PaymentRecord saved = repository.save(payment);
     publish(success ? DomainEventNames.PAYMENT_COMPLETED : DomainEventNames.PAYMENT_FAILED, saved);
@@ -243,6 +331,11 @@ public class PaymentService {
   }
 
   private String buildVnPayUrl(PaymentRecord payment, String bankCode, String language) {
+    return buildVnPayUrl(payment, bankCode, language, null);
+  }
+
+  private String buildVnPayUrl(
+      PaymentRecord payment, String bankCode, String language, String returnUrl) {
     Map<String, String> params = new TreeMap<>();
     params.put("vnp_Version", "2.1.0");
     params.put("vnp_Command", "pay");
@@ -253,7 +346,7 @@ public class PaymentService {
     params.put("vnp_OrderInfo", "Thanh toan don hang " + payment.getOrderId());
     params.put("vnp_OrderType", "other");
     params.put("vnp_Locale", StringUtils.hasText(language) ? language : "vn");
-    params.put("vnp_ReturnUrl", vnpayReturnUrl);
+    params.put("vnp_ReturnUrl", StringUtils.hasText(returnUrl) ? returnUrl : vnpayReturnUrl);
     params.put("vnp_IpAddr", "127.0.0.1");
     params.put("vnp_CreateDate", DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
     if (StringUtils.hasText(bankCode)) {

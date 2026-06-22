@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-20 (PA4 — STAFF+TECHNICIAN roles)
+> Cập nhật lần cuối: 2026-06-21
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -68,6 +68,8 @@ Tên role hiện chưa đồng nhất hoàn toàn:
 - Backend mặc định role mới là `CUSTOMER`.
 - Một số seed/demo profile đang dùng `USER`.
 - Flutter routing xem mọi role không phải `MANAGER`/`MAINTENANCE` là customer home.
+
+**Cấp phát role (2026-06-20):** khách tự đăng ký trên mobile (email/phone/Google qua Firebase) **chỉ ra `CUSTOMER`**. Các role vận hành `ADMIN`/`MANAGER`/`MAINTENANCE` **chỉ do admin web tạo** (`POST /api/admin/users`, tạo cả `auth_account` để login được) — xem mục 3.
 
 ### Admin
 
@@ -206,7 +208,7 @@ Client gọi:
 POST /api/auth/register
 ```
 
-Body gồm email/phone/password và role tuỳ chọn.
+Body gồm email/phone/password (field `roles` nếu có **bị bỏ qua**).
 
 Hành vi backend:
 
@@ -214,6 +216,47 @@ Hành vi backend:
 2. `auth-service` gọi internal provisioning endpoint của `user-service`.
 3. `user-service` tạo profile trong `user_profiles`.
 4. `auth-service` cấp access token và refresh token.
+
+**Self-register chỉ ra role `CUSTOMER` (2026-06-20).** `AuthService.register()` ép `roles = {CUSTOMER}` bất kể client gửi gì (trước đó honor `roles` client → ai cũng tự đăng ký `ADMIN`). Đường cho phép roles tùy ý đã tách riêng thành `provisionWithRoles()` (nội bộ) + `createAccount()` (dùng cho admin tạo role khác, xem dưới).
+
+### Đăng Ký / Đăng Nhập Nhanh Qua Firebase (mobile)
+
+Mobile dùng **Firebase Auth làm identity broker thống nhất** cho cả số điện thoại (OTP) và Google; mọi provider đều sinh **một Firebase ID token**. Backend chỉ có một endpoint verify:
+
+```http
+POST /api/auth/firebase
+{ "idToken": "<firebase-id-token>" }
+```
+
+Hành vi backend (`AuthService.firebaseLogin`):
+
+1. `FirebaseAuth.verifyIdToken(idToken)` → lấy `uid`, `sign_in_provider` (`phone`/`google.com`/...), `phone_number`, `email`, `name`. idToken sai → `AUTH_FIREBASE_INVALID`.
+2. Tra `social_identities(provider, uid)`; nếu có → login account đã link.
+3. Nếu chưa link → tìm account theo email/phone để **link** vào account cũ; nếu vẫn chưa có → provision user `CUSTOMER` + tạo `auth_account` (password random) rồi lưu `social_identities`.
+4. Cấp `AuthResponse` (accessToken/refreshToken/roles).
+
+Lưu trữ: bảng mới `auth_schema.social_identities(account_id, provider, provider_user_id)` unique `(provider, provider_user_id)` — migration `auth-service V2__auth_social_identities.sql`. `password_hash` giữ `NOT NULL` (social/phone dùng random hash).
+
+Khởi tạo Firebase Admin: `app.firebase.credentials-json` (`FIREBASE_CREDENTIALS_JSON`, nội dung service account JSON). `FirebaseConfig` fail-soft khi thiếu credential (chỉ log warn, không chặn boot). **Facebook (2026-06-21)** đã wire ở mobile (`flutter_facebook_auth` + native config strings.xml/AndroidManifest, `signInWithFacebook()` → Firebase credential → cùng endpoint `/api/auth/firebase`); chạy thật khi đã bật Facebook provider trong Firebase (App ID/Secret) + thêm OAuth redirect URI. Backend không cần đổi (nhận mọi `sign_in_provider`).
+
+Mobile (`smart-laundry-locker-mobile`): `firebase_auth` + `google_sign_in` (v7) trong `FirebaseAuthService`; UI nút Google + dialog phone-OTP trong `auth_bottom_sheet.dart` (cả tab Đăng nhập lẫn Đăng ký) → `LoginProvider.loginWithGoogle()/sendPhoneOtp()/confirmPhoneOtp()` → `POST /api/auth/firebase`.
+
+### Tài Khoản Do Admin Tạo (ADMIN / MANAGER / MAINTENANCE)
+
+Self-register **không** tạo được role vận hành. Admin web tạo qua:
+
+```http
+POST /api/admin/users   (role ADMIN)
+{ email, phoneNumber, firstName, lastName, password, roles:["MANAGER"|"MAINTENANCE"|"ADMIN"|"CUSTOMER"] }
+```
+
+Hành vi (`user-service UserController.adminCreate`, 2026-06-20):
+
+1. Tạo `user_profile` (`UserProfileService.create`).
+2. Gọi Feign `AuthClient.createAccount` → `POST /internal/auth/accounts` ở `auth-service` → tạo `auth_account` có password hash thật cho `userId` (validate roles ∈ {CUSTOMER, ADMIN, MANAGER, MAINTENANCE}).
+3. Nếu tạo auth account lỗi → **xóa profile vừa tạo** (compensate) + ném `ACCOUNT_CREATION_FAILED` (tránh profile mồ côi không login được).
+
+Trước thay đổi này, `POST /api/admin/users` chỉ tạo `user_profile` (không có `auth_account`) → manager/maintenance admin tạo ra **không đăng nhập được**. Web `CreateUserModal` đã đổi danh sách role sang `CUSTOMER/ADMIN/MANAGER/MAINTENANCE` (bỏ stale `USER/STAFF/MODERATOR/PARTNER`); `RoleNameSchema` (Zod) mở rộng để không chặn role mới.
 
 ### Đăng Nhập
 
@@ -761,6 +804,8 @@ Endpoint customer/public:
 
 - `POST /api/payments/topup/create` **(mới 2026-06-18, auth required)**: tạo VNPay URL nạp ví. Body: `{amount: decimal ≥1000, returnUrl?, bankCode?, locale?}`. Response: `{paymentUrl, txnRef}`. userId lấy từ `X-User-Id` header (inject bởi gateway).
 - `GET /payments/vnpay/callback` **(mới 2026-06-18, PUBLIC)**: alias callback path để mobile WebView detect VNPay redirect. Cùng handler với `/api/payments/vnpay/return`. Route qua gateway không cần JWT.
+- `POST /api/payments/checkout` **(mới 2026-06-21, auth)**: thanh toán đơn. Body `{orderId, method: WALLET|VNPAY|MOMO|CASH, bankCode?, returnUrl?, language?}`. WALLET/CASH settle ngay (COMPLETED + event); VNPAY/MOMO trả `url`/`deeplink`/`qr` để redirect. Amount lấy từ order-service (không tin client); chặn double-pay.
+- `GET /api/wallet`, `GET /api/wallet/transactions` **(mới 2026-06-21, auth)**: số dư ví + lịch sử (userId từ `X-User-Id`).
 - `POST /api/payments`
 - `POST /api/payments/create`
 - `PATCH /api/payments/{id}/status`
@@ -777,6 +822,7 @@ Endpoint customer/public:
 
 Endpoint admin:
 
+- `GET /api/admin/wallet/{userId}`, `GET /api/admin/wallet/{userId}/transactions`, `POST /api/admin/wallet/{userId}/adjust` **(mới 2026-06-21)**: xem số dư/lịch sử ví + điều chỉnh (body `{amount, reason}`; dương = cộng, âm = trừ). Web admin: nút "Ví" trong bảng Users mở modal số dư + cộng/trừ.
 - `GET /api/admin/payments`
 - `PATCH /api/admin/payments/{id}/status`
 - `GET /api/admin/payments/{paymentId}`
@@ -797,7 +843,7 @@ Lưu ý hiện tại:
 - Credential provider production và đối soát phụ thuộc environment.
 - UX thanh toán cho SEND/RENTAL chưa hoàn tất end-to-end; order service đã expose flags/giá, nhưng product flow thanh toán cuối cùng cần làm tiếp.
 - Khi chạy profile `prod`/`production`, payment service fail-fast nếu VNPay/MoMo config còn là demo, sandbox, localhost hoặc default placeholder.
-- **(2026-06-18) Wallet topup VNPay**: flow tạo URL và ghi nhận callback COMPLETED đã có, nhưng **số dư user KHÔNG thay đổi** — không có wallet/balance service. Xem mục 26 để biết design và TODO đầy đủ.
+- **(2026-06-18 → 2026-06-21) Wallet topup VNPay → ĐÃ NỐI VÍ**: nạp VNPay thành công giờ **cộng số dư ví** (bảng `payment_schema.wallets` + `wallet_transactions`, migration **V3**; idempotent theo `txnRef`). Thêm **thanh toán đơn** `POST /api/payments/checkout` (Ví/VNPay/MoMo/Tiền mặt). order-service **lắng nghe `PAYMENT_COMPLETED`** (queue `order.payment.events`) → set đơn `payment_status=PAID`+`paid_at` (migration order **V5**). **MoMo** có tích hợp thật (`MomoService`: AIO v2 create + HMAC SHA256 + verify IPN), kích hoạt khi cấu hình `MOMO_*` env (chưa cấu hình → checkout MoMo báo `MOMO_NOT_CONFIGURED`, không chặn boot). Thanh toán hiện **không bắt buộc** (chưa chặn cấp PIN). Hoàn tiền/điều chỉnh admin → cộng/trừ ví. `OrderResponse` thêm field `paymentStatus` (UNPAID/PAID/REFUNDED) để client biết đơn đã trả chưa. Mobile: cờ `walletEnabled/transactionsEnabled` đã bật, số dư đọc `GET /api/wallet`; **nút "Thanh toán" trong chi tiết đơn (locker_ops `my_locker_orders_page`)** mở bộ chọn Ví/VNPay/MoMo/Tiền mặt → `POST /api/payments/checkout` (Ví/Tiền mặt tức thì; VNPay/MoMo mở WebView). Xem mục 26.
 
 ## 16. Luồng Thông Báo
 
@@ -1136,6 +1182,75 @@ Lưu ý quan trọng:
 
 Đổi logo app sang logo tủ khóa nền navy người dùng cung cấp: `assets/images/logo.png` (dùng cho splash/onboarding/appbar) + regen launcher icon Android (`mipmap-*/ic_launcher.png`, mọi mật độ) và iOS (`AppIcon.appiconset/*`) qua `flutter_launcher_icons` (đổi `pubspec.yaml` `flutter_launcher_icons.android` → `true` để khớp manifest `@mipmap/ic_launcher`). Không đổi API/flow nghiệp vụ.
 
+### Realtime auto-refresh qua AppEventBus (2026-06-22)
+
+`lib/core/services/app_event_bus.dart` — singleton `StreamController<AppEvent>.broadcast()`:
+
+- Event types: `OrderChangedEvent(orderId?)`, `PaymentCompletedEvent(orderId?)`, `PaymentFailedEvent(orderId?)`, `WalletUpdatedEvent`, `ReportUpdatedEvent(reportId?)`.
+
+`NotificationProvider` parse field `actionType` từ cả 2 nguồn thông báo, emit lên `AppEventBus`:
+
+| actionType | Event emit |
+|---|---|
+| `ORDER_STATUS_CHANGED` | `OrderChangedEvent(orderId: referenceId)` |
+| `PAYMENT_COMPLETED` | `PaymentCompletedEvent(orderId)` + `WalletUpdatedEvent` |
+| `PAYMENT_FAILED` | `PaymentFailedEvent(orderId)` |
+| `LOCKER_REPORT_CLAIMED` / `LOCKER_REPORT_RESOLVED` | `ReportUpdatedEvent(reportId)` |
+
+Nguồn parse:
+- **STOMP WebSocket**: `notification.dataPayload?.actionType` + `notification.dataPayload?.referenceId`
+- **FCM push**: `message.data['type']` + `message.data['referenceId']`
+
+Consumers (subscribe trong `initState`/constructor, hủy trong `dispose` bằng `StreamSubscription.cancel()`):
+
+- `OrderPage`: reload `OrderProvider.refresh()` khi nhận `OrderChangedEvent` hoặc `PaymentCompletedEvent`.
+- `CustomerOrderDetailPage`: gọi `fetchOrderDetail(currentId)` khi nhận `OrderChangedEvent` khớp `orderId` (hoặc `orderId == null` — broadcast toàn bộ).
+- `WalletProvider` (constructor): gọi `getWalletBalance()` khi nhận `WalletUpdatedEvent` hoặc `PaymentCompletedEvent`.
+
+Kết quả: App tự refresh màn Đơn hàng, Chi tiết đơn, Số dư ví khi backend thay đổi trạng thái qua STOMP hoặc FCM push — không cần pull-to-refresh thủ công.
+
+### Trang chi tiết Voucher và Promotion (2026-06-22)
+
+**VoucherDetailPage** (`lib/features/vouchers/presentation/pages/voucher_detail_page.dart`, MỚI):
+
+- Dùng cho `VoucherModel` (từ `/promotions/vouchers/my` khi có backend, hiện wired từ `MyVouchersPage`).
+- Ticket card gradient (màu khi `UNUSED`, xám khi `USED`/`EXPIRED`) với notch divider hai bên (`_NotchPainter`).
+- Code chip bấm-để-copy (`Clipboard.setData` + `SnackBar` xác nhận).
+- Bảng thông tin: loại giảm, giảm tối đa, đơn tối thiểu, hiệu lực từ, hạn dùng, trạng thái.
+- Back navigation: `context.pop()`.
+- Wired từ `MyVouchersPage`: mỗi card bọc trong `GestureDetector` → `Navigator.of(context, rootNavigator: true).push(VoucherDetailPage(voucher: voucher))`.
+
+**PromotionDetailPage** (`lib/features/promotions/presentation/pages/promotion_detail_page.dart`, MỚI):
+
+- Dùng cho `PromotionModel` (từ `GET /api/promotions/active`).
+- Banner ảnh 180px (`CachedNetworkImage` + gradient overlay tối từ dưới lên; fallback gradient khi không có ảnh).
+- Chip "Flash Sale ⚡" + badge giảm giá + tên promotion trên ảnh.
+- Ticket banner gradient (6 màu, chọn theo `promo.id % 6`): text phần thưởng + hạn dùng.
+- Code chip bấm-để-copy.
+- Bảng thông tin: mức giảm, tối đa, đơn tối thiểu, bắt đầu, kết thúc, trạng thái (dùng getter `isExpired` mới thêm vào `PromotionModel`: `endAt?.isBefore(DateTime.now())`).
+- 3 steps "Cách sử dụng": copy mã → nhập khi thanh toán → giảm được áp dụng.
+- Back navigation: `Navigator.of(context).pop()`.
+
+Wiring điều hướng:
+
+| Nguồn | Cách push | Lý do |
+|---|---|---|
+| `PromotionsPage` (`/promotions`, ngoài ShellRoute) | `Navigator.of(ctx).push(MaterialPageRoute)` | Đã ở root navigator — push thường là đủ |
+| `_FlashSaleCard` trên home (trong ShellRoute `/home`) | `Navigator.of(context, rootNavigator: true).push(MaterialPageRoute)` | Phải dùng rootNavigator để phủ qua bottom nav bar |
+
+Lỗi trước khi fix: `_FlashSaleCard.onTap` gọi `context.push(AppRouter.promotions)` (mở trang danh sách, không phải chi tiết); `_buildPromoCard` trong `PromotionsPage` không có `onTap` — tap vào card không làm gì.
+
+### 10 mock ô tủ per locker (2026-06-22)
+
+`_LockerCardState._enrichLayout(Map<String, dynamic> raw)` — static method trong `store_lockers_page.dart`:
+
+- Chạy sau khi `GET /api/lockers/{id}/layout` thành công (nếu trả <10 ô) hoặc thất bại (hiển thị demo grid thay vì màn trắng).
+- Grid 2×5 (2 hàng × 5 cột, tổng 10 ô):
+  - **Row 0** (col 0–4): 5 STANDARD cells, size `SMALL/MEDIUM/LARGE/MEDIUM/SMALL`, status `AVAILABLE/OCCUPIED/AVAILABLE/RESERVED/AVAILABLE`.
+  - **Row 1** col 0–1: 2 STANDARD (`AVAILABLE/OCCUPIED`); col 2–4: 3 DRONE (`AVAILABLE/LARGE`).
+- Giữ ô thật (từ API) ở đúng vị trí theo `rowIndex`/`colIndex`, chỉ lấp các vị trí còn trống bằng mock.
+- Kết quả: Lưới ô tủ luôn hiện đủ 10 ô demo, kể cả khi seed backend CAB-DEMO-01 chỉ trả về 1 ô.
+
 ## 22. Luồng Web Frontend
 
 Flow giá trị cao hiện tại của React app:
@@ -1238,9 +1353,11 @@ Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ t
 - **Mobile UI luồng tủ — ĐÃ LÀM** trên branch `feat/locker-customer-ui-revamp` (xem mục 21).
 - L2–L7: chưa làm.
 
-## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18)
+## 26. Luồng VNPay Wallet Topup — NẠP TIỀN VÍ (2026-06-18, cập nhật 2026-06-21)
 
-> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | Wallet/balance update ❌ | Test thực tế ❌
+> **Trạng thái**: Tạo VNPay URL ✅ | Callback xử lý ✅ | **Wallet/balance update ✅ (2026-06-21)** | Test thực tế (sandbox) ⏳
+>
+> **(2026-06-21) Ví đã hoàn thiện**: bảng `payment_schema.wallets` + `wallet_transactions` (migration V3). `PaymentService.handleVnPayReturn` cộng ví khi topup COMPLETED (idempotent theo `txnRef`). Thanh toán đơn đa hình thức qua `POST /api/payments/checkout` (WALLET trừ ví tức thì / VNPAY / MOMO / CASH). order-service nghe `PAYMENT_COMPLETED` → đơn `payment_status=PAID`. MoMo thật (`MomoService`) gated theo env. Admin điều chỉnh ví `POST /api/admin/wallet/{userId}/adjust`. Mobile bật lại cờ ví + đọc `GET /api/wallet`.
 
 ### Endpoint đã implement
 
@@ -1408,3 +1525,18 @@ ALTER TABLE order_schema.promotions ADD COLUMN IF NOT EXISTS description VARCHAR
 ```
 
 Chạy tự động khi deploy (Flyway). Idempotent nhờ `IF NOT EXISTS`.
+
+### Cập nhật 2026-06-22: Tap vào Flash Sale card và PromotionsPage dẫn thẳng vào PromotionDetailPage
+
+**Trước**: `_FlashSaleCard.onTap` (home, ShellRoute) gọi `context.push(AppRouter.promotions)` → mở trang danh sách, không phải trang chi tiết. `_buildPromoCard` trong `PromotionsPage` không có `onTap` — tap card không làm gì.
+
+**Sau**:
+
+- `_FlashSaleCard.onTap`: `Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PromotionDetailPage(promo: promo)))` — `rootNavigator: true` vì `_FlashSaleCard` nằm trong ShellRoute (tab `/home`), phải phủ qua bottom nav bar.
+- `PromotionsPage` item: bọc `_buildPromoCard` trong `GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => Navigator.of(ctx).push(...))` — `PromotionsPage` nằm ở route `/promotions` ngoài ShellRoute nên push thường là đủ.
+- `PromotionModel` thêm getter `isExpired`: `bool get isExpired { if (endAt == null) return false; return endAt!.isBefore(DateTime.now()); }` — dùng trong `PromotionDetailPage` để hiển thị trạng thái "Hết hạn".
+- `PromotionDetailPage` (MỚI) — xem mục 21 subsection "Trang chi tiết Voucher và Promotion".
+
+**MyVouchersPage → VoucherDetailPage**: Mỗi voucher card trong `MyVouchersPage` bọc trong `GestureDetector` → `Navigator.of(context, rootNavigator: true).push(VoucherDetailPage(voucher: voucher))`. `VoucherDetailPage` (MỚI) — xem mục 21 subsection "Trang chi tiết Voucher và Promotion".
+
+Route `/my-vouchers` + `MyVouchersPage` vẫn gated bởi cờ `vouchersEnabled = false` (backend chưa có endpoint) — khi bật lại thì VoucherDetailPage đã sẵn sàng.

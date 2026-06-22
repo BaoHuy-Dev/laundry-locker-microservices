@@ -5,15 +5,21 @@ import com.huynqb.laundrylocker.auth.dto.LoginRequest;
 import com.huynqb.laundrylocker.auth.dto.LogoutRequest;
 import com.huynqb.laundrylocker.auth.dto.RefreshTokenRequest;
 import com.huynqb.laundrylocker.auth.dto.RegisterRequest;
+import com.huynqb.laundrylocker.auth.dto.CreateAccountRequest;
+import com.huynqb.laundrylocker.auth.dto.FirebaseLoginRequest;
 import com.huynqb.laundrylocker.auth.dto.UserProvisionRequest;
 import com.huynqb.laundrylocker.auth.client.UserClient;
 import com.huynqb.laundrylocker.auth.model.AuthAccount;
 import com.huynqb.laundrylocker.auth.model.RefreshToken;
+import com.huynqb.laundrylocker.auth.model.SocialIdentity;
 import com.huynqb.laundrylocker.auth.repository.AuthAccountRepository;
 import com.huynqb.laundrylocker.auth.repository.RefreshTokenRepository;
+import com.huynqb.laundrylocker.auth.repository.SocialIdentityRepository;
 import com.huynqb.laundrylocker.common.dto.UserSummary;
 import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
 import io.jsonwebtoken.Claims;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,7 +27,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +47,7 @@ public class AuthService {
 
   private final AuthAccountRepository authAccountRepository;
   private final RefreshTokenRepository refreshTokenRepository;
+  private final SocialIdentityRepository socialIdentityRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final UserClient userClient;
@@ -46,6 +55,19 @@ public class AuthService {
 
   @Transactional
   public AuthResponse register(RegisterRequest request) {
+    return provisionWithRoles(
+        new RegisterRequest(
+            request.userId(),
+            request.email(),
+            request.phoneNumber(),
+            request.firstName(),
+            request.lastName(),
+            Set.of("CUSTOMER"),
+            request.password()));
+  }
+
+  @Transactional
+  public AuthResponse provisionWithRoles(RegisterRequest request) {
     Long userId = request.userId();
     UserSummary user =
         userId == null
@@ -71,6 +93,25 @@ public class AuthService {
   }
 
   @Transactional
+  public AuthResponse createAccount(CreateAccountRequest request) {
+    Set<String> allowedRoles = Set.of("CUSTOMER", "ADMIN", "MANAGER", "MAINTENANCE");
+    Set<String> roles = request.roles() == null ? Set.of("CUSTOMER") : request.roles();
+    for (String role : roles) {
+      if (!allowedRoles.contains(role)) {
+        throw new BusinessException("AUTH_INVALID_ROLES", "Invalid role: " + role);
+      }
+    }
+
+    AuthAccount account = new AuthAccount();
+    account.setUserId(request.userId());
+    account.setEmail(request.email());
+    account.setPhoneNumber(request.phoneNumber());
+    String rawPassword = StringUtils.hasText(request.password()) ? request.password() : UUID.randomUUID().toString();
+    account.setPasswordHash(passwordEncoder.encode(rawPassword));
+    return issue(authAccountRepository.save(account), roles);
+  }
+
+  @Transactional
   public AuthResponse login(LoginRequest request) {
     AuthAccount account =
         findByIdentifier(request.identifier());
@@ -79,6 +120,72 @@ public class AuthService {
       throw new BusinessException("AUTH_INVALID", "Invalid credentials");
     }
     account.setLastLoginAt(LocalDateTime.now());
+    UserSummary user = userClient.getUser(account.getUserId()).data();
+    return issue(account, user.roles());
+  }
+
+  @Transactional
+  public AuthResponse firebaseLogin(String idToken) {
+    FirebaseToken decodedToken;
+    try {
+      decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
+    } catch (Exception e) {
+      throw new BusinessException("AUTH_FIREBASE_INVALID", "Invalid Firebase ID Token: " + e.getMessage());
+    }
+
+    String uid = decodedToken.getUid();
+    String email = decodedToken.getEmail();
+    String phone = (String) decodedToken.getClaims().get("phone_number");
+    String name = decodedToken.getName();
+    String provider = "FIREBASE";
+    Object signInProvider = decodedToken.getClaims().get("firebase");
+    if (signInProvider instanceof Map map) {
+      Object sip = map.get("sign_in_provider");
+      if (sip != null) {
+        provider = sip.toString().toUpperCase();
+      }
+    }
+
+    Optional<SocialIdentity> existingIdentity = socialIdentityRepository.findByProviderAndProviderUserId(provider, uid);
+    if (existingIdentity.isPresent()) {
+      AuthAccount account = authAccountRepository.findById(existingIdentity.get().getAccountId())
+          .orElseThrow(() -> new BusinessException("AUTH_ACCOUNT_NOT_FOUND", "Account not found for social identity"));
+      UserSummary user = userClient.getUser(account.getUserId()).data();
+      return issue(account, user.roles());
+    }
+
+    AuthAccount account = null;
+    if (StringUtils.hasText(email)) {
+      account = authAccountRepository.findByEmail(email).orElse(null);
+    }
+    if (account == null && StringUtils.hasText(phone)) {
+      account = authAccountRepository.findByPhoneNumber(phone).orElse(null);
+    }
+
+    if (account == null) {
+      UserSummary user = userClient.provisionUser(new UserProvisionRequest(
+          email,
+          phone,
+          StringUtils.hasText(name) ? name : "User",
+          "",
+          "ACTIVE",
+          Set.of("CUSTOMER")
+      )).data();
+
+      account = new AuthAccount();
+      account.setUserId(user.id());
+      account.setEmail(email);
+      account.setPhoneNumber(phone);
+      account.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+      account = authAccountRepository.save(account);
+    }
+
+    SocialIdentity socialIdentity = new SocialIdentity();
+    socialIdentity.setAccountId(account.getId());
+    socialIdentity.setProvider(provider);
+    socialIdentity.setProviderUserId(uid);
+    socialIdentityRepository.save(socialIdentity);
+
     UserSummary user = userClient.getUser(account.getUserId()).data();
     return issue(account, user.roles());
   }
@@ -113,6 +220,25 @@ public class AuthService {
     AuthAccount account = findAccount(id);
     UserSummary user = userClient.getUser(account.getUserId()).data();
     return new AuthResponse(account.getId(), account.getUserId(), null, null, "Bearer", null, user.roles());
+  }
+
+  /** Provider + verification info per userId, for admin user listing (service-to-service). */
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> accountsByUsers(List<Long> userIds) {
+    if (userIds == null || userIds.isEmpty()) {
+      return List.of();
+    }
+    return authAccountRepository.findByUserIdIn(userIds).stream()
+        .map(
+            account -> {
+              Map<String, Object> info = new HashMap<>();
+              info.put("userId", account.getUserId());
+              info.put("provider", account.getAuthProvider());
+              info.put("emailVerified", account.getEmailVerified());
+              info.put("status", account.getStatus());
+              return info;
+            })
+        .toList();
   }
 
   @Transactional
