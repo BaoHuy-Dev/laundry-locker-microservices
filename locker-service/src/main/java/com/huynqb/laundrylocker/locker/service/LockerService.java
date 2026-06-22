@@ -10,6 +10,11 @@ import com.huynqb.laundrylocker.locker.client.IotClient;
 import com.huynqb.laundrylocker.locker.client.UserClient;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
+import com.huynqb.laundrylocker.locker.dto.DroneBatteryRequest;
+import com.huynqb.laundrylocker.locker.dto.DroneMaintenanceLogResponse;
+import com.huynqb.laundrylocker.locker.dto.DroneStatusRequest;
+import com.huynqb.laundrylocker.locker.dto.DroneUnitRequest;
+import com.huynqb.laundrylocker.locker.dto.DroneUnitResponse;
 import com.huynqb.laundrylocker.locker.dto.FaultCellResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerLayoutResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRatingRequest;
@@ -22,12 +27,17 @@ import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleRequest;
 import com.huynqb.laundrylocker.locker.dto.MaintenanceScheduleResponse;
 import com.huynqb.laundrylocker.locker.dto.RepairLogResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerResponse;
+import com.huynqb.laundrylocker.locker.model.DroneMaintenanceLog;
+import com.huynqb.laundrylocker.locker.model.DroneStatus;
+import com.huynqb.laundrylocker.locker.model.DroneUnit;
 import com.huynqb.laundrylocker.locker.model.LockerBox;
 import com.huynqb.laundrylocker.locker.model.LockerReport;
 import com.huynqb.laundrylocker.locker.model.LockerReportRating;
 import com.huynqb.laundrylocker.locker.model.MaintenanceSchedule;
 import com.huynqb.laundrylocker.locker.model.RepairLog;
 import com.huynqb.laundrylocker.locker.model.LockerUnit;
+import com.huynqb.laundrylocker.locker.repository.DroneMaintenanceLogRepository;
+import com.huynqb.laundrylocker.locker.repository.DroneUnitRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerBoxRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerReportRatingRepository;
 import com.huynqb.laundrylocker.locker.repository.LockerReportRepository;
@@ -60,6 +70,8 @@ public class LockerService {
   private final RepairLogRepository repairLogRepository;
   private final MaintenanceScheduleRepository scheduleRepository;
   private final LockerReportRatingRepository ratingRepository;
+  private final DroneUnitRepository droneUnitRepository;
+  private final DroneMaintenanceLogRepository droneMaintenanceLogRepository;
   private final IotClient iotClient;
   private final UserClient userClient;
 
@@ -547,6 +559,114 @@ public class LockerService {
         s.getNextDueAt(),
         s.getActive(),
         due);
+  }
+
+  // ---- Drone fleet (thiết bị bay vật lý, khác ô tủ cellType=DRONE) ----
+
+  @Transactional
+  public DroneUnitResponse createDroneUnit(DroneUnitRequest request) {
+    lockerRepository
+        .findById(request.lockerId())
+        .orElseThrow(() -> new NotFoundException("Locker", request.lockerId()));
+    if (droneUnitRepository.existsByCode(request.code())) {
+      throw new BusinessException("DRONE_CODE_DUPLICATE", "Drone code already exists: " + request.code());
+    }
+    DroneUnit unit = new DroneUnit();
+    unit.setLockerId(request.lockerId());
+    unit.setCode(request.code());
+    return toDroneUnit(droneUnitRepository.save(unit));
+  }
+
+  @Transactional(readOnly = true)
+  public List<DroneUnitResponse> listDroneUnits() {
+    return droneUnitRepository.findAllByOrderByLockerIdAscCodeAsc().stream()
+        .map(this::toDroneUnit)
+        .toList();
+  }
+
+  @Transactional
+  public DroneUnitResponse claimDrone(Long id, Long userId) {
+    DroneUnit unit = findDroneUnit(id);
+    unit.setAssignedTechnicianId(userId);
+    return toDroneUnit(droneUnitRepository.save(unit));
+  }
+
+  @Transactional
+  public DroneUnitResponse updateDroneStatus(Long id, String status, String reason, Long actorUserId) {
+    if (!DroneStatus.ALL.contains(status)) {
+      throw new BusinessException("DRONE_STATUS_INVALID", "Unknown drone status: " + status);
+    }
+    if (DroneStatus.FAULT.equals(status) && !StringUtils.hasText(reason)) {
+      throw new BusinessException("DRONE_FAULT_REASON_REQUIRED", "A reason is required to mark a drone as FAULT");
+    }
+    DroneUnit unit = findDroneUnit(id);
+    String previousStatus = unit.getStatus();
+    unit.setStatus(status);
+    unit.setFaultReason(DroneStatus.FAULT.equals(status) ? reason : null);
+    DroneUnit saved = droneUnitRepository.save(unit);
+    String note = "Chuyển trạng thái %s → %s%s"
+        .formatted(previousStatus, status, StringUtils.hasText(reason) ? ": " + reason : "");
+    appendDroneLog(saved.getId(), note, actorUserId);
+    return toDroneUnit(saved);
+  }
+
+  @Transactional
+  public DroneUnitResponse updateDroneBattery(Long id, Integer batteryPercent) {
+    DroneUnit unit = findDroneUnit(id);
+    unit.setBatteryPercent(batteryPercent);
+    if (batteryPercent == 100) {
+      unit.setLastChargedAt(LocalDateTime.now());
+    }
+    return toDroneUnit(droneUnitRepository.save(unit));
+  }
+
+  @Transactional(readOnly = true)
+  public List<DroneMaintenanceLogResponse> droneLogs(Long droneUnitId) {
+    return droneMaintenanceLogRepository.findByDroneUnitIdOrderByCreatedAtAsc(droneUnitId).stream()
+        .map(this::toDroneLog)
+        .toList();
+  }
+
+  @Transactional
+  public DroneMaintenanceLogResponse addDroneLog(Long droneUnitId, String note, Long actorUserId) {
+    findDroneUnit(droneUnitId);
+    return toDroneLog(appendDroneLog(droneUnitId, note, actorUserId));
+  }
+
+  private DroneMaintenanceLog appendDroneLog(Long droneUnitId, String note, Long actorUserId) {
+    DroneMaintenanceLog log = new DroneMaintenanceLog();
+    log.setDroneUnitId(droneUnitId);
+    log.setActorUserId(actorUserId);
+    log.setNote(note);
+    return droneMaintenanceLogRepository.save(log);
+  }
+
+  private DroneUnit findDroneUnit(Long id) {
+    return droneUnitRepository.findById(id).orElseThrow(() -> new NotFoundException("DroneUnit", id));
+  }
+
+  private DroneUnitResponse toDroneUnit(DroneUnit unit) {
+    LockerUnit locker = lockerRepository.findById(unit.getLockerId()).orElse(null);
+    UserSummary technician = lookupUserQuietly(unit.getAssignedTechnicianId());
+    return new DroneUnitResponse(
+        unit.getId(),
+        unit.getLockerId(),
+        locker == null ? null : locker.getCode(),
+        locker == null ? null : locker.getName(),
+        unit.getCode(),
+        unit.getStatus(),
+        unit.getBatteryPercent(),
+        unit.getFaultReason(),
+        unit.getAssignedTechnicianId(),
+        technician == null ? null : technician.fullName(),
+        unit.getLastChargedAt(),
+        unit.getCreatedAt(),
+        unit.getUpdatedAt());
+  }
+
+  private DroneMaintenanceLogResponse toDroneLog(DroneMaintenanceLog log) {
+    return new DroneMaintenanceLogResponse(
+        log.getId(), log.getDroneUnitId(), log.getActorUserId(), log.getNote(), log.getCreatedAt());
   }
 
   private LockerStatsResponse toStats(LockerUnit locker) {
