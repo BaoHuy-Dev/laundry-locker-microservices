@@ -1,5 +1,4 @@
 FROM eclipse-temurin:21-jre-alpine
-RUN apk update && apk upgrade --no-cache
 ARG MODULE=loyalty-service
 WORKDIR /app
 RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
