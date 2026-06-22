@@ -694,6 +694,32 @@ Lưu ý hiện tại:
 - **Customer↔Maintenance qua lại (2026-06-16)**: khi maintenance `claim` hoặc `resolve` một report, `LockerService` publish event mới `locker.report.claimed`/`locker.report.resolved` (RabbitMQ exchange `laundry.events`, có binding riêng trong `notification-service`) kèm `userId` của khách đã báo cáo + message tiếng Việt có tên tủ; `notification-service` tạo notification thật (push/STOMP) cho khách. Khách xem trạng thái report của mình qua mobile, màn mới "Báo cáo của tôi" (`GET /api/lockers/my-reports`), và giờ có thể đánh giá ngược lại khi report xong — khép kín vòng phản hồi 2 chiều. Cả `POST /api/lockers/{id}/report` và `POST /api/boxes/{id}/fault` đều ghi vào cùng bảng `locker_reports` nên cùng được loop này phủ.
 - **Force-open khẩn cấp (2026-06-16)**: maintenance có thể mở ô không cần PIN khách qua `POST /api/maintenance/boxes/{id}/force-open` (locker-service gọi Feign `IotClient` → `POST /internal/iot/force-unlock` ở iot-service). Mọi lần mở (PIN/QR khách lẫn MASTER override) đều ghi vào bảng audit `box_access_logs` (actor, credential type, kết quả) — xem mục 19.
 
+### 11.1 Bảo Trì Đội Drone (Fleet) — mới 2026-06-22
+
+Đây là domain mới **"con drone vật lý"** (thiết bị bay), khác hoàn toàn với ô tủ `cellType=DRONE` (ô nhận hàng drone thả xuống, đã có từ Phase 2). Sống trong `locker-service` (bảng `drone_units`/`drone_maintenance_logs`, migration `V10__drone_units.sql`).
+
+Model `DroneUnit`:
+
+- `code` (duy nhất), `lockerId` (tủ làm trạm gốc).
+- `status`: `IDLE` (sẵn sàng) | `CHARGING` (đang sạc) | `IN_FLIGHT` (đang bay) | `MAINTENANCE` (đang bảo trì) | `FAULT` (lỗi, bắt buộc kèm `faultReason`).
+- `batteryPercent` (0-100) và `assignedTechnicianId` — **hiện đều do kỹ thuật viên nhập tay**, chưa có telemetry thật từ drone (chưa có hardware/MQTT cho drone, khác với cabinet đã có simulator).
+- Mỗi lần đổi trạng thái tự ghi 1 dòng vào `drone_maintenance_logs` (audit nhẹ), kỹ thuật viên cũng ghi tay thêm các bước xử lý khác.
+
+Endpoint backend (`locker-service`, role MAINTENANCE/ADMIN qua gateway — dùng lại Path predicate/RBAC có sẵn của `/api/maintenance/**` và `/api/admin/lockers/**`, không cần đổi gateway):
+
+- `GET /api/maintenance/drones`: danh sách toàn bộ drone, kèm `lockerCode/lockerName` và `assignedTechnicianName` (tra qua `user-service`, best-effort).
+- `POST /api/maintenance/drones/{id}/claim`: kỹ thuật viên nhận phụ trách.
+- `POST /api/maintenance/drones/{id}/status` (`{status, reason?}`): đổi trạng thái; `reason` bắt buộc khi chuyển sang `FAULT`.
+- `POST /api/maintenance/drones/{id}/battery` (`{batteryPercent}`): cập nhật % pin nhập tay.
+- `GET/POST /api/maintenance/drones/{id}/logs`: nhật ký bảo trì.
+- `POST /api/admin/lockers/drones` (ADMIN, `{lockerId, code}`): thêm drone mới vào đội.
+
+Mobile: tab mới **"Drone"** (tab thứ 5) trong `MaintenanceHomePage` — danh sách drone (badge màu theo trạng thái, icon pin theo mức, tên kỹ thuật viên phụ trách hoặc "Chưa nhận"), tap vào mở bottom sheet hành động (Nhận xử lý/Đổi trạng thái/Cập nhật pin %/Nhật ký bảo trì). Banner đầu tab ghi rõ pin/trạng thái bay là dữ liệu nhập tay, tránh hiểu nhầm là telemetry thật.
+
+Demo seed: migration V10 seed 3 drone vào `CAB-DEMO-01` (`DRONE-01` IDLE 92%, `DRONE-02` CHARGING 41%, `DRONE-03` FAULT 15% kèm lý do) để tab có dữ liệu ngay không cần admin tạo trước.
+
+Còn thiếu: gán drone cho một chuyến giao hàng/đơn cụ thể (battery-aware assignment), điều khiển bay/MQTT thật, realtime tracking vị trí — vẫn là "Drone delivery service đầy đủ" ở mục 24.
+
 ## 12. Luồng Manager Operations
 
 Manager là flow vận hành, không phải full admin.
@@ -1313,9 +1339,9 @@ Những phần sau chưa hoàn tất trong sản phẩm đang chạy:
 - Source `laundry-service` thật và ownership catalog.
 - Tablet-web cabinet UI cho người dùng đứng trước locker.
 - Tự động occupy/release từ door/weight sensors.
-- Drone delivery service đầy đủ.
-- Drone fleet management.
-- Phân công drone theo pin/battery-aware assignment.
+- Drone delivery service đầy đủ (điều khiển bay/MQTT thật cho drone).
+- Drone fleet management cơ bản (trạng thái/pin/kỹ thuật viên/nhật ký) **đã có từ 2026-06-22** — xem mục 11.1; pin/trạng thái bay vẫn nhập tay, chưa có telemetry thật.
+- Phân công drone theo pin/battery-aware assignment cho một chuyến giao hàng cụ thể (khác với chỉ xem trạng thái/pin của fleet).
 - Drone simulator và realtime map tracking.
 - AI/RAG knowledge support.
 - Đối soát/thanh quyết toán provider payment cấp production.
