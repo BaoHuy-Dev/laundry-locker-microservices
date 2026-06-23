@@ -9,7 +9,7 @@ chia theo từng phần cho dễ theo dõi.
 |---|---|
 | [deploy/README.md](deploy/README.md) | Tổng quan, sơ đồ, bảng thông tin, giá trị cấu hình chuẩn |
 | [deploy/01-domain-dns.md](deploy/01-domain-dns.md) | Domain `.tech` + Cloudflare DNS |
-| [deploy/02-backend-https-cors.md](deploy/02-backend-https-cors.md) | Nginx + Let's Encrypt + **ghim port gateway 18080** + CORS |
+| [deploy/02-backend-https-cors.md](deploy/02-backend-https-cors.md) | Nginx + Let's Encrypt + **port gateway 8080 (auto-deploy ép)** + CORS |
 | [deploy/03-frontend-web.md](deploy/03-frontend-web.md) | Web admin — Cloudflare Worker + `wrangler` |
 | [deploy/04-mobile.md](deploy/04-mobile.md) | Mobile `.env` + envied |
 | [deploy/05-oauth-firebase.md](deploy/05-oauth-firebase.md) | Firebase / Facebook domains |

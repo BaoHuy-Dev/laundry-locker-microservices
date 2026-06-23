@@ -14,12 +14,12 @@ Kiểm theo thứ tự:
 
 **a) Nginx trỏ sai port gateway** (nguyên nhân số 1)
 ```bash
-docker port ll-ms-api-gateway                                    # vd: 8080/tcp -> 0.0.0.0:18080
+docker port ll-ms-api-gateway                                    # vd: 8080/tcp -> 0.0.0.0:8080
 grep proxy_pass /etc/nginx/sites-available/api.locker-drone.tech # phải khớp port trên
 ```
 Lệch nhau → sửa `proxy_pass http://127.0.0.1:<port>;` rồi `sudo systemctl restart nginx`.
 
-**b) Port gateway nhảy sau recreate** → ghim `API_GATEWAY_PORT=18080` trong `.env`
+**b) Port gateway nhảy sau recreate** → để Nginx proxy về `8080` (port auto-deploy ép); xem 02 mục A
 (xem [02 mục A](02-backend-https-cors.md)). Đây là lý do 502 "lúc được lúc không".
 
 **c) Service phía sau chết** (gateway sống nhưng route 502)

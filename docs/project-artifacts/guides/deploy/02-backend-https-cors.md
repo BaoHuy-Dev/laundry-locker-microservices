@@ -2,29 +2,34 @@
 
 ← [01 — Domain/DNS](01-domain-dns.md) · [Mục lục](README.md) · Tiếp: [03 — Frontend](03-frontend-web.md)
 
-Đây là phần **hay lỗi nhất** (502). Làm đúng thứ tự: ghim port → Nginx → SSL → CORS.
+Đây là phần **hay lỗi nhất** (502). Làm đúng thứ tự: port 8080 → Nginx → SSL → CORS.
 
 ---
 
-## A. ⚠️ Ghim port gateway = 18080 (làm TRƯỚC)
+## A. ⚠️ Port gateway trên droplet = 8080 (KHỚP với auto-deploy)
 
-Gateway publish ra host theo biến `API_GATEWAY_PORT`. Trên droplet này nó từng
-**nhảy giữa 8080 ↔ 18080** mỗi lần recreate → gây **502 lúc được lúc không**. Phải
-ghim cố định. Port 8080 còn bị project `aisl` (dùng chung droplet) chiếm → ta ghim
-**18080** cho gateway của mình.
+Gateway publish ra host theo biến `API_GATEWAY_PORT`. **Auto-deploy ÉP port này =
+`8080`**: `scripts/deploy-from-artifact.sh` có dòng
+`export API_GATEWAY_PORT="${API_GATEWAY_PORT:-8080}"` — biến shell này **ĐÈ** giá
+trị trong `.env` khi `docker compose up` (shell env ưu tiên hơn file `.env`). Lý do:
+firewall DigitalOcean chỉ mở inbound 22 + 8080.
 
+Hệ quả **bắt buộc nhớ**:
+- **Nginx PHẢI proxy về `8080`** (mục B). Trỏ 18080 → lệch port → **502 sau mỗi lần
+  auto-deploy** (đây chính là lỗi "502 lúc được lúc không" đã gặp).
+- Local dev: `docker-compose.yml` mặc định `18080` (host 8080 hay bận). **Chỉ trên
+  droplet mới là `8080`.**
+
+Cho `.env` khớp luôn `8080` để lần `docker compose up` thủ công không bị lệch:
 ```bash
 cd /opt/laundry-locker-microservices
 grep -q '^API_GATEWAY_PORT=' .env \
-  && sed -i 's/^API_GATEWAY_PORT=.*/API_GATEWAY_PORT=18080/' .env \
-  || echo 'API_GATEWAY_PORT=18080' >> .env
-
-docker compose up -d --force-recreate api-gateway
-sleep 30
-docker port ll-ms-api-gateway        # PHẢI ra: 8080/tcp -> 0.0.0.0:18080
+  && sed -i 's/^API_GATEWAY_PORT=.*/API_GATEWAY_PORT=8080/' .env \
+  || echo 'API_GATEWAY_PORT=8080' >> .env
+docker port ll-ms-api-gateway        # PHẢI ra: 8080/tcp -> 0.0.0.0:8080
 ```
 
-> Nhờ ghim trong `.env`, các lần recreate/redeploy về sau giữ nguyên 18080.
+> ❌ **ĐỪNG ghim 18080 cho droplet** — auto-deploy sẽ ép lại 8080 và gây 502.
 
 ---
 
@@ -42,7 +47,7 @@ server {
     client_max_body_size 20m;               # cho upload ảnh (face/avatar)
 
     location / {
-        proxy_pass http://127.0.0.1:18080;  # KHỚP với API_GATEWAY_PORT đã ghim ở mục A
+        proxy_pass http://127.0.0.1:8080;   # KHỚP port auto-deploy ép (mục A) — KHÔNG dùng 18080
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -74,7 +79,7 @@ sudo certbot --nginx -d api.locker-drone.tech     # tự sửa Nginx sang 443 + 
 
 **Kiểm tra:**
 ```bash
-curl -s -o /dev/null -w "gw 18080 -> %{http_code}\n" http://127.0.0.1:18080/actuator/health   # 200
+curl -s -o /dev/null -w "gw 8080 -> %{http_code}\n" http://127.0.0.1:8080/actuator/health     # 200
 curl -is https://api.locker-drone.tech/actuator/health | head -1                              # HTTP/2 200
 ```
 

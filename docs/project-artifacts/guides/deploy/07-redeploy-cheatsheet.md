@@ -17,14 +17,14 @@
 
 ## 🔁 Sau mỗi lần backend redeploy — kiểm 2 thứ
 ```bash
-docker port ll-ms-api-gateway        # phải: 8080/tcp -> 0.0.0.0:18080
+docker port ll-ms-api-gateway        # phải: 8080/tcp -> 0.0.0.0:8080
 curl -is https://api.locker-drone.tech/actuator/health | head -1   # HTTP/2 200
 ```
-Nếu port không phải 18080 → xem [02 mục A](02-backend-https-cors.md) (ghim lại).
+Nếu port không phải 8080 → xem [02 mục A](02-backend-https-cors.md) (ghim lại).
 
 ## ✅ Checklist nghiệm thu toàn hệ thống
 - [ ] `curl https://api.locker-drone.tech/actuator/health` → `200`, ổ khóa xanh.
-- [ ] `docker port ll-ms-api-gateway` → `-> 0.0.0.0:18080`; Nginx `proxy_pass …:18080`.
+- [ ] `docker port ll-ms-api-gateway` → `-> 0.0.0.0:8080`; Nginx `proxy_pass …:8080`.
 - [ ] Preflight `OPTIONS …/api/admin/auth/login` trả `access-control-allow-origin`.
 - [ ] `admin.locker-drone.tech` đăng nhập được (Console không 502 / CORS / Mixed Content).
 - [ ] Tạo user mới OK (để trống SĐT vẫn được).
