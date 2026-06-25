@@ -38,6 +38,23 @@ public class StoreService {
   }
 
   @Transactional(readOnly = true)
+  public List<StoreResponse> adminList(String search, String status) {
+    String q = search == null ? null : search.toLowerCase();
+    return repository.findAll().stream()
+        .filter(s -> {
+          if (status != null && !status.equalsIgnoreCase(s.getStatus())) return false;
+          if (q != null) {
+            String name = s.getName() == null ? "" : s.getName().toLowerCase();
+            String addr = s.getAddress() == null ? "" : s.getAddress().toLowerCase();
+            if (!name.contains(q) && !addr.contains(q)) return false;
+          }
+          return true;
+        })
+        .map(this::toResponse)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public List<StoreResponse> nearby(Double latitude, Double longitude, Double radiusKm) {
     double radius = radiusKm == null ? 10.0 : radiusKm;
     return repository.findByStatusAndActiveTrue("ACTIVE").stream()
