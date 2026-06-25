@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -292,6 +293,13 @@ public class LockerController {
   @PostMapping("/api/admin/lockers/drones")
   public ApiResponse<DroneUnitResponse> adminCreateDrone(@Valid @RequestBody DroneUnitRequest request) {
     return ApiResponse.ok("DRONE_CREATED", "Drone created", lockerService.createDroneUnit(request));
+  }
+
+  @GetMapping("/api/admin/drones")
+  public ApiResponse<List<DroneUnitResponse>> adminDrones(
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long lockerId) {
+    return ApiResponse.ok(lockerService.listDroneUnits(status, lockerId));
   }
 
   @GetMapping("/internal/lockers/{id}/boxes/find")

@@ -584,6 +584,15 @@ public class LockerService {
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public List<DroneUnitResponse> listDroneUnits(String status, Long lockerId) {
+    return droneUnitRepository.findAllByOrderByLockerIdAscCodeAsc().stream()
+        .filter(d -> !StringUtils.hasText(status) || status.equalsIgnoreCase(d.getStatus()))
+        .filter(d -> lockerId == null || lockerId.equals(d.getLockerId()))
+        .map(this::toDroneUnit)
+        .toList();
+  }
+
   @Transactional
   public DroneUnitResponse claimDrone(Long id, Long userId) {
     DroneUnit unit = findDroneUnit(id);
