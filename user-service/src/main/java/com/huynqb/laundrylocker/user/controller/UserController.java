@@ -118,8 +118,12 @@ public class UserController {
   }
 
   @GetMapping("/api/admin/users")
-  public ApiResponse<List<com.huynqb.laundrylocker.user.dto.AdminUserView>> adminUsers() {
-    List<com.huynqb.laundrylocker.user.dto.AdminUserView> views = userProfileService.listAdminViews();
+  public ApiResponse<List<com.huynqb.laundrylocker.user.dto.AdminUserView>> adminUsers(
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String role) {
+    List<com.huynqb.laundrylocker.user.dto.AdminUserView> views =
+        userProfileService.listAdminViews(search, status, role);
     // Best-effort enrich with auth provider/email-verified (never break the list on lookup failure).
     try {
       List<Long> ids = views.stream().map(com.huynqb.laundrylocker.user.dto.AdminUserView::id).toList();
