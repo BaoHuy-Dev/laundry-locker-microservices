@@ -56,8 +56,21 @@ public class UserProfileService {
   }
 
   @Transactional(readOnly = true)
-  public List<com.huynqb.laundrylocker.user.dto.AdminUserView> listAdminViews() {
+  public List<com.huynqb.laundrylocker.user.dto.AdminUserView> listAdminViews(
+      String search, String status, String role) {
+    String q = search == null ? null : search.toLowerCase();
     return userProfileRepository.findAll().stream()
+        .filter(u -> {
+          if (status != null && !status.equalsIgnoreCase(u.getStatus())) return false;
+          if (role != null && !u.getRoles().toLowerCase().contains(role.toLowerCase())) return false;
+          if (q != null) {
+            String name = ((u.getFirstName() == null ? "" : u.getFirstName()) + " "
+                + (u.getLastName() == null ? "" : u.getLastName())).toLowerCase();
+            String email = u.getEmail() == null ? "" : u.getEmail().toLowerCase();
+            if (!name.contains(q) && !email.contains(q)) return false;
+          }
+          return true;
+        })
         .map(
             u ->
                 new com.huynqb.laundrylocker.user.dto.AdminUserView(

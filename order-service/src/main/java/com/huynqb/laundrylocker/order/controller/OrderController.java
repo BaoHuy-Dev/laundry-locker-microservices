@@ -258,8 +258,10 @@ public class OrderController {
   }
 
   @GetMapping("/api/admin/orders")
-  public ApiResponse<List<OrderResponse>> adminOrders(@RequestParam(required = false) String status) {
-    return ApiResponse.ok(orderService.list(status, null));
+  public ApiResponse<List<OrderResponse>> adminOrders(
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String type) {
+    return ApiResponse.ok(orderService.list(status, type, null));
   }
 
   @GetMapping("/api/admin/orders/{id}")
@@ -295,8 +297,10 @@ public class OrderController {
   }
 
   @GetMapping("/api/admin/promotions")
-  public ApiResponse<List<Promotion>> promotions() {
-    return ApiResponse.ok(orderService.promotions());
+  public ApiResponse<List<Promotion>> promotions(
+      @RequestParam(required = false) String code,
+      @RequestParam(required = false) String status) {
+    return ApiResponse.ok(orderService.promotions(code, status));
   }
 
   @GetMapping("/api/admin/promotions/{promotionId}")

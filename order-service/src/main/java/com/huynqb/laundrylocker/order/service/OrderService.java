@@ -663,13 +663,20 @@ public class OrderService {
 
   @Transactional(readOnly = true)
   public List<OrderResponse> list(String status, Long staffId) {
+    return list(status, null, staffId);
+  }
+
+  @Transactional(readOnly = true)
+  public List<OrderResponse> list(String status, String type, Long staffId) {
     if (staffId != null) {
       return orderRepository.findByStaffIdOrderByCreatedAtDesc(staffId).stream().map(this::toResponse).toList();
     }
-    if (StringUtils.hasText(status)) {
-      return orderRepository.findByStatusOrderByCreatedAtDesc(status.toUpperCase()).stream().map(this::toResponse).toList();
-    }
-    return orderRepository.findAll().stream().map(this::toResponse).toList();
+    return orderRepository.findAll().stream()
+        .filter(o -> !StringUtils.hasText(status) || status.equalsIgnoreCase(o.getStatus()))
+        .filter(o -> !StringUtils.hasText(type) || type.equalsIgnoreCase(o.getType()))
+        .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+        .map(this::toResponse)
+        .toList();
   }
 
   @Transactional(readOnly = true)
@@ -807,6 +814,16 @@ public class OrderService {
   @Transactional(readOnly = true)
   public List<Promotion> promotions() {
     return promotionRepository.findAll();
+  }
+
+  @Transactional(readOnly = true)
+  public List<Promotion> promotions(String code, String status) {
+    String q = code == null ? null : code.toLowerCase();
+    return promotionRepository.findAll().stream()
+        .filter(p -> !StringUtils.hasText(status) || status.equalsIgnoreCase(p.getStatus()))
+        .filter(p -> q == null || p.getCode().toLowerCase().contains(q)
+            || (p.getName() != null && p.getName().toLowerCase().contains(q)))
+        .toList();
   }
 
   @Transactional(readOnly = true)

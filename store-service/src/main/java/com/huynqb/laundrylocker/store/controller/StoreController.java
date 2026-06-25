@@ -73,8 +73,10 @@ public class StoreController {
   }
 
   @GetMapping("/api/admin/stores")
-  public ApiResponse<List<StoreResponse>> adminList() {
-    return ApiResponse.ok(service.list());
+  public ApiResponse<List<StoreResponse>> adminList(
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) String status) {
+    return ApiResponse.ok(service.adminList(search, status));
   }
 
   @GetMapping("/api/admin/stores/{id}")
