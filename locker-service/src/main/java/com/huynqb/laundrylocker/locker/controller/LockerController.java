@@ -9,6 +9,7 @@ import com.huynqb.laundrylocker.locker.dto.DroneMaintenanceLogResponse;
 import com.huynqb.laundrylocker.locker.dto.DroneStatusRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneUnitRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneUnitResponse;
+import com.huynqb.laundrylocker.locker.dto.DroneUpdateRequest;
 import com.huynqb.laundrylocker.locker.dto.FaultCellResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerLayoutResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerStatsResponse;
@@ -257,6 +258,12 @@ public class LockerController {
     return ApiResponse.ok("DRONE_CLAIMED", "Drone claimed", lockerService.claimDrone(id, userId));
   }
 
+  @PostMapping("/api/maintenance/drones/{id}/release")
+  public ApiResponse<DroneUnitResponse> maintenanceReleaseDrone(
+      @PathVariable Long id, @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok("DRONE_RELEASED", "Drone released", lockerService.releaseDrone(id, userId));
+  }
+
   @PostMapping("/api/maintenance/drones/{id}/status")
   public ApiResponse<DroneUnitResponse> maintenanceDroneStatus(
       @PathVariable Long id,
@@ -293,6 +300,30 @@ public class LockerController {
   @PostMapping("/api/admin/lockers/drones")
   public ApiResponse<DroneUnitResponse> adminCreateDrone(@Valid @RequestBody DroneUnitRequest request) {
     return ApiResponse.ok("DRONE_CREATED", "Drone created", lockerService.createDroneUnit(request));
+  }
+
+  @PutMapping("/api/admin/drones/{id}")
+  public ApiResponse<DroneUnitResponse> adminUpdateDrone(
+      @PathVariable Long id, @RequestBody DroneUpdateRequest request) {
+    return ApiResponse.ok("DRONE_UPDATED", "Drone updated", lockerService.updateDroneUnit(id, request));
+  }
+
+  @DeleteMapping("/api/admin/drones/{id}")
+  public ApiResponse<Void> adminDecommissionDrone(
+      @PathVariable Long id, @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    lockerService.decommissionDrone(id, userId);
+    return ApiResponse.ok("DRONE_DECOMMISSIONED", "Drone decommissioned", null);
+  }
+
+  // #6 — bao tri bai dap drone (role MAINTENANCE/ADMIN)
+  @PostMapping("/api/maintenance/lockers/{id}/landing-pad")
+  public ApiResponse<LockerLayoutResponse> maintenanceLandingPadStatus(
+      @PathVariable Long id,
+      @RequestBody Map<String, String> body,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok(
+        "LANDING_PAD_UPDATED", "Landing pad status updated",
+        lockerService.updateLandingPadStatus(id, body.get("status"), body.get("reason"), userId));
   }
 
   @GetMapping("/api/admin/drones")

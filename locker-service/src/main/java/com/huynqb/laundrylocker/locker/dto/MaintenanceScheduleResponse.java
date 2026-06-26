@@ -7,6 +7,8 @@ public record MaintenanceScheduleResponse(
     Long lockerId,
     String lockerName,
     String lockerCode,
+    Long droneUnitId,
+    String droneCode,
     String title,
     Integer intervalDays,
     LocalDateTime lastDoneAt,

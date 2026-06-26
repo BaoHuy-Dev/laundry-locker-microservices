@@ -15,6 +15,7 @@ import com.huynqb.laundrylocker.locker.dto.DroneMaintenanceLogResponse;
 import com.huynqb.laundrylocker.locker.dto.DroneStatusRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneUnitRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneUnitResponse;
+import com.huynqb.laundrylocker.locker.dto.DroneUpdateRequest;
 import com.huynqb.laundrylocker.locker.dto.FaultCellResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerLayoutResponse;
 import com.huynqb.laundrylocker.locker.dto.LockerReportRatingRequest;
@@ -86,6 +87,13 @@ public class LockerService {
   private int reservedTtlHours;
 
   private final RabbitTemplate rabbitTemplate;
+
+  /// #7 Nguong pin toi thieu de cho phep drone cat canh (IN_FLIGHT).
+  private static final int DRONE_LOW_BATTERY_PERCENT = 20;
+
+  /// #6 Trang thai hop le cua bai dap drone.
+  private static final java.util.Set<String> LANDING_PAD_STATUSES =
+      java.util.Set.of("OK", "FAULT", "MAINTENANCE");
 
   @Transactional
   public LockerResponse createLocker(LockerRequest request) {
@@ -293,8 +301,34 @@ public class LockerService {
     long fault = boxes.stream().filter(b -> "FAULT".equalsIgnoreCase(b.getStatus())).count();
     return new LockerLayoutResponse(
         locker.getId(), locker.getCode(), locker.getName(), locker.getStatus(),
-        locker.getLandingPad(), locker.getLandingMarkerId(),
+        locker.getLandingPad(), locker.getLandingMarkerId(), locker.getLandingPadStatus(),
         cells.size(), available, fault, cells);
+  }
+
+  /// #6 KTV cap nhat trang thai bao tri bai dap drone: OK / FAULT / MAINTENANCE.
+  /// Khi khac OK se tao 1 phieu su co de theo doi (idempotent theo phieu dang mo).
+  @Transactional
+  public LockerLayoutResponse updateLandingPadStatus(Long lockerId, String status, String reason, Long actorUserId) {
+    if (!LANDING_PAD_STATUSES.contains(status)) {
+      throw new BusinessException("LANDING_PAD_STATUS_INVALID", "Unknown landing pad status: " + status);
+    }
+    LockerUnit locker =
+        lockerRepository.findById(lockerId).orElseThrow(() -> new NotFoundException("Locker", lockerId));
+    if (!Boolean.TRUE.equals(locker.getLandingPad())) {
+      throw new BusinessException("LANDING_PAD_ABSENT", "This locker has no drone landing pad");
+    }
+    String previous = locker.getLandingPadStatus();
+    locker.setLandingPadStatus(status);
+    lockerRepository.save(locker);
+    if (!"OK".equals(status) && !status.equals(previous)) {
+      LockerReport report = new LockerReport();
+      report.setLockerId(lockerId);
+      report.setUserId(actorUserId == null ? 0L : actorUserId);
+      report.setTitle("Bãi đáp drone — " + locker.getCode());
+      report.setDescription(StringUtils.hasText(reason) ? reason : "Landing pad needs attention: " + status);
+      reportRepository.save(report);
+    }
+    return layout(lockerId);
   }
 
   @Transactional(readOnly = true)
@@ -499,11 +533,21 @@ public class LockerService {
 
   @Transactional
   public MaintenanceScheduleResponse createSchedule(MaintenanceScheduleRequest request) {
-    lockerRepository
-        .findById(request.lockerId())
-        .orElseThrow(() -> new NotFoundException("Locker", request.lockerId()));
+    // Lich nham vao 1 tu HOAC 1 drone — bat buoc dung 1 trong 2.
+    if ((request.lockerId() == null) == (request.droneUnitId() == null)) {
+      throw new BusinessException(
+          "SCHEDULE_TARGET_INVALID", "Provide exactly one of lockerId or droneUnitId");
+    }
     MaintenanceSchedule schedule = new MaintenanceSchedule();
-    schedule.setLockerId(request.lockerId());
+    if (request.lockerId() != null) {
+      lockerRepository
+          .findById(request.lockerId())
+          .orElseThrow(() -> new NotFoundException("Locker", request.lockerId()));
+      schedule.setLockerId(request.lockerId());
+    } else {
+      findDroneUnit(request.droneUnitId());
+      schedule.setDroneUnitId(request.droneUnitId());
+    }
     schedule.setTitle(request.title());
     schedule.setIntervalDays(request.intervalDays());
     schedule.setNextDueAt(LocalDateTime.now().plusDays(request.intervalDays()));
@@ -543,7 +587,12 @@ public class LockerService {
   }
 
   private MaintenanceScheduleResponse toSchedule(MaintenanceSchedule s) {
-    LockerUnit locker = lockerRepository.findById(s.getLockerId()).orElse(null);
+    LockerUnit locker =
+        s.getLockerId() == null ? null : lockerRepository.findById(s.getLockerId()).orElse(null);
+    DroneUnit drone =
+        s.getDroneUnitId() == null
+            ? null
+            : droneUnitRepository.findById(s.getDroneUnitId()).orElse(null);
     boolean due =
         Boolean.TRUE.equals(s.getActive())
             && s.getNextDueAt() != null
@@ -553,6 +602,8 @@ public class LockerService {
         s.getLockerId(),
         locker == null ? null : locker.getName(),
         locker == null ? null : locker.getCode(),
+        s.getDroneUnitId(),
+        drone == null ? null : drone.getCode(),
         s.getTitle(),
         s.getIntervalDays(),
         s.getLastDoneAt(),
@@ -580,6 +631,7 @@ public class LockerService {
   @Transactional(readOnly = true)
   public List<DroneUnitResponse> listDroneUnits() {
     return droneUnitRepository.findAllByOrderByLockerIdAscCodeAsc().stream()
+        .filter(d -> Boolean.TRUE.equals(d.getActive()))
         .map(this::toDroneUnit)
         .toList();
   }
@@ -587,6 +639,7 @@ public class LockerService {
   @Transactional(readOnly = true)
   public List<DroneUnitResponse> listDroneUnits(String status, Long lockerId) {
     return droneUnitRepository.findAllByOrderByLockerIdAscCodeAsc().stream()
+        .filter(d -> Boolean.TRUE.equals(d.getActive()))
         .filter(d -> !StringUtils.hasText(status) || status.equalsIgnoreCase(d.getStatus()))
         .filter(d -> lockerId == null || lockerId.equals(d.getLockerId()))
         .map(this::toDroneUnit)
@@ -610,14 +663,104 @@ public class LockerService {
       throw new BusinessException("DRONE_FAULT_REASON_REQUIRED", "A reason is required to mark a drone as FAULT");
     }
     DroneUnit unit = findDroneUnit(id);
+    // #7 An toan: khong cho cat canh khi pin qua thap.
+    if (DroneStatus.IN_FLIGHT.equals(status)
+        && unit.getBatteryPercent() != null
+        && unit.getBatteryPercent() <= DRONE_LOW_BATTERY_PERCENT) {
+      throw new BusinessException(
+          "DRONE_BATTERY_TOO_LOW",
+          "Battery is too low to fly (" + unit.getBatteryPercent() + "%), needs charging first");
+    }
     String previousStatus = unit.getStatus();
     unit.setStatus(status);
     unit.setFaultReason(fault ? reason : null);
+    // #7 Roi trang thai CHARGING => ghi nhan mốc sac xong gan nhat.
+    if (DroneStatus.CHARGING.equals(previousStatus) && !DroneStatus.CHARGING.equals(status)) {
+      unit.setLastChargedAt(LocalDateTime.now());
+    }
     DroneUnit saved = droneUnitRepository.save(unit);
     String note = "Chuyển trạng thái %s → %s%s"
         .formatted(previousStatus, status, fault && StringUtils.hasText(reason) ? ": " + reason : "");
     appendDroneLog(saved.getId(), note, actorUserId);
+    // #2 Dong bo voi hang doi phieu su co: FAULT mo phieu, hoi phuc thi dong phieu.
+    if (fault && !DroneStatus.FAULT.equals(previousStatus)) {
+      openDroneFaultReport(saved, reason, actorUserId);
+    } else if (DroneStatus.FAULT.equals(previousStatus) && !fault) {
+      resolveDroneFaultReport(saved.getId(), actorUserId);
+    }
     return toDroneUnit(saved);
+  }
+
+  /// #5 KTV nha quyen phu trach mot drone (de ban giao ca).
+  @Transactional
+  public DroneUnitResponse releaseDrone(Long id, Long actorUserId) {
+    DroneUnit unit = findDroneUnit(id);
+    unit.setAssignedTechnicianId(null);
+    DroneUnit saved = droneUnitRepository.save(unit);
+    appendDroneLog(saved.getId(), "Nhả quyền phụ trách drone", actorUserId);
+    return toDroneUnit(saved);
+  }
+
+  /// #4 Admin chinh sua drone: doi tu goc va/hoac doi ma.
+  @Transactional
+  public DroneUnitResponse updateDroneUnit(Long id, DroneUpdateRequest request) {
+    DroneUnit unit = findDroneUnit(id);
+    if (request.lockerId() != null && !request.lockerId().equals(unit.getLockerId())) {
+      lockerRepository
+          .findById(request.lockerId())
+          .orElseThrow(() -> new NotFoundException("Locker", request.lockerId()));
+      unit.setLockerId(request.lockerId());
+    }
+    if (StringUtils.hasText(request.code()) && !request.code().equals(unit.getCode())) {
+      if (droneUnitRepository.existsByCode(request.code())) {
+        throw new BusinessException("DRONE_CODE_DUPLICATE", "Drone code already exists: " + request.code());
+      }
+      unit.setCode(request.code());
+    }
+    return toDroneUnit(droneUnitRepository.save(unit));
+  }
+
+  /// #4 Ngung hoat dong drone (xoa mem) — an khoi danh sach van hanh, giu lich su log.
+  @Transactional
+  public void decommissionDrone(Long id, Long actorUserId) {
+    DroneUnit unit = findDroneUnit(id);
+    unit.setActive(false);
+    unit.setAssignedTechnicianId(null);
+    unit.setStatus(DroneStatus.MAINTENANCE);
+    droneUnitRepository.save(unit);
+    appendDroneLog(id, "Drone ngừng hoạt động (decommission)", actorUserId);
+  }
+
+  /// #2 Mo 1 phieu su co gan voi drone (box_id NULL) de no vao chung hang doi
+  /// SLA/qua han nhu phieu o tu.
+  private void openDroneFaultReport(DroneUnit unit, String reason, Long actorUserId) {
+    boolean alreadyOpen =
+        reportRepository
+            .findFirstByDroneUnitIdAndStatusInOrderByCreatedAtDesc(unit.getId(), OPEN_REPORT_STATUSES)
+            .isPresent();
+    if (alreadyOpen) {
+      return;
+    }
+    LockerReport report = new LockerReport();
+    report.setLockerId(unit.getLockerId());
+    report.setDroneUnitId(unit.getId());
+    report.setUserId(actorUserId == null ? 0L : actorUserId);
+    report.setTitle("Drone " + unit.getCode() + " lỗi");
+    report.setDescription(StringUtils.hasText(reason) ? reason : "Drone reported faulty");
+    reportRepository.save(report);
+  }
+
+  /// #2 Khi drone tro lai binh thuong, dong phieu su co dang mo cua no.
+  private void resolveDroneFaultReport(Long droneUnitId, Long actorUserId) {
+    reportRepository
+        .findFirstByDroneUnitIdAndStatusInOrderByCreatedAtDesc(droneUnitId, OPEN_REPORT_STATUSES)
+        .ifPresent(
+            report -> {
+              report.setStatus("RESOLVED");
+              report.setResolvedByUserId(actorUserId);
+              report.setResolvedAt(LocalDateTime.now());
+              reportRepository.save(report);
+            });
   }
 
   @Transactional
@@ -670,6 +813,7 @@ public class LockerService {
         unit.getAssignedTechnicianId(),
         technician == null ? null : technician.fullName(),
         unit.getLastChargedAt(),
+        unit.getActive(),
         unit.getCreatedAt(),
         unit.getUpdatedAt());
   }

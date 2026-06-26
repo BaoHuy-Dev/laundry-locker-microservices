@@ -14,5 +14,6 @@ public record DroneUnitResponse(
     Long assignedTechnicianId,
     String assignedTechnicianName,
     LocalDateTime lastChargedAt,
+    Boolean active,
     LocalDateTime createdAt,
     LocalDateTime updatedAt) {}

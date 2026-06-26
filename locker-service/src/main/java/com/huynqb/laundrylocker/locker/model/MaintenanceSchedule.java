@@ -23,8 +23,13 @@ public class MaintenanceSchedule {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(name = "locker_id", nullable = false)
+  /// Lich nham vao 1 tu; NULL khi lich danh cho 1 drone (xem droneUnitId).
+  @Column(name = "locker_id")
   private Long lockerId;
+
+  /// Lich nham vao 1 drone vat ly; NULL khi lich danh cho 1 tu.
+  @Column(name = "drone_unit_id")
+  private Long droneUnitId;
 
   @Column(nullable = false, length = 255)
   private String title;

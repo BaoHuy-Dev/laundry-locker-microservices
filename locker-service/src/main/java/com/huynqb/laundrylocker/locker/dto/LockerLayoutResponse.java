@@ -10,6 +10,7 @@ public record LockerLayoutResponse(
     String status,
     Boolean landingPad,
     String landingMarkerId,
+    String landingPadStatus,
     int totalCells,
     long availableCells,
     long faultCells,
