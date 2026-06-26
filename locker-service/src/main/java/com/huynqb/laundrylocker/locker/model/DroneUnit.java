@@ -44,6 +44,10 @@ public class DroneUnit {
   @Column(name = "last_charged_at")
   private LocalDateTime lastChargedAt;
 
+  /// false = drone da ngung hoat dong (decommission), an khoi danh sach van hanh.
+  @Column(nullable = false)
+  private Boolean active = true;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
 
