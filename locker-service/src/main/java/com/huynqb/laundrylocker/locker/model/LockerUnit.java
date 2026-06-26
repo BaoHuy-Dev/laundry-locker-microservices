@@ -44,6 +44,10 @@ public class LockerUnit {
   @Column(name = "landing_marker_id", length = 50)
   private String landingMarkerId;
 
+  /// Trang thai bao tri bai dap drone: OK / FAULT / MAINTENANCE.
+  @Column(name = "landing_pad_status", nullable = false, length = 20)
+  private String landingPadStatus = "OK";
+
   @Column(length = 2000)
   private String description;
 
