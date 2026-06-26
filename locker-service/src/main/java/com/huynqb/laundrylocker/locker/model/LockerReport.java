@@ -40,6 +40,10 @@ public class LockerReport {
   @Column(name = "box_id")
   private Long boxId;
 
+  /// Khi phieu su co gan voi 1 drone vat ly (box_id se NULL).
+  @Column(name = "drone_unit_id")
+  private Long droneUnitId;
+
   @Column(name = "assigned_to_user_id")
   private Long assignedToUserId;
 
