@@ -729,6 +729,28 @@ Demo seed: migration V10 seed 3 drone vào `CAB-DEMO-01` (`DRONE-01` IDLE 92%, `
 
 Còn thiếu: gán drone cho một chuyến giao hàng/đơn cụ thể (battery-aware assignment), điều khiển bay/MQTT thật, realtime tracking vị trí — vẫn là "Drone delivery service đầy đủ" ở mục 24.
 
+### 11.2 Mission Planner — Lập Kế Hoạch Bay (Flight Plan) — mới 2026-06-28
+
+Tính năng kiểu **Mission Planner** (Mảng 1: lập kế hoạch bay) cho drone, **chỉ ở mobile**, **thuần frontend + data model offline** — KHÔNG gọi backend, KHÔNG đổi API/DB/event/role. Sống trong `smart-laundry-locker-mobile`, feature mới `lib/features/drone_mission/**`. Đây là bước chuẩn bị cho điều khiển bay thật (Mảng 2 — telemetry MAVLink real-time — **chưa làm**).
+
+**Vai trò & vị trí:** mở từ tab **"Drone"** trong `MaintenanceHomePage` (nút "Lập kế hoạch bay (Mission Planner)"), route `/drone/mission-planner` (`AppRouter.droneMissionPlanner`). Không thêm role mới, không đụng gateway/RBAC (màn cục bộ, không gọi mạng).
+
+**Mô hình dữ liệu (data model):**
+
+- `MavCommand` (enum): các lệnh MAVLink `MAV_CMD` với `code` numeric chuẩn ArduPilot/PX4 — `TAKEOFF`(22), `WAYPOINT`(16), `LOITER_TIME`(19), `LOITER_TURNS`(18), `LOITER_UNLIM`(17), `RTL`(20), `LAND`(21), `CHANGE_SPEED`(178). Mỗi lệnh khai báo có gắn toạ độ/độ cao không + 1 param phụ có nghĩa (loiter time/turns, tốc độ).
+- `MissionItem`: 1 dòng mission (frame MAVLink, command, lat/lng/alt, param1-4, autoContinue). Lệnh không toạ độ (RTL/CHANGE_SPEED) áp dụng tại vị trí điểm liền trước.
+- `FlightMission`: home (điểm xuất phát) + danh sách item + `cruiseSpeed` (ước tính giờ bay) + `defaultAltitude`. Tính tổng quãng đường (haversine qua `pathPoints` từ home), ETA, số waypoint.
+
+**Định dạng file mission (export/import):**
+
+- **QGC WPL 110** (`.waypoints`) — định dạng chuẩn Mission Planner/QGroundControl đọc-ghi (tab-separated, item 0 = HOME frame `GLOBAL`, các item sau frame `GLOBAL_RELATIVE_ALT`). Cho phép liên thông với GCS thật (ArduPilot/PX4). Command code lạ khi import → fallback `WAYPOINT` (không vỡ).
+- **JSON nội bộ** — lossless (giữ tên/cruiseSpeed/defaultAltitude/id/timestamp) để app reload chính xác.
+- Lưu/đọc qua `file_picker` (`saveFile`/`pickFiles`). Ngoài ra có library cục bộ qua `shared_preferences` (lưu nhiều kế hoạch theo tên, mở lại/xóa).
+
+**Thao tác UI:** chạm bản đồ (`flutter_map`+OSM) để thêm waypoint; marker đánh số + marker HOME; polyline nối đường bay; tap marker/list để sửa lệnh-độ cao-param hoặc xóa; chế độ "di chuyển" (chạm lại để đặt vị trí mới); reorder danh sách điểm; đặt HOME tại tâm bản đồ; summary bar (số điểm/quãng đường/ETA); xuất `.waypoints`/JSON, nhập file, lưu/mở library, tạo mới, xóa.
+
+**Chưa có (Mảng 2 — phiên sau):** kết nối flight controller qua MAVLink (UDP/TCP/Bluetooth/USB), telemetry/vị trí drone live, HUD, gửi lệnh real-time. Drag marker trực tiếp trên map (hiện dùng chế độ "di chuyển").
+
 ## 12. Luồng Manager Operations
 
 Manager là flow vận hành, không phải full admin.
