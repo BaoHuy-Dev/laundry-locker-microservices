@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-21
+> Cập nhật lần cuối: 2026-06-21 (PA4 — STAFF+TECHNICIAN roles)
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -152,25 +152,34 @@ Response của `faults` và `reports` hiện trả thêm metadata định vị l
 
 ### Staff
 
-> **ĐÃ GỠ HOÀN TOÀN (PA3 đợt 2, 2026-06-15)**: `staff-service` (module Maven + container + route gateway `/api/staff/**`) và DB `staff_db`/bảng `staff_assignments` đã bị xóa — không luồng nào dùng (order-service xử lý SEND/RENTAL/LAUNDRY trực tiếp). Cũng giải phóng 1 JVM trên droplet. Phần mô tả endpoint bên dưới chỉ còn giá trị lịch sử.
+> **Tái tạo (PA4, 2026-06-20)**: `staff-service` riêng đã bị gỡ (PA3 2026-06-15), nhưng RBAC path `/api/staff/**` đã được thêm lại dưới dạng controllers nhẹ trong locker-service và order-service. Không có DB riêng, không có service riêng. `StaffController` trong locker-service và `StaffOrderController` trong order-service reuse hoàn toàn service methods sẵn có.
 
-Dùng cho các flow vận hành cũ/legacy:
+Gateway yêu cầu `STAFF` hoặc `ADMIN` cho `/api/staff/**`.
 
-- Gán staff cho đơn.
-- Liệt kê đơn của staff theo trạng thái.
-- Mở ô tủ thông qua staff facade.
+Endpoint backend hiện có (read-only):
+
+- `GET /api/staff/lockers` — locker list (optionally filtered by `?storeId=`) → locker-service
+- `GET /api/staff/lockers/{id}/layout` — grid layout ô tủ → locker-service
+- `GET /api/staff/lockers/stats` — occupancy stats (optionally filtered by `?storeId=`) → locker-service
+- `GET /api/staff/orders` — active orders (optionally filtered by `?status=&type=&lockerId=`) → order-service
+
+Test account: `staff@lockr.test` / `12345678` (user_id 9005).
+
+### Technician
+
+> **Mới (PA4, 2026-06-20)**: Role TECHNICIAN mới, dùng cho nhân viên kỹ thuật IoT. `TechnicianController` trong iot-service reuse `DeviceStatusRepository` và `BoxAccessLogRepository`.
+
+Gateway yêu cầu `TECHNICIAN` hoặc `ADMIN` cho `/api/technician/**`.
 
 Endpoint backend hiện có:
 
-- `POST /api/staff/assignments`
-- `POST /api/staff/orders/{orderId}/assign`
-- `GET /api/staff/orders/my-assigned`
-- `GET /api/staff/orders`
-- `GET /api/staff/orders/waiting`
-- `GET /api/staff/orders/processing`
-- `GET /api/staff/orders/ready`
-- `GET /api/staff/lockers`
-- `POST /api/staff/unlock-box`
+- `GET /api/technician/devices` — danh sách tất cả IoT device và trạng thái hiện tại
+- `GET /api/technician/devices/{id}` — chi tiết một device (health, last-seen, status)
+- `PUT /api/technician/devices/{id}/status` — override thủ công trạng thái device (`{status: "ONLINE"|"OFFLINE"|"ERROR"}`)
+- `GET /api/technician/devices/{id}/logs` — audit log (box_access_logs) của locker được device gắn với, mới nhất trước
+- `POST /api/technician/devices/{id}/restart` — publish lệnh restart qua MQTT (best-effort), luôn ghi audit log dù MQTT thất bại
+
+Test account: `tech@lockr.test` / `12345678` (user_id 9006).
 
 ### Partner (đã gỡ)
 
@@ -719,6 +728,28 @@ Mobile: tab mới **"Drone"** (tab thứ 5) trong `MaintenanceHomePage` — danh
 Demo seed: migration V10 seed 3 drone vào `CAB-DEMO-01` (`DRONE-01` IDLE 92%, `DRONE-02` CHARGING 41%, `DRONE-03` FAULT 15% kèm lý do) để tab có dữ liệu ngay không cần admin tạo trước.
 
 Còn thiếu: gán drone cho một chuyến giao hàng/đơn cụ thể (battery-aware assignment), điều khiển bay/MQTT thật, realtime tracking vị trí — vẫn là "Drone delivery service đầy đủ" ở mục 24.
+
+### 11.2 Mission Planner — Lập Kế Hoạch Bay (Flight Plan) — mới 2026-06-28
+
+Tính năng kiểu **Mission Planner** (Mảng 1: lập kế hoạch bay) cho drone, **chỉ ở mobile**, **thuần frontend + data model offline** — KHÔNG gọi backend, KHÔNG đổi API/DB/event/role. Sống trong `smart-laundry-locker-mobile`, feature mới `lib/features/drone_mission/**`. Đây là bước chuẩn bị cho điều khiển bay thật (Mảng 2 — telemetry MAVLink real-time — **chưa làm**).
+
+**Vai trò & vị trí:** mở từ tab **"Drone"** trong `MaintenanceHomePage` (nút "Lập kế hoạch bay (Mission Planner)"), route `/drone/mission-planner` (`AppRouter.droneMissionPlanner`). Không thêm role mới, không đụng gateway/RBAC (màn cục bộ, không gọi mạng).
+
+**Mô hình dữ liệu (data model):**
+
+- `MavCommand` (enum): các lệnh MAVLink `MAV_CMD` với `code` numeric chuẩn ArduPilot/PX4 — `TAKEOFF`(22), `WAYPOINT`(16), `LOITER_TIME`(19), `LOITER_TURNS`(18), `LOITER_UNLIM`(17), `RTL`(20), `LAND`(21), `CHANGE_SPEED`(178). Mỗi lệnh khai báo có gắn toạ độ/độ cao không + 1 param phụ có nghĩa (loiter time/turns, tốc độ).
+- `MissionItem`: 1 dòng mission (frame MAVLink, command, lat/lng/alt, param1-4, autoContinue). Lệnh không toạ độ (RTL/CHANGE_SPEED) áp dụng tại vị trí điểm liền trước.
+- `FlightMission`: home (điểm xuất phát) + danh sách item + `cruiseSpeed` (ước tính giờ bay) + `defaultAltitude`. Tính tổng quãng đường (haversine qua `pathPoints` từ home), ETA, số waypoint.
+
+**Định dạng file mission (export/import):**
+
+- **QGC WPL 110** (`.waypoints`) — định dạng chuẩn Mission Planner/QGroundControl đọc-ghi (tab-separated, item 0 = HOME frame `GLOBAL`, các item sau frame `GLOBAL_RELATIVE_ALT`). Cho phép liên thông với GCS thật (ArduPilot/PX4). Command code lạ khi import → fallback `WAYPOINT` (không vỡ).
+- **JSON nội bộ** — lossless (giữ tên/cruiseSpeed/defaultAltitude/id/timestamp) để app reload chính xác.
+- Lưu/đọc qua `file_picker` (`saveFile`/`pickFiles`). Ngoài ra có library cục bộ qua `shared_preferences` (lưu nhiều kế hoạch theo tên, mở lại/xóa).
+
+**Thao tác UI:** chạm bản đồ (`flutter_map`+OSM) để thêm waypoint; marker đánh số + marker HOME; polyline nối đường bay; tap marker/list để sửa lệnh-độ cao-param hoặc xóa; chế độ "di chuyển" (chạm lại để đặt vị trí mới); reorder danh sách điểm; đặt HOME tại tâm bản đồ; summary bar (số điểm/quãng đường/ETA); xuất `.waypoints`/JSON, nhập file, lưu/mở library, tạo mới, xóa.
+
+**Chưa có (Mảng 2 — phiên sau):** kết nối flight controller qua MAVLink (UDP/TCP/Bluetooth/USB), telemetry/vị trí drone live, HUD, gửi lệnh real-time. Drag marker trực tiếp trên map (hiện dùng chế độ "di chuyển").
 
 ## 12. Luồng Manager Operations
 
