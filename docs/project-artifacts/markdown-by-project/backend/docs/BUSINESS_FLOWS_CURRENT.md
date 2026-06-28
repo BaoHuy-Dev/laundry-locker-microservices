@@ -749,7 +749,31 @@ Tính năng kiểu **Mission Planner** (Mảng 1: lập kế hoạch bay) cho dr
 
 **Thao tác UI:** chạm bản đồ (`flutter_map`+OSM) để thêm waypoint; marker đánh số + marker HOME; polyline nối đường bay; tap marker/list để sửa lệnh-độ cao-param hoặc xóa; chế độ "di chuyển" (chạm lại để đặt vị trí mới); reorder danh sách điểm; đặt HOME tại tâm bản đồ; summary bar (số điểm/quãng đường/ETA); xuất `.waypoints`/JSON, nhập file, lưu/mở library, tạo mới, xóa.
 
-**Chưa có (Mảng 2 — phiên sau):** kết nối flight controller qua MAVLink (UDP/TCP/Bluetooth/USB), telemetry/vị trí drone live, HUD, gửi lệnh real-time. Drag marker trực tiếp trên map (hiện dùng chế độ "di chuyển").
+Bổ sung Mảng 2 (telemetry real-time) ở mục **11.3**. Drag marker trực tiếp trên map của Mảng 1 vẫn dùng chế độ "di chuyển".
+
+### 11.3 Flight Data — Telemetry & Điều Khiển Real-time (MAVLink) — mới 2026-06-28
+
+Tính năng **Flight Data** (Mảng 2): kết nối flight controller **ArduPilot/PX4 thật** (hoặc SITL simulator) qua giao thức **MAVLink**, hiển thị drone live + HUD + gửi lệnh. **Chỉ ở mobile**, **không qua backend** (app nói chuyện thẳng với autopilot qua mạng), KHÔNG đổi API/DB/event/role. Feature `lib/features/drone_telemetry/**`.
+
+**Vai trò & vị trí:** mở từ tab **"Drone"** trong `MaintenanceHomePage` (nút "Telemetry & điều khiển (Flight Data)"), route `/drone/flight-data` (`AppRouter.droneFlightData`). Không thêm role/gateway.
+
+**Giao thức MAVLink (tự viết, thuần Dart, không thêm dependency):**
+
+- `MavlinkCrc` — checksum CRC-16/MCRF4XX + bảng `CRC_EXTRA` theo `common.xml` (đã verify khớp check-value chuẩn `0x6F91`, nên gửi/nhận tương thích autopilot thật).
+- `MavlinkProtocol` — parse khung **MAVLink v1 (0xFE) + v2 (0xFD)**: buffer streaming, resync khi sai CRC, bỏ qua message lạ, học `system_id`/`component_id` của drone từ HEARTBEAT để gửi lệnh đúng đích. Encode: `COMMAND_LONG`(#76), `SET_MODE`(#11), `REQUEST_DATA_STREAM`(#66), `HEARTBEAT`(#0).
+- Message decode: HEARTBEAT(#0, armed + flight mode), SYS_STATUS(#1, pin V/A/%), GPS_RAW_INT(#24, fix + sat), ATTITUDE(#30, roll/pitch/yaw), GLOBAL_POSITION_INT(#33, vị trí + alt + heading), VFR_HUD(#74, tốc độ/alt/climb), COMMAND_ACK(#77), STATUSTEXT(#253).
+
+**Transport (`dart:io`, cross-platform, không cần plugin native):**
+
+- **UDP** (`UdpMavConnection`) — bind cổng local (mặc định 14550), học địa chỉ drone từ datagram đầu tiên (hợp SITL "broadcast tới GCS") hoặc nhập sẵn IP drone. Đây là link phổ biến nhất cho ArduPilot/PX4 qua WiFi.
+- **TCP** (`TcpMavConnection`) — vd SITL `tcp:127.0.0.1:5760` hoặc bridge telemetry TCP.
+- **USB-serial + Bluetooth: chưa làm** (cần plugin native Android + cấu hình USB-host). Abstraction `MavConnection` đã sẵn để cắm vào sau.
+
+**Màn hình `FlightDataPage`:** bản đồ `flutter_map`+OSM với marker drone xoay theo heading + vệt đường bay (trail); **HUD** gồm chân trời nhân tạo (`AttitudeIndicator`, vẽ roll/pitch + thang pitch) + readouts (độ cao tương đối, tốc độ đất, leo/xuống, hướng, pin V/%, GPS fix + số vệ tinh, chế độ bay, ARMED/DISARMED, trạng thái link); sheet kết nối (chọn UDP/TCP, host, cổng). `FlightDataController` (ChangeNotifier) giữ link sống bằng HEARTBEAT 1Hz và gửi `REQUEST_DATA_STREAM` khi nhận heartbeat đầu.
+
+**Lệnh điều khiển (qua COMMAND_LONG/SET_MODE):** ARM/DISARM (`MAV_CMD_COMPONENT_ARM_DISARM` 400), RTL/LOITER/GUIDED/AUTO (đổi mode ArduCopter: 6/5/4/3), TAKEOFF (`MAV_CMD_NAV_TAKEOFF` 22, cần GUIDED + đã ARM). Lệnh nguy hiểm (ARM/RTL/AUTO/DISARM) có dialog xác nhận. **Mode number theo ArduCopter** — PX4 dùng map khác (hiện hiển thị `MODE <số>`).
+
+**An toàn/ghi chú:** tính năng điều khiển bay thật — chỉ dùng khi có thẩm quyền vận hành drone; mode/lệnh đang nhắm ArduPilot (phổ biến với Mission Planner). Chưa smoke với SITL/drone thật trong phiên tạo (kết nối cần peer); đã verify codec bằng unit test (9/9, gồm CRC chuẩn).
 
 ## 12. Luồng Manager Operations
 
