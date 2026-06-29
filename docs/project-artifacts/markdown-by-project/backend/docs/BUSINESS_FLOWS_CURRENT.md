@@ -1060,6 +1060,7 @@ Endpoint:
 - `POST /api/iot/box-status`
 - `POST /internal/iot/device-status`
 - `POST /internal/iot/force-unlock` (mới 2026-06-16: maintenance override, gọi từ `locker-service`, chặn qua gateway public)
+- `POST /internal/iot/box-sync` (mới 2026-06-29: **booking → IoT sync (GAP 1)** — gọi từ `locker-service` khi ô đổi vòng đời `RESERVED/OCCUPIED/AVAILABLE/FAULT`, publish MQTT `cabinet/{lockerId}/command/sync` để tủ mô phỏng đồng bộ; chặn qua gateway public; best-effort, không chặn luồng đặt đơn)
 
 Flow nghiệp vụ:
 
@@ -1075,6 +1076,7 @@ Flow nghiệp vụ:
 
 Lưu ý hiện tại:
 
+- **Booking → IoT sync (GAP 1, mới 2026-06-29)**: trước đây đặt đơn (SEND/RENTAL) chỉ đổi trạng thái ô trong DB của `locker-service`, **không** báo cabinet — tủ chỉ nghe đúng lệnh "mở ô này ngay" (`/api/iot/unlock`), không bao giờ biết ô vừa được giữ/chiếm/giải phóng. Nay `LockerService.reserveBox/occupyBox/releaseBox/markFault/clearFault` gọi best-effort `IotClient.syncBoxState` → `POST /internal/iot/box-sync` (iot-service) → publish MQTT `cabinet/{lockerId}/command/sync` body `{boxId, state, orderId?}`. Đây là **thông báo một chiều fire-and-forget** (không chờ reply, nuốt mọi lỗi broker) nên iot-service/broker chết cũng không làm hỏng luồng đặt đơn. Simulator `simulate_demo_cabinet.py` subscribe topic này và log như thể cabinet cập nhật sơ đồ ô trên màn hình. Khép kín "đặt đơn → tủ mô phỏng đồng bộ".
 - Occupy từ sensor thật là Phase 3.
 - Python `smart-locker-iot` cần config MQTT broker khớp với backend và chế độ hardware/simulation.
 - Drone vẫn là future channel riêng, chỉ dùng cell `DRONE` khi `channel=DRONE`.

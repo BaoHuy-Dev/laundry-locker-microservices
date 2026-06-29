@@ -5,6 +5,7 @@ import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.iot.client.LockerClient;
 import com.huynqb.laundrylocker.iot.client.OrderClient;
 
+import com.huynqb.laundrylocker.iot.dto.BoxStateSyncRequest;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusResponse;
@@ -86,6 +87,19 @@ public class IotService {
       logAccess(request.boxId(), request.lockerId(), verification.orderId(), actorUserId, "PIN_OR_QR", "TIMEOUT", e.getMessage());
       return Map.of("accepted", false, "lockerId", request.lockerId(), "boxId", request.boxId(), "message", "IoT device timeout");
     }
+  }
+
+  /// Booking → IoT sync (GAP 1): mirror a box lifecycle change down to the cabinet.
+  /// Best-effort and non-blocking — a down broker just returns published=false and
+  /// never breaks the caller's order/booking flow.
+  public Map<String, Object> syncBoxState(BoxStateSyncRequest request) {
+    boolean published = lockerMqttService.publishBoxStateSync(
+        request.lockerId(), request.boxId(), request.state().toUpperCase(), request.orderId());
+    return Map.of(
+        "published", published,
+        "lockerId", request.lockerId(),
+        "boxId", request.boxId(),
+        "state", request.state().toUpperCase());
   }
 
   /// Maintenance/admin override: open a box without a customer PIN/QR. Always
