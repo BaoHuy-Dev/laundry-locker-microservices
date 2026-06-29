@@ -176,7 +176,9 @@ public class LockerService {
     }
     box.setStatus("RESERVED");
     box.setReservedUntil(LocalDateTime.now().plusHours(reservedTtlHours));
-    return toSummary(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "RESERVED");
+    return toSummary(saved);
   }
 
   /// Backstop sweep for boxes stuck RESERVED past their TTL — defense in
@@ -203,7 +205,9 @@ public class LockerService {
     }
     box.setStatus("OCCUPIED");
     box.setReservedUntil(null);
-    return toSummary(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "OCCUPIED");
+    return toSummary(saved);
   }
 
   @Transactional
@@ -219,7 +223,9 @@ public class LockerService {
     }
     box.setStatus("AVAILABLE");
     box.setReservedUntil(null);
-    return toSummary(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "AVAILABLE");
+    return toSummary(saved);
   }
 
   @Transactional
@@ -236,6 +242,7 @@ public class LockerService {
     report.setDescription(StringUtils.hasText(reason) ? reason : "Reported faulty");
     reportRepository.save(report);
     publishBoxFault(box, reason);
+    syncBoxStateQuietly(box, "FAULT");
     return toCell(box);
   }
 
@@ -244,7 +251,9 @@ public class LockerService {
     LockerBox box = findBox(boxId);
     box.setStatus("AVAILABLE");
     box.setFaultReason(null);
-    return toCell(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "AVAILABLE");
+    return toCell(saved);
   }
 
   /// Ngưng dùng ô có chủ đích (bảo trì/đóng). Ô bị loại khỏi mọi reserve vì
@@ -948,6 +957,18 @@ public class LockerService {
     LockerBox box = findBox(boxId);
     var result = iotClient.forceUnlock(new IotClient.ForceUnlockRequest(box.getLockerId(), boxId, actorUserId));
     return result.data();
+  }
+
+  /// Booking → IoT sync (GAP 1): best-effort mirror of a box's new lifecycle
+  /// state (RESERVED/OCCUPIED/AVAILABLE/FAULT) down to the cabinet via
+  /// iot-service. Never throws — a down/slow iot-service must not break the
+  /// booking/maintenance flow that just changed the box in the DB.
+  private void syncBoxStateQuietly(LockerBox box, String state) {
+    try {
+      iotClient.syncBoxState(new IotClient.BoxStateSyncRequest(box.getLockerId(), box.getId(), state, null));
+    } catch (Exception ex) {
+      log.debug("Box-state sync to IoT skipped for box {} ({}): {}", box.getId(), state, ex.getMessage());
+    }
   }
 
   @Transactional

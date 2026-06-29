@@ -13,4 +13,11 @@ public interface IotClient {
   ApiResponse<Map<String, Object>> forceUnlock(@RequestBody ForceUnlockRequest request);
 
   record ForceUnlockRequest(Long lockerId, Long boxId, Long actorUserId) {}
+
+  /// Booking → IoT sync (GAP 1): tell the cabinet a box's lifecycle state changed
+  /// (RESERVED/OCCUPIED/AVAILABLE/FAULT). Best-effort — callers swallow failures.
+  @PostMapping("/box-sync")
+  ApiResponse<Map<String, Object>> syncBoxState(@RequestBody BoxStateSyncRequest request);
+
+  record BoxStateSyncRequest(Long lockerId, Long boxId, String state, Long orderId) {}
 }

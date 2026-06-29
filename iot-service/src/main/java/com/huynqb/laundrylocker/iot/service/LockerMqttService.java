@@ -134,6 +134,31 @@ public class LockerMqttService {
     }
   }
 
+  /// Booking → IoT sync (GAP 1): fire-and-forget notify the cabinet that a box's
+  /// lifecycle state changed (RESERVED/OCCUPIED/AVAILABLE/FAULT). Unlike the open
+  /// command this expects no hardware reply, so it never blocks the order flow and
+  /// swallows any broker error (returns false instead of throwing).
+  public boolean publishBoxStateSync(Long lockerId, Long boxId, String state, Long orderId) {
+    if (client == null || !client.isConnected()) {
+      log.warn("Skip box-state sync for locker {} box {}: MQTT client not connected", lockerId, boxId);
+      return false;
+    }
+    try {
+      String payload = orderId == null
+          ? String.format("{\"boxId\":%d,\"state\":\"%s\"}", boxId, state)
+          : String.format("{\"boxId\":%d,\"state\":\"%s\",\"orderId\":%d}", boxId, state, orderId);
+      MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
+      message.setQos(1);
+      String topic = "cabinet/" + lockerId + "/command/sync";
+      client.publish(topic, message);
+      log.info("Published box-state sync (box {} -> {}) to {}", boxId, state, topic);
+      return true;
+    } catch (Exception ex) {
+      log.warn("MQTT box-state sync failed for locker {} box {}: {}", lockerId, boxId, ex.getMessage());
+      return false;
+    }
+  }
+
   public CompletableFuture<JsonNode> sendUnlockCommandAsync(Long lockerId, Long boxId) {
     String commandId = UUID.randomUUID().toString();
     CompletableFuture<JsonNode> future = new CompletableFuture<>();

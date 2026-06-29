@@ -1,6 +1,7 @@
 package com.huynqb.laundrylocker.iot.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.iot.dto.BoxStateSyncRequest;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusResponse;
@@ -51,6 +52,14 @@ public class IotController {
   @PostMapping("/internal/iot/force-unlock")
   public ApiResponse<Map<String, Object>> forceUnlock(@Valid @RequestBody ForceUnlockRequest request) {
     return ApiResponse.ok("IOT_FORCE_UNLOCK_ACCEPTED", "Force unlock accepted", iotService.forceUnlock(request));
+  }
+
+  // Service-to-service only (blocked at gateway): booking → IoT sync (GAP 1),
+  // called from locker-service when a box is reserved/occupied/released/faulted.
+  // Mirrors the box lifecycle state down to the cabinet over MQTT.
+  @PostMapping("/internal/iot/box-sync")
+  public ApiResponse<Map<String, Object>> boxSync(@Valid @RequestBody BoxStateSyncRequest request) {
+    return ApiResponse.ok("IOT_BOX_SYNC_PUBLISHED", "Box state sync published", iotService.syncBoxState(request));
   }
 
 
