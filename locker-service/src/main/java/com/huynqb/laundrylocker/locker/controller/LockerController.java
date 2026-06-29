@@ -2,6 +2,7 @@ package com.huynqb.laundrylocker.locker.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
+import com.huynqb.laundrylocker.locker.dto.BoxHealthResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
 import com.huynqb.laundrylocker.locker.dto.DroneBatteryRequest;
@@ -313,6 +314,14 @@ public class LockerController {
       @PathVariable Long id, @RequestHeader(value = "X-User-Id", required = false) Long userId) {
     lockerService.decommissionDrone(id, userId);
     return ApiResponse.ok("DRONE_DECOMMISSIONED", "Drone decommissioned", null);
+  }
+
+  // Maintenance box-health: logical (order-driven) status side-by-side with the
+  // cabinet-reported hardware door state (iot-service, GAP 2), flagging doors open
+  // on non-occupied boxes. Role MAINTENANCE/ADMIN (gateway-guarded /api/maintenance/**).
+  @GetMapping("/api/maintenance/lockers/{lockerId}/box-health")
+  public ApiResponse<List<BoxHealthResponse>> maintenanceBoxHealth(@PathVariable Long lockerId) {
+    return ApiResponse.ok(lockerService.boxHealth(lockerId));
   }
 
   // #6 — bao tri bai dap drone (role MAINTENANCE/ADMIN)
