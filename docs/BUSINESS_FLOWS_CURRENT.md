@@ -134,6 +134,7 @@ Endpoint backend hiện có:
 - `POST /api/maintenance/boxes/{id}/out-of-service` (L5, body `{reason?}`): ngưng dùng ô có chủ đích.
 - `POST /api/maintenance/boxes/{id}/cleaning` (L5): đánh dấu ô đang vệ sinh/khử khuẩn.
 - `POST /api/maintenance/boxes/{id}/return-to-service` (L5): khôi phục ô `OUT_OF_SERVICE`/`CLEANING` về `AVAILABLE`.
+- `GET /api/maintenance/lockers/{lockerId}/box-health` (mới 2026-06-30): **box-health cho bảo trì** — trạng thái logic (theo đơn, locker-service) đặt cạnh trạng thái **phần cứng** cửa (iot-service, GAP 2). Mỗi ô trả `{boxId, boxNumber, cellType, logicalStatus, hwState, lastReportedAt, doorOpen, needsAttention}`; `doorOpen`=cửa đang OPEN, `needsAttention`=cửa mở nhưng ô KHÔNG `OCCUPIED` (nghi cửa kẹt/quên đóng). locker-service Feign `GET /internal/iot/box-status` (best-effort; iot-service chết → `hwState=null`, vẫn hiện logic).
 - `GET /api/maintenance/reports/{id}/logs` (L5): nhật ký xử lý (work-log) của phiếu.
 - `POST /api/maintenance/reports/{id}/logs` (L5, body `{note}`): KTV thêm 1 bước xử lý (actor = `X-User-Id`). Bảng mới `repair_logs` (migration V5).
 - `GET /api/maintenance/schedules` (L5): lịch bảo trì phòng ngừa (kèm cờ `due` khi `now >= next_due_at`).
@@ -1054,6 +1055,7 @@ Endpoint:
 - `POST /api/iot/device-status`
 - `GET /api/manage/iot/device-status` (mới 2026-06-16: liệt kê toàn bộ device status cho dashboard Manager/Admin — trước đó dữ liệu chỉ được ghi, không có cách đọc lại)
 - `GET /api/manage/iot/box-status` (mới 2026-06-30, **GAP 2**: liệt kê trạng thái **phần cứng** ô cabinet báo lên — `?lockerId=` lọc theo tủ — Manager/Admin; tách khỏi trạng thái logic theo đơn, chỉ để đối chiếu)
+- `GET /internal/iot/box-status` (mới 2026-06-30, service-to-service, chặn qua gateway: locker-service gọi để ghép với trạng thái logic dựng view box-health cho bảo trì — xem mục 11/`GET /api/maintenance/lockers/{lockerId}/box-health`)
 - `POST /api/iot/unlock`
 - `POST /api/iot/verify-pin`
 - `POST /api/iot/verify-access`

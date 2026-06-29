@@ -8,6 +8,7 @@ import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
 import com.huynqb.laundrylocker.locker.client.IotClient;
 import com.huynqb.laundrylocker.locker.client.UserClient;
+import com.huynqb.laundrylocker.locker.dto.BoxHealthResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
 import com.huynqb.laundrylocker.locker.dto.DroneBatteryRequest;
@@ -968,6 +969,50 @@ public class LockerService {
       iotClient.syncBoxState(new IotClient.BoxStateSyncRequest(box.getLockerId(), box.getId(), state, null));
     } catch (Exception ex) {
       log.debug("Box-state sync to IoT skipped for box {} ({}): {}", box.getId(), state, ex.getMessage());
+    }
+  }
+
+  /// Maintenance box-health: the order-driven logical box status (this service)
+  /// side-by-side with the cabinet-reported hardware door state (iot-service,
+  /// GAP 2), flagging doors physically open on boxes that aren't OCCUPIED. The
+  /// hardware lookup is best-effort — if iot-service is down, hwState is null and
+  /// the logical status still shows.
+  @Transactional(readOnly = true)
+  public List<BoxHealthResponse> boxHealth(Long lockerId) {
+    List<LockerBox> boxes = boxRepository.findByLockerIdOrderByRowIndexAscColIndexAsc(lockerId);
+    Map<Long, IotClient.BoxHardwareStatus> hwByBox = fetchHardwareStatuses(lockerId);
+    return boxes.stream()
+        .map(
+            box -> {
+              IotClient.BoxHardwareStatus hw = hwByBox.get(box.getId());
+              String hwState = hw == null ? null : hw.hwState();
+              boolean doorOpen = "OPEN".equalsIgnoreCase(hwState);
+              boolean needsAttention = doorOpen && !"OCCUPIED".equalsIgnoreCase(box.getStatus());
+              return new BoxHealthResponse(
+                  box.getId(),
+                  box.getBoxNumber(),
+                  box.getCellType(),
+                  box.getStatus(),
+                  hwState,
+                  hw == null ? null : hw.lastReportedAt(),
+                  doorOpen,
+                  needsAttention);
+            })
+        .toList();
+  }
+
+  private Map<Long, IotClient.BoxHardwareStatus> fetchHardwareStatuses(Long lockerId) {
+    try {
+      List<IotClient.BoxHardwareStatus> list = iotClient.boxStatus(lockerId).data();
+      if (list == null) {
+        return Map.of();
+      }
+      return list.stream()
+          .filter(h -> h.boxId() != null)
+          .collect(java.util.stream.Collectors.toMap(IotClient.BoxHardwareStatus::boxId, h -> h, (a, b) -> a));
+    } catch (Exception ex) {
+      log.debug("Could not fetch hardware box status for locker {}: {}", lockerId, ex.getMessage());
+      return Map.of();
     }
   }
 

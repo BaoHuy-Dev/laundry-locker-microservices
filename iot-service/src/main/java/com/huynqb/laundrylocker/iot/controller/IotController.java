@@ -50,6 +50,14 @@ public class IotController {
     return ApiResponse.ok(iotService.listBoxHardwareStatuses(lockerId));
   }
 
+  // Service-to-service (blocked at gateway): locker-service joins this with its
+  // own logical box status to build the maintenance box-health view.
+  @GetMapping("/internal/iot/box-status")
+  public ApiResponse<List<BoxHardwareStatusResponse>> listBoxHardwareStatusesInternal(
+      @RequestParam(value = "lockerId", required = false) Long lockerId) {
+    return ApiResponse.ok(iotService.listBoxHardwareStatuses(lockerId));
+  }
+
   @PostMapping("/api/iot/unlock")
   public ApiResponse<Map<String, Object>> unlock(
       @Valid @RequestBody UnlockRequest request,
