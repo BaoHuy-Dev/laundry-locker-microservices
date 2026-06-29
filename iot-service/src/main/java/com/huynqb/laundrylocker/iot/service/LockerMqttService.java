@@ -96,12 +96,16 @@ public class LockerMqttService {
               IotService iotService = applicationContext.getBean(IotService.class);
               iotService.updateStatus(new com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest(cabinetName, null, status));
             } else if (topic.endsWith("/status")) {
-              // Extract from "cabinet/{cabinetName}/locker/{lockerId}/status"
+              // Topic: "cabinet/{lockerId}/locker/{boxId}/status" — boxId comes from
+              // the payload (slotIndex), the cabinet's lockerId from the topic segment.
               if (data.has("lockerId") || data.has("slotIndex")) {
                 Long boxId = data.has("slotIndex") ? data.get("slotIndex").asLong() : data.get("lockerId").asLong();
                 String hwState = data.has("hwState") ? data.get("hwState").asText() : "UNKNOWN";
+                String[] segments = topic.split("/");
+                Long cabinetLockerId = segments.length > 1 ? parseLongOrNull(segments[1]) : null;
                 IotService iotService = applicationContext.getBean(IotService.class);
-                iotService.updateBoxStatus(new com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest(boxId, hwState));
+                iotService.updateBoxStatus(
+                    new com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest(boxId, hwState, cabinetLockerId));
               }
             }
           } catch (Exception e) {
@@ -131,6 +135,14 @@ public class LockerMqttService {
       } catch (MqttException e) {
         log.warn("Error disconnecting MQTT client", e);
       }
+    }
+  }
+
+  private static Long parseLongOrNull(String value) {
+    try {
+      return Long.parseLong(value);
+    } catch (NumberFormatException ex) {
+      return null;
     }
   }
 

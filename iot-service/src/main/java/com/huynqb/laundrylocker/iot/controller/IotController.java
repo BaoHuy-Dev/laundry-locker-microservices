@@ -1,6 +1,7 @@
 package com.huynqb.laundrylocker.iot.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.iot.dto.BoxHardwareStatusResponse;
 import com.huynqb.laundrylocker.iot.dto.BoxStateSyncRequest;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -38,6 +40,14 @@ public class IotController {
   @GetMapping("/api/manage/iot/device-status")
   public ApiResponse<List<DeviceStatusResponse>> listDeviceStatuses() {
     return ApiResponse.ok(iotService.listDeviceStatuses());
+  }
+
+  // GAP 2: cabinet-reported hardware box state (door/sensor), kept separate from
+  // the order-driven status so ops can spot mismatches. Optional ?lockerId= filter.
+  @GetMapping("/api/manage/iot/box-status")
+  public ApiResponse<List<BoxHardwareStatusResponse>> listBoxHardwareStatuses(
+      @RequestParam(value = "lockerId", required = false) Long lockerId) {
+    return ApiResponse.ok(iotService.listBoxHardwareStatuses(lockerId));
   }
 
   @PostMapping("/api/iot/unlock")

@@ -5,6 +5,7 @@ import com.huynqb.laundrylocker.common.event.DomainEventNames;
 import com.huynqb.laundrylocker.iot.client.LockerClient;
 import com.huynqb.laundrylocker.iot.client.OrderClient;
 
+import com.huynqb.laundrylocker.iot.dto.BoxHardwareStatusResponse;
 import com.huynqb.laundrylocker.iot.dto.BoxStateSyncRequest;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
@@ -18,9 +19,11 @@ import com.huynqb.laundrylocker.iot.dto.VerifyPinRequest;
 import com.huynqb.laundrylocker.iot.dto.VerifyPinResponse;
 import com.huynqb.laundrylocker.iot.model.AccessAttempt;
 import com.huynqb.laundrylocker.iot.model.BoxAccessLog;
+import com.huynqb.laundrylocker.iot.model.BoxHardwareStatus;
 import com.huynqb.laundrylocker.iot.model.DeviceStatus;
 import com.huynqb.laundrylocker.iot.repository.AccessAttemptRepository;
 import com.huynqb.laundrylocker.iot.repository.BoxAccessLogRepository;
+import com.huynqb.laundrylocker.iot.repository.BoxHardwareStatusRepository;
 import com.huynqb.laundrylocker.iot.repository.DeviceStatusRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,6 +43,7 @@ public class IotService {
 
   private final DeviceStatusRepository repository;
   private final BoxAccessLogRepository accessLogRepository;
+  private final BoxHardwareStatusRepository boxHardwareStatusRepository;
   private final AccessAttemptRepository accessAttemptRepository;
   private final RabbitTemplate rabbitTemplate;
   private final OrderClient orderClient;
@@ -195,7 +199,32 @@ public class IotService {
 
   @Transactional
   public void updateBoxStatus(BoxStatusUpdateRequest request) {
-    publishRawDeviceStatus("box-" + request.boxId(), null, request.status().toUpperCase(), Map.of("boxId", request.boxId()));
+    // GAP 2: persist the cabinet-reported hardware truth, kept separate from the
+    // order-driven LockerBox.status (owned by locker-service) — never overwrites it.
+    BoxHardwareStatus hw =
+        boxHardwareStatusRepository.findById(request.boxId()).orElseGet(BoxHardwareStatus::new);
+    hw.setBoxId(request.boxId());
+    if (request.lockerId() != null) {
+      hw.setLockerId(request.lockerId());
+    }
+    hw.setHwState(request.status().toUpperCase());
+    hw.setLastReportedAt(LocalDateTime.now());
+    boxHardwareStatusRepository.save(hw);
+    publishRawDeviceStatus(
+        "box-" + request.boxId(), request.lockerId(), request.status().toUpperCase(), Map.of("boxId", request.boxId()));
+  }
+
+  /// GAP 2: read-only view of cabinet-reported hardware box state for ops
+  /// (Manager/Admin) to compare against the order-driven logical status.
+  @Transactional(readOnly = true)
+  public List<BoxHardwareStatusResponse> listBoxHardwareStatuses(Long lockerId) {
+    List<BoxHardwareStatus> rows =
+        lockerId == null
+            ? boxHardwareStatusRepository.findAllByOrderByLastReportedAtDesc()
+            : boxHardwareStatusRepository.findByLockerIdOrderByLastReportedAtDesc(lockerId);
+    return rows.stream()
+        .map(hw -> new BoxHardwareStatusResponse(hw.getBoxId(), hw.getLockerId(), hw.getHwState(), hw.getLastReportedAt()))
+        .toList();
   }
 
   private DeviceStatusResponse toResponse(DeviceStatus device) {
