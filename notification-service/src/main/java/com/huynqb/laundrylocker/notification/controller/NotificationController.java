@@ -2,9 +2,11 @@ package com.huynqb.laundrylocker.notification.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.NotificationRequest;
+import com.huynqb.laundrylocker.notification.dto.DeliveryStatusNotificationRequest;
 import com.huynqb.laundrylocker.notification.dto.DeviceTokenRequest;
 import com.huynqb.laundrylocker.notification.dto.FcmTokenRequest;
 import com.huynqb.laundrylocker.notification.dto.NotificationResponse;
+import com.huynqb.laundrylocker.notification.service.DeliveryNotificationService;
 import com.huynqb.laundrylocker.notification.service.NotificationService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -26,10 +28,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class NotificationController {
 
   private final NotificationService notificationService;
+  private final DeliveryNotificationService deliveryNotificationService;
 
   @PostMapping("/internal/notifications")
   public ApiResponse<NotificationResponse> createInternal(@Valid @RequestBody NotificationRequest request) {
     return ApiResponse.ok("NOTIFICATION_CREATED", "Notification created", notificationService.create(request));
+  }
+
+  /**
+   * Gửi noti trạng thái giao hàng (drone) tới người nhận. Internal only — luồng
+   * giao drone/order gọi service-to-service; gateway chặn /internal/** ra ngoài.
+   */
+  @PostMapping("/internal/notifications/delivery-status")
+  public ApiResponse<NotificationResponse> deliveryStatus(
+      @Valid @RequestBody DeliveryStatusNotificationRequest request) {
+    return ApiResponse.ok(
+        "DELIVERY_NOTIFICATION_SENT",
+        "Delivery notification sent",
+        deliveryNotificationService.notifyDeliveryStatus(request));
   }
 
   @PostMapping("/internal/notifications/order-status")
