@@ -2,6 +2,7 @@ package com.huynqb.laundrylocker.locker.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
+import com.huynqb.laundrylocker.locker.dto.BoxAnomalyResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxHealthResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
@@ -322,6 +323,13 @@ public class LockerController {
   @GetMapping("/api/maintenance/lockers/{lockerId}/box-health")
   public ApiResponse<List<BoxHealthResponse>> maintenanceBoxHealth(@PathVariable Long lockerId) {
     return ApiResponse.ok(lockerService.boxHealth(lockerId));
+  }
+
+  // Shift overview: every box across all lockers whose hardware door is OPEN while
+  // not OCCUPIED (likely left ajar), with locker location for directions.
+  @GetMapping("/api/maintenance/box-anomalies")
+  public ApiResponse<List<BoxAnomalyResponse>> maintenanceBoxAnomalies() {
+    return ApiResponse.ok(lockerService.boxAnomalies());
   }
 
   // #6 — bao tri bai dap drone (role MAINTENANCE/ADMIN)
