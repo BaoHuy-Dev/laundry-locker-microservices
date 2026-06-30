@@ -1,6 +1,8 @@
 package com.huynqb.laundrylocker.iot.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.iot.dto.BoxHardwareStatusResponse;
+import com.huynqb.laundrylocker.iot.dto.BoxStateSyncRequest;
 import com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest;
 import com.huynqb.laundrylocker.iot.dto.DeviceStatusResponse;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -39,6 +42,22 @@ public class IotController {
     return ApiResponse.ok(iotService.listDeviceStatuses());
   }
 
+  // GAP 2: cabinet-reported hardware box state (door/sensor), kept separate from
+  // the order-driven status so ops can spot mismatches. Optional ?lockerId= filter.
+  @GetMapping("/api/manage/iot/box-status")
+  public ApiResponse<List<BoxHardwareStatusResponse>> listBoxHardwareStatuses(
+      @RequestParam(value = "lockerId", required = false) Long lockerId) {
+    return ApiResponse.ok(iotService.listBoxHardwareStatuses(lockerId));
+  }
+
+  // Service-to-service (blocked at gateway): locker-service joins this with its
+  // own logical box status to build the maintenance box-health view.
+  @GetMapping("/internal/iot/box-status")
+  public ApiResponse<List<BoxHardwareStatusResponse>> listBoxHardwareStatusesInternal(
+      @RequestParam(value = "lockerId", required = false) Long lockerId) {
+    return ApiResponse.ok(iotService.listBoxHardwareStatuses(lockerId));
+  }
+
   @PostMapping("/api/iot/unlock")
   public ApiResponse<Map<String, Object>> unlock(
       @Valid @RequestBody UnlockRequest request,
@@ -51,6 +70,14 @@ public class IotController {
   @PostMapping("/internal/iot/force-unlock")
   public ApiResponse<Map<String, Object>> forceUnlock(@Valid @RequestBody ForceUnlockRequest request) {
     return ApiResponse.ok("IOT_FORCE_UNLOCK_ACCEPTED", "Force unlock accepted", iotService.forceUnlock(request));
+  }
+
+  // Service-to-service only (blocked at gateway): booking → IoT sync (GAP 1),
+  // called from locker-service when a box is reserved/occupied/released/faulted.
+  // Mirrors the box lifecycle state down to the cabinet over MQTT.
+  @PostMapping("/internal/iot/box-sync")
+  public ApiResponse<Map<String, Object>> boxSync(@Valid @RequestBody BoxStateSyncRequest request) {
+    return ApiResponse.ok("IOT_BOX_SYNC_PUBLISHED", "Box state sync published", iotService.syncBoxState(request));
   }
 
 

@@ -134,6 +134,7 @@ Endpoint backend hiện có:
 - `POST /api/maintenance/boxes/{id}/out-of-service` (L5, body `{reason?}`): ngưng dùng ô có chủ đích.
 - `POST /api/maintenance/boxes/{id}/cleaning` (L5): đánh dấu ô đang vệ sinh/khử khuẩn.
 - `POST /api/maintenance/boxes/{id}/return-to-service` (L5): khôi phục ô `OUT_OF_SERVICE`/`CLEANING` về `AVAILABLE`.
+- `GET /api/maintenance/lockers/{lockerId}/box-health` (mới 2026-06-30): **box-health cho bảo trì** — trạng thái logic (theo đơn, locker-service) đặt cạnh trạng thái **phần cứng** cửa (iot-service, GAP 2). Mỗi ô trả `{boxId, boxNumber, cellType, logicalStatus, hwState, lastReportedAt, doorOpen, needsAttention}`; `doorOpen`=cửa đang OPEN, `needsAttention`=cửa mở nhưng ô KHÔNG `OCCUPIED` (nghi cửa kẹt/quên đóng). locker-service Feign `GET /internal/iot/box-status` (best-effort; iot-service chết → `hwState=null`, vẫn hiện logic).
 - `GET /api/maintenance/reports/{id}/logs` (L5): nhật ký xử lý (work-log) của phiếu.
 - `POST /api/maintenance/reports/{id}/logs` (L5, body `{note}`): KTV thêm 1 bước xử lý (actor = `X-User-Id`). Bảng mới `repair_logs` (migration V5).
 - `GET /api/maintenance/schedules` (L5): lịch bảo trì phòng ngừa (kèm cờ `due` khi `now >= next_due_at`).
@@ -1078,6 +1079,8 @@ Endpoint:
 
 - `POST /api/iot/device-status`
 - `GET /api/manage/iot/device-status` (mới 2026-06-16: liệt kê toàn bộ device status cho dashboard Manager/Admin — trước đó dữ liệu chỉ được ghi, không có cách đọc lại)
+- `GET /api/manage/iot/box-status` (mới 2026-06-30, **GAP 2**: liệt kê trạng thái **phần cứng** ô cabinet báo lên — `?lockerId=` lọc theo tủ — Manager/Admin; tách khỏi trạng thái logic theo đơn, chỉ để đối chiếu)
+- `GET /internal/iot/box-status` (mới 2026-06-30, service-to-service, chặn qua gateway: locker-service gọi để ghép với trạng thái logic dựng view box-health cho bảo trì — xem mục 11/`GET /api/maintenance/lockers/{lockerId}/box-health`)
 - `POST /api/iot/unlock`
 - `POST /api/iot/verify-pin`
 - `POST /api/iot/verify-access`
@@ -1085,6 +1088,7 @@ Endpoint:
 - `POST /api/iot/box-status`
 - `POST /internal/iot/device-status`
 - `POST /internal/iot/force-unlock` (mới 2026-06-16: maintenance override, gọi từ `locker-service`, chặn qua gateway public)
+- `POST /internal/iot/box-sync` (mới 2026-06-29: **booking → IoT sync (GAP 1)** — gọi từ `locker-service` khi ô đổi vòng đời `RESERVED/OCCUPIED/AVAILABLE/FAULT`, publish MQTT `cabinet/{lockerId}/command/sync` để tủ mô phỏng đồng bộ; chặn qua gateway public; best-effort, không chặn luồng đặt đơn)
 
 Flow nghiệp vụ:
 
@@ -1100,10 +1104,11 @@ Flow nghiệp vụ:
 
 Lưu ý hiện tại:
 
-- Occupy từ sensor thật là Phase 3.
+- **Booking → IoT sync (GAP 1, mới 2026-06-29)**: trước đây đặt đơn (SEND/RENTAL) chỉ đổi trạng thái ô trong DB của `locker-service`, **không** báo cabinet — tủ chỉ nghe đúng lệnh "mở ô này ngay" (`/api/iot/unlock`), không bao giờ biết ô vừa được giữ/chiếm/giải phóng. Nay `LockerService.reserveBox/occupyBox/releaseBox/markFault/clearFault` gọi best-effort `IotClient.syncBoxState` → `POST /internal/iot/box-sync` (iot-service) → publish MQTT `cabinet/{lockerId}/command/sync` body `{boxId, state, orderId?}`. Đây là **thông báo một chiều fire-and-forget** (không chờ reply, nuốt mọi lỗi broker) nên iot-service/broker chết cũng không làm hỏng luồng đặt đơn. Simulator `simulate_demo_cabinet.py` subscribe topic này và log như thể cabinet cập nhật sơ đồ ô trên màn hình. Khép kín "đặt đơn → tủ mô phỏng đồng bộ".
+- **Trạng thái phần cứng ô (GAP 2, mới 2026-06-30)**: cabinet báo trạng thái cửa/cảm biến thật trên `cabinet/{lockerId}/locker/{boxId}/status` (boxId trong `slotIndex`, kèm `hwState`). Trước đây `IotService.updateBoxStatus` chỉ publish event `iot.device.status.changed` rồi vứt — không lưu gì. Nay **upsert** vào bảng riêng `iot_schema.box_hardware_status` (V3: `box_id` PK, `locker_id`, `hw_state`, `last_reported_at`) **tách hẳn** khỏi `LockerBox.status` (order-driven, locker-service sở hữu) — đây là *hardware truth*, **KHÔNG bao giờ tự ghi đè** trạng thái logic theo đơn (tránh xung đột state machine). Đọc qua `GET /api/manage/iot/box-status` (Manager/Admin) để đối chiếu/phát hiện lệch. Simulator báo cửa OPEN rồi CLOSED (`SIM_DOOR_CLOSE_SECONDS`) sau mỗi lần mở thành công. **Occupy/release tự động từ sensor vẫn là Phase 3** (chưa lái vòng đời ô); chưa có surface cho MAINTENANCE (mobile/`/api/maintenance/...`) — follow-up.
 - Python `smart-locker-iot` cần config MQTT broker khớp với backend và chế độ hardware/simulation.
 - Drone vẫn là future channel riêng, chỉ dùng cell `DRONE` khi `channel=DRONE`.
-- **Device health dashboard (2026-06-16)**: heartbeat/online-offline giờ xem được qua `GET /api/manage/iot/device-status` + section "Sức khỏe thiết bị" trong web admin — trước đó dữ liệu được ghi (`POST /api/iot/device-status`) nhưng không ai đọc lại được. Vẫn là poll REST (15s/khi load trang), **chưa** push realtime — event `iot.device.status.changed` vẫn chưa có consumer nào tiêu thụ.
+- **Device health dashboard (2026-06-16)**: heartbeat/online-offline giờ xem được qua `GET /api/manage/iot/device-status` + section "Sức khỏe thiết bị" trong web admin — trước đó dữ liệu được ghi (`POST /api/iot/device-status`) nhưng không ai đọc lại được. Vẫn là poll REST (15s/khi load trang), **chưa** push realtime — event `iot.device.status.changed` vẫn chưa có consumer nào tiêu thụ. **2026-06-30 (GAP 3)**: trước đây dashboard luôn rỗng vì **không ai publish** heartbeat (`main.py` chờ setup handshake, simulator cũ chỉ trả lời lệnh mở). Nay `simulate_demo_cabinet.py` tự phát heartbeat: học cabinet từ traffic (`cabinet/{id}/command/open|sync`) + seed env `SIM_HEARTBEAT_CABINETS`, định kỳ (`SIM_HEARTBEAT_SECONDS`, mặc định 30s) publish `cabinet/{id}/heartbeat` `{status:"ONLINE"}` → `LockerMqttService` → `IotService.updateStatus` cập nhật `lastSeenAt` ⇒ thiết bị hiện **ONLINE** thật khi simulator chạy. Thuần simulator, backend không đổi.
 - **Mô phỏng mở tủ cho mobile (2026-06-16)**: `main.py` (hardware-track) chỉ trả lời lệnh mở sau khi nhận handshake `SETUP_LOCKERS` qua `iot/{macAddress}/command/setup` — chưa có code Java nào gửi handshake này, nên `main.py` (kể cả `SIMULATION=true`, cờ đó chỉ mock tầng serial) sẽ không trả lời `iot-service`. Thêm script độc lập `smart-locker-iot/simulate_demo_cabinet.py` (không sửa `main.py`/serial/setup) subscribe `cabinet/+/command/open` trực tiếp và trả lời đúng payload Java thật gửi (`{commandId, box_id, action, timeout}`, **không có** `lockerId`/`slotIndex` mà `main.py` mong đợi) trên `cabinet/{lockerId}/command/open/result`. Mobile gọi `POST /api/iot/unlock` qua nút "Mở tủ" trong chi tiết đơn. Khi có hardware + setup handshake thật, retire script này và dùng `main.py`; không cần đổi backend vì cùng contract MQTT.
 
 ## 20. RabbitMQ Events

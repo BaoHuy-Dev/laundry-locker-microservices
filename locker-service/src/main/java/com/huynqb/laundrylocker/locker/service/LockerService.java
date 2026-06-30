@@ -8,6 +8,7 @@ import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
 import com.huynqb.laundrylocker.locker.client.IotClient;
 import com.huynqb.laundrylocker.locker.client.UserClient;
+import com.huynqb.laundrylocker.locker.dto.BoxHealthResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
 import com.huynqb.laundrylocker.locker.dto.DroneBatteryRequest;
@@ -176,7 +177,9 @@ public class LockerService {
     }
     box.setStatus("RESERVED");
     box.setReservedUntil(LocalDateTime.now().plusHours(reservedTtlHours));
-    return toSummary(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "RESERVED");
+    return toSummary(saved);
   }
 
   /// Backstop sweep for boxes stuck RESERVED past their TTL — defense in
@@ -203,7 +206,9 @@ public class LockerService {
     }
     box.setStatus("OCCUPIED");
     box.setReservedUntil(null);
-    return toSummary(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "OCCUPIED");
+    return toSummary(saved);
   }
 
   @Transactional
@@ -219,7 +224,9 @@ public class LockerService {
     }
     box.setStatus("AVAILABLE");
     box.setReservedUntil(null);
-    return toSummary(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "AVAILABLE");
+    return toSummary(saved);
   }
 
   @Transactional
@@ -236,6 +243,7 @@ public class LockerService {
     report.setDescription(StringUtils.hasText(reason) ? reason : "Reported faulty");
     reportRepository.save(report);
     publishBoxFault(box, reason);
+    syncBoxStateQuietly(box, "FAULT");
     return toCell(box);
   }
 
@@ -244,7 +252,9 @@ public class LockerService {
     LockerBox box = findBox(boxId);
     box.setStatus("AVAILABLE");
     box.setFaultReason(null);
-    return toCell(boxRepository.save(box));
+    LockerBox saved = boxRepository.save(box);
+    syncBoxStateQuietly(saved, "AVAILABLE");
+    return toCell(saved);
   }
 
   /// Ngưng dùng ô có chủ đích (bảo trì/đóng). Ô bị loại khỏi mọi reserve vì
@@ -948,6 +958,62 @@ public class LockerService {
     LockerBox box = findBox(boxId);
     var result = iotClient.forceUnlock(new IotClient.ForceUnlockRequest(box.getLockerId(), boxId, actorUserId));
     return result.data();
+  }
+
+  /// Booking → IoT sync (GAP 1): best-effort mirror of a box's new lifecycle
+  /// state (RESERVED/OCCUPIED/AVAILABLE/FAULT) down to the cabinet via
+  /// iot-service. Never throws — a down/slow iot-service must not break the
+  /// booking/maintenance flow that just changed the box in the DB.
+  private void syncBoxStateQuietly(LockerBox box, String state) {
+    try {
+      iotClient.syncBoxState(new IotClient.BoxStateSyncRequest(box.getLockerId(), box.getId(), state, null));
+    } catch (Exception ex) {
+      log.debug("Box-state sync to IoT skipped for box {} ({}): {}", box.getId(), state, ex.getMessage());
+    }
+  }
+
+  /// Maintenance box-health: the order-driven logical box status (this service)
+  /// side-by-side with the cabinet-reported hardware door state (iot-service,
+  /// GAP 2), flagging doors physically open on boxes that aren't OCCUPIED. The
+  /// hardware lookup is best-effort — if iot-service is down, hwState is null and
+  /// the logical status still shows.
+  @Transactional(readOnly = true)
+  public List<BoxHealthResponse> boxHealth(Long lockerId) {
+    List<LockerBox> boxes = boxRepository.findByLockerIdOrderByRowIndexAscColIndexAsc(lockerId);
+    Map<Long, IotClient.BoxHardwareStatus> hwByBox = fetchHardwareStatuses(lockerId);
+    return boxes.stream()
+        .map(
+            box -> {
+              IotClient.BoxHardwareStatus hw = hwByBox.get(box.getId());
+              String hwState = hw == null ? null : hw.hwState();
+              boolean doorOpen = "OPEN".equalsIgnoreCase(hwState);
+              boolean needsAttention = doorOpen && !"OCCUPIED".equalsIgnoreCase(box.getStatus());
+              return new BoxHealthResponse(
+                  box.getId(),
+                  box.getBoxNumber(),
+                  box.getCellType(),
+                  box.getStatus(),
+                  hwState,
+                  hw == null ? null : hw.lastReportedAt(),
+                  doorOpen,
+                  needsAttention);
+            })
+        .toList();
+  }
+
+  private Map<Long, IotClient.BoxHardwareStatus> fetchHardwareStatuses(Long lockerId) {
+    try {
+      List<IotClient.BoxHardwareStatus> list = iotClient.boxStatus(lockerId).data();
+      if (list == null) {
+        return Map.of();
+      }
+      return list.stream()
+          .filter(h -> h.boxId() != null)
+          .collect(java.util.stream.Collectors.toMap(IotClient.BoxHardwareStatus::boxId, h -> h, (a, b) -> a));
+    } catch (Exception ex) {
+      log.debug("Could not fetch hardware box status for locker {}: {}", lockerId, ex.getMessage());
+      return Map.of();
+    }
   }
 
   @Transactional

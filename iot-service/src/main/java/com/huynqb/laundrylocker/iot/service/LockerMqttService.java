@@ -96,12 +96,16 @@ public class LockerMqttService {
               IotService iotService = applicationContext.getBean(IotService.class);
               iotService.updateStatus(new com.huynqb.laundrylocker.iot.dto.DeviceStatusRequest(cabinetName, null, status));
             } else if (topic.endsWith("/status")) {
-              // Extract from "cabinet/{cabinetName}/locker/{lockerId}/status"
+              // Topic: "cabinet/{lockerId}/locker/{boxId}/status" — boxId comes from
+              // the payload (slotIndex), the cabinet's lockerId from the topic segment.
               if (data.has("lockerId") || data.has("slotIndex")) {
                 Long boxId = data.has("slotIndex") ? data.get("slotIndex").asLong() : data.get("lockerId").asLong();
                 String hwState = data.has("hwState") ? data.get("hwState").asText() : "UNKNOWN";
+                String[] segments = topic.split("/");
+                Long cabinetLockerId = segments.length > 1 ? parseLongOrNull(segments[1]) : null;
                 IotService iotService = applicationContext.getBean(IotService.class);
-                iotService.updateBoxStatus(new com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest(boxId, hwState));
+                iotService.updateBoxStatus(
+                    new com.huynqb.laundrylocker.iot.dto.BoxStatusUpdateRequest(boxId, hwState, cabinetLockerId));
               }
             }
           } catch (Exception e) {
@@ -131,6 +135,39 @@ public class LockerMqttService {
       } catch (MqttException e) {
         log.warn("Error disconnecting MQTT client", e);
       }
+    }
+  }
+
+  private static Long parseLongOrNull(String value) {
+    try {
+      return Long.parseLong(value);
+    } catch (NumberFormatException ex) {
+      return null;
+    }
+  }
+
+  /// Booking → IoT sync (GAP 1): fire-and-forget notify the cabinet that a box's
+  /// lifecycle state changed (RESERVED/OCCUPIED/AVAILABLE/FAULT). Unlike the open
+  /// command this expects no hardware reply, so it never blocks the order flow and
+  /// swallows any broker error (returns false instead of throwing).
+  public boolean publishBoxStateSync(Long lockerId, Long boxId, String state, Long orderId) {
+    if (client == null || !client.isConnected()) {
+      log.warn("Skip box-state sync for locker {} box {}: MQTT client not connected", lockerId, boxId);
+      return false;
+    }
+    try {
+      String payload = orderId == null
+          ? String.format("{\"boxId\":%d,\"state\":\"%s\"}", boxId, state)
+          : String.format("{\"boxId\":%d,\"state\":\"%s\",\"orderId\":%d}", boxId, state, orderId);
+      MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
+      message.setQos(1);
+      String topic = "cabinet/" + lockerId + "/command/sync";
+      client.publish(topic, message);
+      log.info("Published box-state sync (box {} -> {}) to {}", boxId, state, topic);
+      return true;
+    } catch (Exception ex) {
+      log.warn("MQTT box-state sync failed for locker {} box {}: {}", lockerId, boxId, ex.getMessage());
+      return false;
     }
   }
 
