@@ -10,6 +10,7 @@ import com.huynqb.laundrylocker.notification.model.FcmToken;
 import com.huynqb.laundrylocker.notification.model.NotificationMessage;
 import com.huynqb.laundrylocker.notification.repository.FcmTokenRepository;
 import com.huynqb.laundrylocker.notification.repository.NotificationRepository;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,17 @@ public class NotificationService {
 
   @Transactional
   public NotificationResponse create(NotificationRequest request) {
+    return create(request, Map.of());
+  }
+
+  /**
+   * Tạo notification + đẩy FCM kèm thêm các field [extraData] vào phần data của
+   * message (vd noti giao hàng cần orderId/status/eta/message). Field gốc
+   * (notificationId/type/referenceType/referenceId) vẫn được giữ; extraData chỉ
+   * bổ sung/ghi đè nên client cũ không bị ảnh hưởng.
+   */
+  @Transactional
+  public NotificationResponse create(NotificationRequest request, Map<String, String> extraData) {
     NotificationMessage notification = new NotificationMessage();
     notification.setUserId(request.userId());
     notification.setTitle(request.title());
@@ -41,19 +53,17 @@ public class NotificationService {
     notification.setReferenceId(request.referenceId());
     notification.setReferenceType(request.referenceType());
     NotificationMessage saved = notificationRepository.save(notification);
-    fcmPushNotificationService.sendToUser(
-        saved.getUserId(),
-        saved.getTitle(),
-        saved.getMessage(),
-        Map.of(
-            "notificationId",
-            String.valueOf(saved.getId()),
-            "type",
-            saved.getType(),
-            "referenceType",
-            saved.getReferenceType() == null ? "" : saved.getReferenceType(),
-            "referenceId",
-            saved.getReferenceId() == null ? "" : String.valueOf(saved.getReferenceId())));
+
+    Map<String, String> data = new HashMap<>();
+    data.put("notificationId", String.valueOf(saved.getId()));
+    data.put("type", saved.getType());
+    data.put("referenceType", saved.getReferenceType() == null ? "" : saved.getReferenceType());
+    data.put("referenceId", saved.getReferenceId() == null ? "" : String.valueOf(saved.getReferenceId()));
+    if (extraData != null) {
+      data.putAll(extraData);
+    }
+
+    fcmPushNotificationService.sendToUser(saved.getUserId(), saved.getTitle(), saved.getMessage(), data);
     webSocketNotificationService.sendToUser(saved.getUserId(), toResponse(saved));
     publishNotificationRequested(saved);
     return toResponse(saved);

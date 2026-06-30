@@ -52,6 +52,11 @@ public class RabbitConfig {
   }
 
   @Bean
+  Binding deliveryStatusChangedBinding(Queue notificationEventsQueue, TopicExchange laundryEventsExchange) {
+    return BindingBuilder.bind(notificationEventsQueue).to(laundryEventsExchange).with(DomainEventNames.DELIVERY_STATUS_CHANGED);
+  }
+
+  @Bean
   MessageConverter domainEventMessageConverter() {
     SimpleMessageConverter converter = new SimpleMessageConverter();
     converter.setAllowedListPatterns(

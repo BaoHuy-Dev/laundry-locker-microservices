@@ -13,6 +13,8 @@ public final class DomainEventNames {
   public static final String LOCKER_REPORT_CLAIMED = "locker.report.claimed";
   public static final String LOCKER_REPORT_RESOLVED = "locker.report.resolved";
   public static final String IOT_DEVICE_STATUS_CHANGED = "iot.device.status.changed";
+  /** Trạng thái chuyến giao hàng (drone) thay đổi: dispatched/approaching/arrived/delivered/delayed/failed. */
+  public static final String DELIVERY_STATUS_CHANGED = "delivery.status.changed";
 
   private DomainEventNames() {}
 }
