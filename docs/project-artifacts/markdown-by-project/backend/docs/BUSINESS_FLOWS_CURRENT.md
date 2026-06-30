@@ -1177,6 +1177,7 @@ Màn "Báo cáo của tôi" (mới, 2026-06-16):
 Maintenance home — bổ sung 2026-06-30 (box-health phần cứng):
 
 - Tab **"Kiểm tra tủ"** thêm card **"Tình trạng phần cứng ô"** (`_boxHealthCard`/`_boxHealthRow`): khi chọn tủ, gọi `GET /api/maintenance/lockers/{lockerId}/box-health` (`LockerOpsService.boxHealth`, best-effort — không vỡ trang nếu BE/IoT chưa có dữ liệu) hiển thị mỗi ô: trạng thái **logic theo đơn** (`StatusChip`) đặt cạnh trạng thái **phần cứng cửa** (Cửa MỞ/đóng/chưa có tín hiệu, kèm "Báo lúc ..."). Ô `needsAttention` (cửa mở nhưng không `OCCUPIED`) được tô đỏ + banner cảnh báo đếm số ô cần kiểm tra. Đây là **surface MAINTENANCE** cho dữ liệu GAP 2 (trước chỉ Manager/Admin web đọc được). `flutter analyze` 0 issue; chưa smoke emulator. Không đổi backend/contract.
+- Tab **"Sự cố"** thêm section **"Cảnh báo phần cứng (cửa mở bất thường)"** (`_boxAnomaliesSection`) ở đầu tab: gọi `GET /api/maintenance/box-anomalies` (`LockerOpsService.boxAnomalies`, load best-effort trong `_load`) gom **mọi ô bất thường trên tất cả tủ** (cửa MỞ && không `OCCUPIED`) — KTV thấy ngay không phải chọn từng tủ. Mỗi card: tên tủ + ô + `StatusChip` logic + "Cửa MỞ · báo lúc ..." + nút **Chỉ đường** (dùng lại `_openDirections` với `lockerLatitude/lockerLongitude/lockerAddress`). Ẩn khi không có ô bất thường. `flutter analyze` 0 issue; chưa smoke emulator. Không đổi backend/contract.
 
 Maintenance home — bổ sung 2026-06-16 (chiều):
 
