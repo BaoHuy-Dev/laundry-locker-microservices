@@ -974,6 +974,31 @@ Lưu ý hiện tại:
 - Flutter notification client đã được cập nhật để dùng `/api/notifications/**`, parse response phẳng hiện tại (`data` là list) và unread count dạng số.
 - Flutter có STOMP realtime subscriber cho `/user/queue/notifications`; local runtime smoke qua gateway đã PASS với admin send -> private STOMP `MESSAGE`. Deploy/emulator vẫn cần chạy lại khi `api-dev` health route và Firebase/device sẵn sàng.
 
+### 16.1 Push Trạng Thái Giao Hàng (Drone Delivery) — mới 2026-06-28
+
+Phase **chỉ push notification** báo trạng thái chuyến giao hàng (drone) cho người nhận — **CHƯA** làm live map/websocket tracking/MQTT (phase sau). Tái dùng hạ tầng FCM sẵn có; nhắm theo **userId người nhận** (không đăng ký token theo order).
+
+**6 mốc trạng thái (contract):** `dispatched` (drone xuất phát) · `approaching` (sắp đến) · `arrived` (đã đến điểm giao) · `delivered` (giao thành công) · `delayed` (trễ, kèm `eta`) · `failed` (giao hỏng, drone quay về). Mỗi mốc có tiêu đề/nội dung tiếng Việt mặc định (xem `DeliveryNotificationService.DeliveryStatus` ở BE và `DeliveryStatus` ở mobile).
+
+**Payload FCM (phần data):** `{ orderId, status, eta, message, type:"ORDER_STATUS_CHANGED", referenceId:orderId, referenceType:"DELIVERY", notificationId }`. Gửi dạng **hybrid notification+data**: foreground app tự render local notification; background/terminated để system tray hiển thị.
+
+**Backend (notification-service):**
+
+- `POST /internal/notifications/delivery-status` (internal, service-to-service — gateway chặn `/internal/**`): body `{orderId, receiverUserId, status, eta?}` → `DeliveryNotificationService.notifyDeliveryStatus` build title/body theo status → lưu lịch sử (`NotificationMessage`) + đẩy FCM tới mọi token của `receiverUserId` (`FcmPushNotificationService.sendToUser`) + WebSocket.
+- Event `delivery.status.changed` (mới, `DomainEventNames.DELIVERY_STATUS_CHANGED`) — binding trong `RabbitConfig`, `NotificationEventListener` route sang `DeliveryNotificationService.notifyFromEvent` (payload kỳ vọng `orderId/userId/status/eta`). Dành cho **luồng giao drone thật bắn ra (TODO)**; hiện test bằng gọi internal endpoint trực tiếp.
+- `NotificationService.create(request, extraData)` (overload mới): merge `extraData` (orderId/status/eta/message) vào phần data FCM — backward-compatible, không ảnh hưởng client/luồng cũ.
+
+**Mobile (`smart-laundry-locker-mobile`):**
+
+- Quyền: đã xin Android 13+ (`POST_NOTIFICATIONS`) + iOS; thêm `NotificationPermissionHelper` (kiểm tra/xin + hộp thoại hướng dẫn mở **Settings** khi bị từ chối vĩnh viễn).
+- Token: đăng ký `POST /api/notifications/fcm-tokens` sau đăng nhập (backend lấy userId từ JWT) **+ `onTokenRefresh`** tự đăng ký lại khi token xoay vòng.
+- Nhận noti ở **cả 3 trạng thái app**: foreground (local notification + cập nhật `NotificationProvider`/`AppEventBus`), background & terminated (system tray).
+- **Tap noti → deep-link chi tiết đơn** theo `orderId` (route `order_detail` nhận `orderId`): qua `onMessageOpenedApp` + `getInitialMessage` (background/terminated) **và** tap banner foreground (local-notif, payload JSON). `DeliveryNotification.fromData` bóc tách data; status lạ → `unknown` (không vỡ).
+- **Tự cập nhật trạng thái đơn**: data `type:ORDER_STATUS_CHANGED` + `referenceId:orderId` → `NotificationProvider` emit `OrderChangedEvent(orderId)` → `OrderPage`/`CustomerOrderDetailPage` tự reload (cơ chế `AppEventBus` sẵn có).
+- **Lịch sử thông báo** (`NotificationListPage`, `/api/notifications`): noti giao hàng có icon `truck`, tap → chi tiết đơn.
+
+**Chưa làm / phụ thuộc:** push thật cần Firebase credential production + thiết bị; luồng giao drone thật bắn `delivery.status.changed` (gắn `drone-service`/order-service) vẫn TODO; live map real-time là phase sau (ngoài scope).
+
 ## 17. Luồng Store
 
 Store service sở hữu dữ liệu cửa hàng.
@@ -1099,6 +1124,7 @@ Event name hiện có:
 - `locker.box.opened`
 - `locker.box.fault`
 - `iot.device.status.changed`
+- `delivery.status.changed` (mới 2026-06-28: trạng thái giao hàng drone — notification-service consume → push FCM tới người nhận; xem mục 16.1. Luồng giao drone thật bắn event này vẫn TODO.)
 
 Hành vi event:
 
