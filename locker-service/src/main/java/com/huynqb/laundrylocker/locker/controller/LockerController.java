@@ -102,6 +102,12 @@ public class LockerController {
     return ApiResponse.ok("BOX_RELEASED", "Box released", lockerService.releaseBox(id));
   }
 
+  // Nguồn dữ liệu cho job đối soát ô ↔ đơn của order-service (Gap G4).
+  @GetMapping("/internal/boxes")
+  public ApiResponse<List<Map<String, Object>>> listBoxesInternal() {
+    return ApiResponse.ok(lockerService.listBoxesForReconcile());
+  }
+
   @GetMapping("/api/lockers/{id}/layout")
   public ApiResponse<LockerLayoutResponse> layout(@PathVariable Long id) {
     return ApiResponse.ok(lockerService.layout(id));
