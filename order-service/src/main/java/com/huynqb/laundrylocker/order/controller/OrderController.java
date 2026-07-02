@@ -92,6 +92,21 @@ public class OrderController {
     return ApiResponse.ok(orderService.statistics());
   }
 
+  // Manager thao tác đơn (gateway đã giới hạn /api/manage/** cho MANAGER/ADMIN).
+  // Ghi nhận manager làm actor trong timeline nếu request không chỉ định staffId.
+  @PatchMapping("/api/manage/orders/{id}/status")
+  public ApiResponse<OrderResponse> manageUpdateStatus(
+      @PathVariable Long id,
+      @Valid @RequestBody UpdateOrderStatusRequest request,
+      @RequestHeader(value = "X-User-Id", required = false) Long managerId) {
+    UpdateOrderStatusRequest effective =
+        request.staffId() == null
+            ? new UpdateOrderStatusRequest(request.status(), managerId, request.receiveBoxId())
+            : request;
+    return ApiResponse.ok(
+        "ORDER_STATUS_UPDATED", "Order status updated", orderService.updateStatus(id, effective));
+  }
+
   @PatchMapping("/api/orders/{id}/status")
   public ApiResponse<OrderResponse> updateStatus(
       @PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
@@ -368,6 +383,18 @@ public class OrderController {
   @PostMapping("/api/admin/scheduler/pickup-reminders")
   public ApiResponse<Map<String, Object>> pickupReminders() {
     return ApiResponse.ok("SCHEDULER_PICKUP_REMINDERS_OK", "Pickup reminder job completed", orderService.pickupReminders());
+  }
+
+  @PostMapping("/api/admin/scheduler/release-overdue")
+  public ApiResponse<Map<String, Object>> releaseOverdue() {
+    return ApiResponse.ok(
+        "SCHEDULER_RELEASE_OVERDUE_OK", "Overdue release job completed", orderService.releaseOverdueOrders());
+  }
+
+  @PostMapping("/api/admin/scheduler/reconcile-boxes")
+  public ApiResponse<Map<String, Object>> reconcileBoxes() {
+    return ApiResponse.ok(
+        "SCHEDULER_RECONCILE_BOXES_OK", "Box reconcile job completed", orderService.reconcileBoxStates());
   }
 
   @GetMapping("/api/admin/scheduler/status")
