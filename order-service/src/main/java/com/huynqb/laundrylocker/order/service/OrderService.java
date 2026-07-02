@@ -110,6 +110,10 @@ public class OrderService {
   @Value("${app.order.auto-cancel-hours:24}")
   private int autoCancelHours;
 
+  // Chặn khách bỏ hàng / bắt đầu thuê khi đơn có phí nhưng chưa thanh toán.
+  @Value("${app.order.require-payment-before-drop:true}")
+  private boolean requirePaymentBeforeDrop;
+
   @Transactional
   public OrderResponse create(CreateOrderRequest request) {
     userClient.getUser(request.userId());
@@ -164,6 +168,7 @@ public class OrderService {
     LockerOrder order = find(id);
     assertOwner(order, userId);
     validateStatus(order, Set.of("INITIALIZED"));
+    assertPaidBeforeDrop(order);
     occupyBoxQuietly(order.getSendBoxId());
     if ("SEND".equalsIgnoreCase(order.getType())) {
       // Stage 2 of the SEND flow: the drop PIN dies here, a fresh pickup PIN
@@ -1078,6 +1083,25 @@ public class OrderService {
   private void validateStatus(LockerOrder order, Set<String> statuses) {
     if (!statuses.contains(order.getStatus())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Order status does not allow this action");
+    }
+  }
+
+  /**
+   * Chặn khách bỏ hàng / bắt đầu thuê khi đơn có phí (&gt;0) mà chưa thanh toán.
+   * Đơn miễn phí (totalPrice = 0/null) luôn được phép. Có thể tắt bằng cấu hình
+   * {@code app.order.require-payment-before-drop=false}.
+   */
+  private void assertPaidBeforeDrop(LockerOrder order) {
+    if (!requirePaymentBeforeDrop) {
+      return;
+    }
+    BigDecimal total = order.getTotalPrice();
+    boolean hasFee = total != null && total.compareTo(BigDecimal.ZERO) > 0;
+    boolean paid = "PAID".equalsIgnoreCase(order.getPaymentStatus());
+    if (hasFee && !paid) {
+      throw new BusinessException(
+          "ORDER_UNPAID",
+          "Vui lòng thanh toán đơn trước khi bỏ hàng vào tủ.");
     }
   }
 
