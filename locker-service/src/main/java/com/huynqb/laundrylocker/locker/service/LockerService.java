@@ -184,6 +184,24 @@ public class LockerService {
     return toSummary(saved);
   }
 
+  /// Toàn bộ ô (mọi tủ) cho job đối soát của order-service (Gap G4):
+  /// trạng thái ô là bản sao best-effort của đơn nên có thể lệch; order-service
+  /// cần id + status + reservedUntil để phân biệt RESERVED còn hạn (đơn vừa
+  /// tạo) với RESERVED mồ côi.
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> listBoxesForReconcile() {
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (LockerBox box : boxRepository.findAll()) {
+      Map<String, Object> item = new java.util.HashMap<>();
+      item.put("id", box.getId());
+      item.put("lockerId", box.getLockerId());
+      item.put("status", box.getStatus());
+      item.put("reservedUntil", box.getReservedUntil());
+      result.add(item);
+    }
+    return result;
+  }
+
   /// Backstop sweep for boxes stuck RESERVED past their TTL — defense in
   /// depth in case order-service's own auto-cancel sweep is down. Does not
   /// touch the order itself; just frees the cell so it isn't lost forever.
