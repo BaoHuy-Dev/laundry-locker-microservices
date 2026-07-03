@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-21 (PA4 — STAFF+TECHNICIAN roles)
+> Cập nhật lần cuối: 2026-07-03 (PA5 — gỡ giặt ủi + courier/staff-registration khỏi scope)
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -53,7 +53,6 @@ Dùng cho các flow trên app khách hàng:
 - Xem cửa hàng/locker.
 - Tạo đơn gửi hàng qua locker, gọi là SEND.
 - Tạo đơn thuê ô tủ tạm thời, gọi là RENTAL.
-- Tạo đơn giặt theo flow cũ.
 - Xem đơn của mình.
 - Xác nhận đã bỏ hàng/đồ vào ô tủ.
 - Hoàn tất nhận hàng/lấy đồ.
@@ -449,45 +448,18 @@ Migration `V3__seed_demo_cabinet.sql` seed:
 - 6 cell `STANDARD`.
 - 1 cell `XL`.
 
-## 6. Luồng Đơn Giặt
+## 6. Luồng Đơn Giặt — ĐÃ GỠ (2026-07-03)
 
-Đây là lifecycle giặt đồ cũ, vẫn tồn tại trong `order-service`.
+Nghiệp vụ **giặt ủi không còn trong scope dự án** (chỉ còn SEND + RENTAL).
 
-Endpoint tạo đơn chính:
+Đã gỡ trong PA5:
 
-```http
-POST /api/orders
-```
+- Backend `order-service`: 5 endpoint lifecycle giặt `PUT /api/orders/{id}/collect|weight|process|ready|return` + service methods `collect/updateWeight/process/ready/returnOrder`.
+- Mobile: bộ lọc "Giặt ủi" ở màn Đơn tủ; feature `user_laundry` (màn tạo đơn giặt legacy); `locker_action_page`/`locker_otp_page` legacy.
 
-Flow thông thường:
+Giữ lại cho dữ liệu lịch sử: các trạng thái cũ `COLLECTED/PROCESSING/READY/RETURNED` vẫn được `complete()`/`checkout()` chấp nhận để chốt đơn tồn đọng; **không** xoá dữ liệu/migration cũ.
 
-1. Customer chọn store, locker, ô gửi, dịch vụ/items.
-2. Đơn được tạo với type/category như `LAUNDRY`.
-3. Ô locker được reserve.
-4. Customer nhận PIN.
-5. Customer mở ô và xác nhận đã bỏ đồ vào.
-6. Staff thu gom đơn.
-7. Staff cân/xử lý đồ giặt.
-8. Staff mark ready.
-9. Staff trả đồ sạch vào ô nhận.
-10. Customer lấy đồ.
-11. Đơn hoàn tất và ô được release.
-
-Endpoint quan trọng:
-
-- `PUT /api/orders/{orderId}/confirm`
-- `PUT /api/orders/{orderId}/collect`
-- `PUT /api/orders/{orderId}/weight`
-- `PUT /api/orders/{orderId}/process`
-- `PUT /api/orders/{orderId}/ready`
-- `PUT /api/orders/{orderId}/return?boxId=...`
-- `PUT /api/orders/{orderId}/complete`
-- `PUT /api/orders/{orderId}/cancel`
-- `GET /api/orders/{orderId}/timeline`
-
-Lưu ý hiện tại:
-
-- Một số màn hình legacy trên frontend/mobile vẫn diễn tả flow laundry/courier cũ, có thể chưa đồng bộ hoàn toàn với các màn hình locker ops Phase 2.
+**Cùng đợt PA5, đã gỡ khỏi mobile toàn bộ luồng Giao hàng qua Courier + Đăng ký làm Nhân viên/Courier** (chưa từng có backend — Gap G6): features `courier_delivery`/`courier_dispatch`/`courier_registration`/`staff_application`/`logistics_send`, chế độ "Người giao hàng" ở Home/Profile, màn đăng ký hồ sơ NV, các courier use case/model trong feature `orders`, route + provider liên quan. `POST /api/staff/**` (STAFF ops read-only) và role STAFF/TECHNICIAN giữ nguyên.
 
 ## 7. Luồng SEND Parcel
 
@@ -1141,6 +1113,8 @@ Hành vi event:
 - Notification service listen và tạo notification; RabbitMQ consumer dùng `SimpleMessageConverter` với allow-list package dự án/JDK cần thiết cho `DomainEvent`, không bật trust-all deserialization.
 
 ## 21. Luồng Flutter Mobile
+
+> **PA5 (2026-07-03):** đã GỠ toàn bộ courier/staff-registration/giặt ủi khỏi mobile (xem mục 6). Bổ sung cùng đợt: **khóa ứng dụng bằng sinh trắc học thiết bị** (`local_auth`, bật ở Hồ sơ → Bảo mật, gate ở splash khi có phiên đăng nhập; `MainActivity` → `FlutterFragmentActivity`, thêm quyền `USE_BIOMETRIC`); nút **"Mở tủ"** hiển thị đúng kết quả phần cứng (parse `accepted/message` — backend vốn chờ MQTT result rồi mới trả); **Trợ giúp/Liên hệ** trong Hồ sơ có nội dung thật (bottom sheet hướng dẫn + mailto/website) thay toast "đang phát triển". "Quên mật khẩu" đã wire từ 2026-07-02 (trang `/forgot-password`). Mục "Ngôn ngữ"/"Vị trí" vẫn là placeholder.
 
 Flutter routing có cả flow cũ và mới.
 

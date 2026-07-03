@@ -26,7 +26,6 @@ import com.huynqb.laundrylocker.order.dto.OrderStatusResponse;
 import com.huynqb.laundrylocker.order.dto.OrderTimelineEvent;
 import com.huynqb.laundrylocker.order.dto.PromotionRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
-import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
 import com.huynqb.laundrylocker.order.model.LockerOrder;
 import com.huynqb.laundrylocker.order.model.OrderComplaint;
 import com.huynqb.laundrylocker.order.model.OrderDetail;
@@ -315,67 +314,9 @@ public class OrderService {
     }
   }
 
-  @Transactional
-  public OrderResponse collect(Long id, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("STORING", "INITIALIZED"));
-    if (order.getSendBoxId() != null) {
-      lockerClient.releaseBox(order.getSendBoxId());
-    }
-    return transition(order, "COLLECTED", staffId, null, "Staff collected items from locker");
-  }
-
-  @Transactional
-  public OrderResponse updateWeight(Long id, UpdateOrderWeightRequest request, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("COLLECTED", "PROCESSING"));
-    order.setActualWeight(request.actualWeight());
-    if (StringUtils.hasText(request.weightUnit())) {
-      order.setWeightUnit(request.weightUnit().toUpperCase());
-    }
-    if (request.items() != null && !request.items().isEmpty()) {
-      detailRepository.deleteByOrderId(order.getId());
-      BigDecimal newTotal = saveItemDetails(order.getId(), request.items(), request.actualWeight());
-      order.setOriginalPrice(newTotal);
-      BigDecimal discount = order.getDiscount() == null ? BigDecimal.ZERO : order.getDiscount();
-      BigDecimal extraFee = order.getExtraFee() == null ? BigDecimal.ZERO : order.getExtraFee();
-      order.setTotalPrice(newTotal.subtract(discount).max(BigDecimal.ZERO).add(extraFee));
-    }
-    order.setStaffId(staffId);
-    LockerOrder saved = orderRepository.save(order);
-    addHistory(saved.getId(), saved.getStatus(), saved.getStatus(), staffId,
-        StringUtils.hasText(request.staffNote()) ? request.staffNote() : "Staff updated order weight");
-    return toResponse(saved);
-  }
-
-  @Transactional
-  public OrderResponse process(Long id, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("COLLECTED"));
-    return transition(order, "PROCESSING", staffId, null, "Staff started processing order");
-  }
-
-  @Transactional
-  public OrderResponse ready(Long id, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("PROCESSING", "COLLECTED"));
-    return transition(order, "READY", staffId, null, "Order is ready for return");
-  }
-
-  @Transactional
-  public OrderResponse returnOrder(Long id, Long boxId, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("READY", "PROCESSING"));
-    if (boxId != null) {
-      lockerClient.reserveBox(boxId);
-      occupyBoxQuietly(boxId);
-    }
-    order.setPinCode(generatePinCode());
-    order.setPinCodeIssuedAt(LocalDateTime.now());
-    order.setReturnedAt(LocalDateTime.now());
-    order.setPickupDeadline(LocalDateTime.now().plusHours(pickupHoursLimit));
-    return transition(order, "RETURNED", staffId, boxId, "Staff returned items to locker");
-  }
+  // Laundry lifecycle (collect/updateWeight/process/ready/returnOrder) đã gỡ
+  // 2026-07-03 — dự án chỉ còn SEND/RENTAL. Trạng thái cũ COLLECTED/PROCESSING/
+  // READY/RETURNED vẫn được chấp nhận ở complete()/checkout() cho dữ liệu lịch sử.
 
   // EXPIRED: đồ đã dời vào kho (G3) — nhân viên trao trả tại quầy và chốt đơn
   // qua checkout; ô đã được nhả từ lúc expire nên releaseBoxes dưới đây no-op.
