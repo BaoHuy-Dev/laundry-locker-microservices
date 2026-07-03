@@ -15,7 +15,6 @@ import com.huynqb.laundrylocker.order.dto.PromotionRequest;
 import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
 import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
-import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
 import com.huynqb.laundrylocker.order.service.OrderService;
 import jakarta.validation.Valid;
@@ -118,34 +117,8 @@ public class OrderController {
     return ApiResponse.ok("ORDER_CONFIRMED", "Order confirmed", orderService.confirm(orderId, userId));
   }
 
-  @PutMapping("/api/orders/{orderId}/collect")
-  public ApiResponse<OrderResponse> collect(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_COLLECTED", "Order collected", orderService.collect(orderId, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/weight")
-  public ApiResponse<OrderResponse> updateWeight(
-      @PathVariable Long orderId,
-      @Valid @RequestBody UpdateOrderWeightRequest request,
-      @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_WEIGHT_UPDATED", "Order weight updated", orderService.updateWeight(orderId, request, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/process")
-  public ApiResponse<OrderResponse> process(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_PROCESSING", "Order processing", orderService.process(orderId, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/ready")
-  public ApiResponse<OrderResponse> ready(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_READY", "Order ready", orderService.ready(orderId, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/return")
-  public ApiResponse<OrderResponse> returnOrder(
-      @PathVariable Long orderId, @RequestParam Long boxId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_RETURNED", "Order returned", orderService.returnOrder(orderId, boxId, staffId));
-  }
+  // Laundry lifecycle endpoints (collect/weight/process/ready/return) đã gỡ
+  // 2026-07-03 — dự án không còn nghiệp vụ giặt ủi, chỉ SEND/RENTAL.
 
   @PutMapping("/api/orders/{orderId}/complete")
   public ApiResponse<OrderResponse> complete(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
