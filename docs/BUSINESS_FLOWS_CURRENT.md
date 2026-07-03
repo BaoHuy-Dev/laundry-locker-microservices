@@ -749,6 +749,17 @@ Tính năng **Flight Data** (Mảng 2): kết nối flight controller **ArduPilo
 
 **An toàn/ghi chú:** tính năng điều khiển bay thật — chỉ dùng khi có thẩm quyền vận hành drone; mode/lệnh đang nhắm ArduPilot (phổ biến với Mission Planner). Chưa smoke với SITL/drone thật trong phiên tạo (kết nối cần peer); đã verify codec bằng unit test (9/9, gồm CRC chuẩn).
 
+### 11.4 Theo Dõi Giao Drone Cho NGƯỜI NHẬN (mobile, push-only Phase 1) — mới 2026-07-03
+
+Luồng **cho khách NHẬN hàng** theo dõi chuyến giao bằng drone, **chỉ ở mobile**, **Phase 1 = chỉ push notification + timeline** (CHƯA live map/websocket). Khác hoàn toàn với 11.1–11.3 (phía pilot/MAVLink/maintenance). Feature mới `smart-laundry-locker-mobile/lib/features/drone_delivery/**` (đủ 4 layer, mirror `logistics_send`). Route `/drone-delivery` (`AppRouter.droneDeliveryTracking`), nhận `orderId` qua `extra`.
+
+**Backend cần cung cấp (CHƯA có — mobile đang tắt sau flag `droneDeliveryEnabled=false` + mock, KHÔNG gọi endpoint chết):**
+
+- **FCM data payload** (backend đẩy khi trạng thái giao drone đổi): `{ type, title, content, orderId, deliveryId, status, eta }` với `type` ∈ `drone_dispatched | drone_approaching | drone_arrived | drone_delivered | drone_delayed | drone_failed`, `status` ∈ `dispatched | approaching | arrived | delivered | delayed | failed`. Mobile tap noti → deep-link `DroneDeliveryTrackingPage(orderId)`. Tái dùng channel FCM `aisl_high_importance_channel` sẵn có.
+- **Endpoint fetch trạng thái** (để mở app/pull-to-refresh, không phụ thuộc push): `GET /api/orders/{orderId}/drone-delivery` → trả `{ status, deliveryId, orderId, orderCode, droneCode, etaMinutes, updatedAt }`. Khi backend triển khai, mobile chỉ cần bật cờ `droneDeliveryEnabled`.
+
+**Phase 2 (live map — CHƯA làm):** contract `{ orderId, status, eta }` chỉ cần thêm `{ lat, lng, heading }` và subscribe STOMP `/ws` (đã có realtime hạ tầng) — không phải đập đi làm lại. Gắn với "Drone delivery service đầy đủ" (còn thiếu ở 11.1: battery-aware assignment, điều khiển bay thật, realtime tracking).
+
 ## 12. Luồng Manager Operations
 
 Manager là flow vận hành, không phải full admin.
