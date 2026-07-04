@@ -8,6 +8,7 @@ import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
 import com.huynqb.laundrylocker.locker.client.IotClient;
 import com.huynqb.laundrylocker.locker.client.UserClient;
+import com.huynqb.laundrylocker.locker.dto.BoxAnomalyResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxHealthResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
@@ -47,6 +48,7 @@ import com.huynqb.laundrylocker.locker.repository.LockerUnitRepository;
 import com.huynqb.laundrylocker.locker.repository.MaintenanceScheduleRepository;
 import com.huynqb.laundrylocker.locker.repository.RepairLogRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -180,6 +182,24 @@ public class LockerService {
     LockerBox saved = boxRepository.save(box);
     syncBoxStateQuietly(saved, "RESERVED");
     return toSummary(saved);
+  }
+
+  /// Toàn bộ ô (mọi tủ) cho job đối soát của order-service (Gap G4):
+  /// trạng thái ô là bản sao best-effort của đơn nên có thể lệch; order-service
+  /// cần id + status + reservedUntil để phân biệt RESERVED còn hạn (đơn vừa
+  /// tạo) với RESERVED mồ côi.
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> listBoxesForReconcile() {
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (LockerBox box : boxRepository.findAll()) {
+      Map<String, Object> item = new java.util.HashMap<>();
+      item.put("id", box.getId());
+      item.put("lockerId", box.getLockerId());
+      item.put("status", box.getStatus());
+      item.put("reservedUntil", box.getReservedUntil());
+      result.add(item);
+    }
+    return result;
   }
 
   /// Backstop sweep for boxes stuck RESERVED past their TTL — defense in
@@ -999,6 +1019,50 @@ public class LockerService {
                   needsAttention);
             })
         .toList();
+  }
+
+  /// Maintenance shift overview: every box across all lockers whose cabinet
+  /// reports the door physically OPEN while it isn't OCCUPIED (likely left ajar).
+  /// Hardware truth comes from iot-service (best-effort — returns empty if it's
+  /// down). Enriched with locker location so the technician can navigate there.
+  @Transactional(readOnly = true)
+  public List<BoxAnomalyResponse> boxAnomalies() {
+    List<IotClient.BoxHardwareStatus> hw;
+    try {
+      hw = iotClient.boxStatus(null).data();
+    } catch (Exception ex) {
+      log.debug("Could not fetch hardware box status for anomalies: {}", ex.getMessage());
+      return List.of();
+    }
+    if (hw == null) {
+      return List.of();
+    }
+    List<BoxAnomalyResponse> out = new ArrayList<>();
+    for (IotClient.BoxHardwareStatus h : hw) {
+      if (h.boxId() == null || !"OPEN".equalsIgnoreCase(h.hwState())) {
+        continue;
+      }
+      LockerBox box = boxRepository.findById(h.boxId()).orElse(null);
+      if (box == null || "OCCUPIED".equalsIgnoreCase(box.getStatus())) {
+        continue; // missing box, or door legitimately open while in use
+      }
+      LockerUnit locker = lockerRepository.findById(box.getLockerId()).orElse(null);
+      out.add(
+          new BoxAnomalyResponse(
+              box.getLockerId(),
+              locker == null ? null : locker.getCode(),
+              locker == null ? null : locker.getName(),
+              locker == null ? null : locker.getAddress(),
+              locker == null ? null : locker.getLatitude(),
+              locker == null ? null : locker.getLongitude(),
+              box.getId(),
+              box.getBoxNumber(),
+              box.getCellType(),
+              box.getStatus(),
+              h.hwState(),
+              h.lastReportedAt()));
+    }
+    return out;
   }
 
   private Map<Long, IotClient.BoxHardwareStatus> fetchHardwareStatuses(Long lockerId) {

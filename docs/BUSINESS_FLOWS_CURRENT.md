@@ -1,6 +1,6 @@
 # Luồng Nghiệp Vụ Hiện Tại
 
-> Cập nhật lần cuối: 2026-06-21 (PA4 — STAFF+TECHNICIAN roles)
+> Cập nhật lần cuối: 2026-07-03 (PA5 — gỡ giặt ủi + courier/staff-registration khỏi scope)
 > Workspace: `G:\BigProject`
 > Cặp tài liệu nguồn: file này + `docs/PROJECT_PROGRESS_TRACKER.md`
 
@@ -53,7 +53,6 @@ Dùng cho các flow trên app khách hàng:
 - Xem cửa hàng/locker.
 - Tạo đơn gửi hàng qua locker, gọi là SEND.
 - Tạo đơn thuê ô tủ tạm thời, gọi là RENTAL.
-- Tạo đơn giặt theo flow cũ.
 - Xem đơn của mình.
 - Xác nhận đã bỏ hàng/đồ vào ô tủ.
 - Hoàn tất nhận hàng/lấy đồ.
@@ -135,6 +134,7 @@ Endpoint backend hiện có:
 - `POST /api/maintenance/boxes/{id}/cleaning` (L5): đánh dấu ô đang vệ sinh/khử khuẩn.
 - `POST /api/maintenance/boxes/{id}/return-to-service` (L5): khôi phục ô `OUT_OF_SERVICE`/`CLEANING` về `AVAILABLE`.
 - `GET /api/maintenance/lockers/{lockerId}/box-health` (mới 2026-06-30): **box-health cho bảo trì** — trạng thái logic (theo đơn, locker-service) đặt cạnh trạng thái **phần cứng** cửa (iot-service, GAP 2). Mỗi ô trả `{boxId, boxNumber, cellType, logicalStatus, hwState, lastReportedAt, doorOpen, needsAttention}`; `doorOpen`=cửa đang OPEN, `needsAttention`=cửa mở nhưng ô KHÔNG `OCCUPIED` (nghi cửa kẹt/quên đóng). locker-service Feign `GET /internal/iot/box-status` (best-effort; iot-service chết → `hwState=null`, vẫn hiện logic).
+- `GET /api/maintenance/box-anomalies` (mới 2026-06-30): **tổng quan ca trực** — gom **mọi ô trên tất cả tủ** đang có cửa phần cứng `OPEN` nhưng KHÔNG `OCCUPIED` (từ dữ liệu GAP 2) vào một danh sách, mỗi mục kèm metadata locker (`lockerCode/lockerName/lockerAddress/lat/long` để chỉ đường) + `boxId/boxNumber/cellType/logicalStatus/hwState/lastReportedAt`. Read-only, best-effort (iot-service chết → list rỗng); **không** tự tạo report/notify (không side-effect) — chỉ để KTV thấy bất thường ở mọi tủ mà không phải chọn từng tủ.
 - `GET /api/maintenance/reports/{id}/logs` (L5): nhật ký xử lý (work-log) của phiếu.
 - `POST /api/maintenance/reports/{id}/logs` (L5, body `{note}`): KTV thêm 1 bước xử lý (actor = `X-User-Id`). Bảng mới `repair_logs` (migration V5).
 - `GET /api/maintenance/schedules` (L5): lịch bảo trì phòng ngừa (kèm cờ `due` khi `now >= next_due_at`).
@@ -448,45 +448,18 @@ Migration `V3__seed_demo_cabinet.sql` seed:
 - 6 cell `STANDARD`.
 - 1 cell `XL`.
 
-## 6. Luồng Đơn Giặt
+## 6. Luồng Đơn Giặt — ĐÃ GỠ (2026-07-03)
 
-Đây là lifecycle giặt đồ cũ, vẫn tồn tại trong `order-service`.
+Nghiệp vụ **giặt ủi không còn trong scope dự án** (chỉ còn SEND + RENTAL).
 
-Endpoint tạo đơn chính:
+Đã gỡ trong PA5:
 
-```http
-POST /api/orders
-```
+- Backend `order-service`: 5 endpoint lifecycle giặt `PUT /api/orders/{id}/collect|weight|process|ready|return` + service methods `collect/updateWeight/process/ready/returnOrder`.
+- Mobile: bộ lọc "Giặt ủi" ở màn Đơn tủ; feature `user_laundry` (màn tạo đơn giặt legacy); `locker_action_page`/`locker_otp_page` legacy.
 
-Flow thông thường:
+Giữ lại cho dữ liệu lịch sử: các trạng thái cũ `COLLECTED/PROCESSING/READY/RETURNED` vẫn được `complete()`/`checkout()` chấp nhận để chốt đơn tồn đọng; **không** xoá dữ liệu/migration cũ.
 
-1. Customer chọn store, locker, ô gửi, dịch vụ/items.
-2. Đơn được tạo với type/category như `LAUNDRY`.
-3. Ô locker được reserve.
-4. Customer nhận PIN.
-5. Customer mở ô và xác nhận đã bỏ đồ vào.
-6. Staff thu gom đơn.
-7. Staff cân/xử lý đồ giặt.
-8. Staff mark ready.
-9. Staff trả đồ sạch vào ô nhận.
-10. Customer lấy đồ.
-11. Đơn hoàn tất và ô được release.
-
-Endpoint quan trọng:
-
-- `PUT /api/orders/{orderId}/confirm`
-- `PUT /api/orders/{orderId}/collect`
-- `PUT /api/orders/{orderId}/weight`
-- `PUT /api/orders/{orderId}/process`
-- `PUT /api/orders/{orderId}/ready`
-- `PUT /api/orders/{orderId}/return?boxId=...`
-- `PUT /api/orders/{orderId}/complete`
-- `PUT /api/orders/{orderId}/cancel`
-- `GET /api/orders/{orderId}/timeline`
-
-Lưu ý hiện tại:
-
-- Một số màn hình legacy trên frontend/mobile vẫn diễn tả flow laundry/courier cũ, có thể chưa đồng bộ hoàn toàn với các màn hình locker ops Phase 2.
+**Cùng đợt PA5, đã gỡ khỏi mobile toàn bộ luồng Giao hàng qua Courier + Đăng ký làm Nhân viên/Courier** (chưa từng có backend — Gap G6): features `courier_delivery`/`courier_dispatch`/`courier_registration`/`staff_application`/`logistics_send`, chế độ "Người giao hàng" ở Home/Profile, màn đăng ký hồ sơ NV, các courier use case/model trong feature `orders`, route + provider liên quan. `POST /api/staff/**` (STAFF ops read-only) và role STAFF/TECHNICIAN giữ nguyên.
 
 ## 7. Luồng SEND Parcel
 
@@ -1156,6 +1129,8 @@ Hành vi event:
 
 ## 21. Luồng Flutter Mobile
 
+> **PA5 (2026-07-03):** đã GỠ toàn bộ courier/staff-registration/giặt ủi khỏi mobile (xem mục 6). Bổ sung cùng đợt: **khóa ứng dụng bằng sinh trắc học thiết bị** (`local_auth`, bật ở Hồ sơ → Bảo mật, gate ở splash khi có phiên đăng nhập; `MainActivity` → `FlutterFragmentActivity`, thêm quyền `USE_BIOMETRIC`); nút **"Mở tủ"** hiển thị đúng kết quả phần cứng (parse `accepted/message` — backend vốn chờ MQTT result rồi mới trả); **Trợ giúp/Liên hệ** trong Hồ sơ có nội dung thật (bottom sheet hướng dẫn + mailto/website) thay toast "đang phát triển". "Quên mật khẩu" đã wire từ 2026-07-02 (trang `/forgot-password`). Mục "Ngôn ngữ"/"Vị trí" vẫn là placeholder.
+
 Flutter routing có cả flow cũ và mới.
 
 ### Flow Phase 2 đã verify hiện tại
@@ -1187,6 +1162,11 @@ Màn "Báo cáo của tôi" (mới, 2026-06-16):
 
 - Route `/locker/my-reports` (hằng số `AppRouter.myLockerReports`, không trùng `AppRouter.myReports` route legacy `/maintenance/my-reports`), trang `lib/features/locker_ops/presentation/pages/my_reports_page.dart`. Đọc `GET /api/lockers/my-reports`, hiện card trạng thái (`OPEN/IN_PROGRESS/RESOLVED`) dùng lại `ops_widgets.dart` (`StatusChip`, `OpsCard`, `OpsBanner`). Đây là trang mới trong `locker_ops` (style đơn giản Map<String,dynamic>), **không phải** rewire màn `ReportListPage`/`CreateReportPage` cũ trong `lib/features/maintenance/**` — màn cũ đó dùng kiến trúc clean-arch khác (entity `MaintenanceReport` có field `code/staffNote/photoUrls` không khớp `LockerReportResponse` hiện tại, bắt chọn theo cây Location→Cabinet→Locker cũ và bắt chụp đúng 2 ảnh) nên giữ nguyên không sửa/xoá, không liên kết từ UI mới — đúng tiền lệ tab "Đơn hàng" trước đây cũng repoint sang trang mới thay vì sửa `OrderPage` legacy.
 - **Cập nhật cùng ngày (chiều)**: card report ở trạng thái `RESOLVED` giờ hiện 5 sao để đánh giá (gọi `POST /api/lockers/reports/{id}/rate`) nếu chưa đánh giá, hoặc hiện lại điểm đã chấm (`GET /api/lockers/reports/{id}/rating`, 404 nếu chưa có — `LockerOpsService.getReportRating` bắt riêng case này, trả `null` thay vì throw).
+
+Maintenance home — bổ sung 2026-06-30 (box-health phần cứng):
+
+- Tab **"Kiểm tra tủ"** thêm card **"Tình trạng phần cứng ô"** (`_boxHealthCard`/`_boxHealthRow`): khi chọn tủ, gọi `GET /api/maintenance/lockers/{lockerId}/box-health` (`LockerOpsService.boxHealth`, best-effort — không vỡ trang nếu BE/IoT chưa có dữ liệu) hiển thị mỗi ô: trạng thái **logic theo đơn** (`StatusChip`) đặt cạnh trạng thái **phần cứng cửa** (Cửa MỞ/đóng/chưa có tín hiệu, kèm "Báo lúc ..."). Ô `needsAttention` (cửa mở nhưng không `OCCUPIED`) được tô đỏ + banner cảnh báo đếm số ô cần kiểm tra. Đây là **surface MAINTENANCE** cho dữ liệu GAP 2 (trước chỉ Manager/Admin web đọc được). `flutter analyze` 0 issue; chưa smoke emulator. Không đổi backend/contract.
+- Tab **"Sự cố"** thêm section **"Cảnh báo phần cứng (cửa mở bất thường)"** (`_boxAnomaliesSection`) ở đầu tab: gọi `GET /api/maintenance/box-anomalies` (`LockerOpsService.boxAnomalies`, load best-effort trong `_load`) gom **mọi ô bất thường trên tất cả tủ** (cửa MỞ && không `OCCUPIED`) — KTV thấy ngay không phải chọn từng tủ. Mỗi card: tên tủ + ô + `StatusChip` logic + "Cửa MỞ · báo lúc ..." + nút **Chỉ đường** (dùng lại `_openDirections` với `lockerLatitude/lockerLongitude/lockerAddress`). Ẩn khi không có ô bất thường. `flutter analyze` 0 issue; chưa smoke emulator. Không đổi backend/contract.
 
 Maintenance home — bổ sung 2026-06-16 (chiều):
 
@@ -1455,13 +1435,14 @@ Tài liệu đặc tả đầy đủ (phân tích as-is bám code + bổ sung to
 
 Các điểm as-is đã xác minh trực tiếp từ code, cần lưu ý vì là lỗ hổng đúng đắn của luồng tủ đang chạy:
 
-- **Trạng thái ô (cập nhật L5)**: `AVAILABLE / RESERVED / OCCUPIED / FAULT / OUT_OF_SERVICE / CLEANING` (xem `LockerService`). `OUT_OF_SERVICE`/`CLEANING` được thêm ở L5 (bảo trì vận hành) — set qua `/api/maintenance/boxes/{id}/{out-of-service|cleaning}`, khôi phục qua `return-to-service`; ô ở 2 trạng thái này bị loại khỏi reserve. `EXPIRED` vẫn chỉ tồn tại ở cấp order qua `pickupDeadline` (chưa có ở cấp ô).
-- **Ô `RESERVED` không có TTL** và `autoCancelUnconfirmedOrders()` đổi đơn `INITIALIZED`>24h sang `CANCELED` nhưng **không release ô** và **không được `@Scheduled`** → ô có thể kẹt `RESERVED` (Gap G1/G2). `cancel()` thủ công thì có release.
-- **Quá hạn lấy hàng chỉ nhắc + cộng phí**; ô vẫn `OCCUPIED` tới khi có lệnh complete/checkout — chưa có move-to-storage/giải phóng tự động (Gap G3).
-- **Luồng nhận hàng qua shipper/courier (PARCEL_RECEIVE) chưa có code** — SEND hiện chỉ là C2C giữa 2 app-user; chưa có "courier access code" tách với PIN khách (Gap G6).
+- **Trạng thái ô (cập nhật L5)**: `AVAILABLE / RESERVED / OCCUPIED / FAULT / OUT_OF_SERVICE / CLEANING` (xem `LockerService`). `OUT_OF_SERVICE`/`CLEANING` được thêm ở L5 (bảo trì vận hành) — set qua `/api/maintenance/boxes/{id}/{out-of-service|cleaning}`, khôi phục qua `return-to-service`; ô ở 2 trạng thái này bị loại khỏi reserve. `EXPIRED` là trạng thái **đơn** (từ 2026-07-02 được job G3 đặt tự động); ở cấp ô thì ô được nhả về `AVAILABLE` ngay khi đơn expire nên không cần trạng thái ô riêng.
+- ~~**Ô `RESERVED` không có TTL**~~ **ĐÃ VÁ (G1/G2)**: `autoCancelUnconfirmedOrders()` release ô + `@Scheduled` 15 phút (order-service); locker-service có `reserved_until` + sweep mỗi giờ (backstop).
+- ~~**Quá hạn lấy hàng chỉ nhắc + cộng phí**~~ **ĐÃ VÁ (G3, 2026-07-02)**: `OrderService.releaseOverdueOrders()` — quá `pickupDeadline` hơn `app.order.overdue-release-hours` (mặc định 24h, 0=tắt) → chốt phí quá hạn, đơn sang `EXPIRED`, thu hồi PIN, cắt tham chiếu box + nhả ô, notify khách/người nhận; nhân viên trao trả từ kho qua `POST /api/orders/{id}/checkout` (đã chấp nhận EXPIRED). Cron `app.order.overdue-release-cron` (phút :05 mỗi giờ) + trigger tay `POST /api/admin/scheduler/release-overdue`.
+- **Luồng nhận hàng qua shipper/courier (PARCEL_RECEIVE) chưa có code** — SEND hiện chỉ là C2C giữa 2 app-user; chưa có "courier access code" tách với PIN khách (Gap G6). *Ngoài phạm vi dự án hiện tại (chỉ gửi/giữ đồ).*
 - **Deadline SEND mặc định 48h**, laundry pickup 24h; rental deadline = số giờ thuê (cấu hình `app.order.*`).
 - **PIN/QR**: QR ký số HMAC gắn PIN hiện tại → đổi PIN (delegate/reset/SEND handover) vô hiệu QR cũ; `getByAccess` nhận cả PIN và QR.
-- **Trạng thái ô là bản sao best-effort** của order (occupy/release nuốt lỗi) → có rủi ro lệch trạng thái, chưa có job đối soát (Gap G4).
+- ~~**Trạng thái ô là bản sao best-effort** của order, chưa có job đối soát~~ **ĐÃ VÁ (G4, 2026-07-02)**: `OrderService.reconcileBoxStates()` đối soát hai chiều mỗi giờ (cron `app.order.reconcile-cron`, phút :35): ô `RESERVED`/`OCCUPIED` mồ côi (không đơn `INITIALIZED/STORING/RETURNED` nào tham chiếu) → release (RESERVED còn hạn giữ chỗ bỏ qua để tránh race đơn vừa tạo); đơn hoạt động mà ô `AVAILABLE` → reserve/occupy lại (re-check đơn trước khi sửa). Nguồn dữ liệu: `GET /internal/boxes` (locker-service, id/lockerId/status/reservedUntil). Trigger tay: `POST /api/admin/scheduler/reconcile-boxes`.
+- **Manager thao tác đơn (2026-07-02)**: `PATCH /api/manage/orders/{id}/status` (RBAC `/api/manage/**` MANAGER/ADMIN sẵn có; manager ghi làm actor qua `X-User-Id` khi request không có `staffId`). Mobile Manager tab Đơn hàng bấm đơn → bottom sheet đổi trạng thái.
 
 Toàn bộ danh sách 16 gap (G1–G16), đề xuất data model/API, và lộ trình implement 7 giai đoạn (L1–L7, mỗi giai đoạn 1 branch) nằm trong spec ở trên.
 

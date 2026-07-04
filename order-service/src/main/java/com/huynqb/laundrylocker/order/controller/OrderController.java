@@ -15,7 +15,6 @@ import com.huynqb.laundrylocker.order.dto.PromotionRequest;
 import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
 import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
-import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
 import com.huynqb.laundrylocker.order.service.OrderService;
 import jakarta.validation.Valid;
@@ -92,6 +91,21 @@ public class OrderController {
     return ApiResponse.ok(orderService.statistics());
   }
 
+  // Manager thao tác đơn (gateway đã giới hạn /api/manage/** cho MANAGER/ADMIN).
+  // Ghi nhận manager làm actor trong timeline nếu request không chỉ định staffId.
+  @PatchMapping("/api/manage/orders/{id}/status")
+  public ApiResponse<OrderResponse> manageUpdateStatus(
+      @PathVariable Long id,
+      @Valid @RequestBody UpdateOrderStatusRequest request,
+      @RequestHeader(value = "X-User-Id", required = false) Long managerId) {
+    UpdateOrderStatusRequest effective =
+        request.staffId() == null
+            ? new UpdateOrderStatusRequest(request.status(), managerId, request.receiveBoxId())
+            : request;
+    return ApiResponse.ok(
+        "ORDER_STATUS_UPDATED", "Order status updated", orderService.updateStatus(id, effective));
+  }
+
   @PatchMapping("/api/orders/{id}/status")
   public ApiResponse<OrderResponse> updateStatus(
       @PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
@@ -103,34 +117,8 @@ public class OrderController {
     return ApiResponse.ok("ORDER_CONFIRMED", "Order confirmed", orderService.confirm(orderId, userId));
   }
 
-  @PutMapping("/api/orders/{orderId}/collect")
-  public ApiResponse<OrderResponse> collect(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_COLLECTED", "Order collected", orderService.collect(orderId, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/weight")
-  public ApiResponse<OrderResponse> updateWeight(
-      @PathVariable Long orderId,
-      @Valid @RequestBody UpdateOrderWeightRequest request,
-      @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_WEIGHT_UPDATED", "Order weight updated", orderService.updateWeight(orderId, request, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/process")
-  public ApiResponse<OrderResponse> process(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_PROCESSING", "Order processing", orderService.process(orderId, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/ready")
-  public ApiResponse<OrderResponse> ready(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_READY", "Order ready", orderService.ready(orderId, staffId));
-  }
-
-  @PutMapping("/api/orders/{orderId}/return")
-  public ApiResponse<OrderResponse> returnOrder(
-      @PathVariable Long orderId, @RequestParam Long boxId, @RequestHeader("X-User-Id") Long staffId) {
-    return ApiResponse.ok("ORDER_RETURNED", "Order returned", orderService.returnOrder(orderId, boxId, staffId));
-  }
+  // Laundry lifecycle endpoints (collect/weight/process/ready/return) đã gỡ
+  // 2026-07-03 — dự án không còn nghiệp vụ giặt ủi, chỉ SEND/RENTAL.
 
   @PutMapping("/api/orders/{orderId}/complete")
   public ApiResponse<OrderResponse> complete(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
@@ -368,6 +356,18 @@ public class OrderController {
   @PostMapping("/api/admin/scheduler/pickup-reminders")
   public ApiResponse<Map<String, Object>> pickupReminders() {
     return ApiResponse.ok("SCHEDULER_PICKUP_REMINDERS_OK", "Pickup reminder job completed", orderService.pickupReminders());
+  }
+
+  @PostMapping("/api/admin/scheduler/release-overdue")
+  public ApiResponse<Map<String, Object>> releaseOverdue() {
+    return ApiResponse.ok(
+        "SCHEDULER_RELEASE_OVERDUE_OK", "Overdue release job completed", orderService.releaseOverdueOrders());
+  }
+
+  @PostMapping("/api/admin/scheduler/reconcile-boxes")
+  public ApiResponse<Map<String, Object>> reconcileBoxes() {
+    return ApiResponse.ok(
+        "SCHEDULER_RECONCILE_BOXES_OK", "Box reconcile job completed", orderService.reconcileBoxStates());
   }
 
   @GetMapping("/api/admin/scheduler/status")

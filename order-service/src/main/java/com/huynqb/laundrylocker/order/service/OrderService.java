@@ -26,7 +26,6 @@ import com.huynqb.laundrylocker.order.dto.OrderStatusResponse;
 import com.huynqb.laundrylocker.order.dto.OrderTimelineEvent;
 import com.huynqb.laundrylocker.order.dto.PromotionRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
-import com.huynqb.laundrylocker.order.dto.UpdateOrderWeightRequest;
 import com.huynqb.laundrylocker.order.model.LockerOrder;
 import com.huynqb.laundrylocker.order.model.OrderComplaint;
 import com.huynqb.laundrylocker.order.model.OrderDetail;
@@ -110,6 +109,15 @@ public class OrderService {
   @Value("${app.order.auto-cancel-hours:24}")
   private int autoCancelHours;
 
+  // Chặn khách bỏ hàng / bắt đầu thuê khi đơn có phí nhưng chưa thanh toán.
+  @Value("${app.order.require-payment-before-drop:true}")
+  private boolean requirePaymentBeforeDrop;
+
+  // G3: quá hạn lấy hàng quá số giờ này thì coi như đồ được dời vào kho —
+  // đơn sang EXPIRED, chốt phí quá hạn và nhả ô cho khách khác. 0 = tắt.
+  @Value("${app.order.overdue-release-hours:24}")
+  private int overdueReleaseHours;
+
   @Transactional
   public OrderResponse create(CreateOrderRequest request) {
     userClient.getUser(request.userId());
@@ -164,6 +172,7 @@ public class OrderService {
     LockerOrder order = find(id);
     assertOwner(order, userId);
     validateStatus(order, Set.of("INITIALIZED"));
+    assertPaidBeforeDrop(order);
     occupyBoxQuietly(order.getSendBoxId());
     if ("SEND".equalsIgnoreCase(order.getType())) {
       // Stage 2 of the SEND flow: the drop PIN dies here, a fresh pickup PIN
@@ -305,72 +314,16 @@ public class OrderService {
     }
   }
 
-  @Transactional
-  public OrderResponse collect(Long id, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("STORING", "INITIALIZED"));
-    if (order.getSendBoxId() != null) {
-      lockerClient.releaseBox(order.getSendBoxId());
-    }
-    return transition(order, "COLLECTED", staffId, null, "Staff collected items from locker");
-  }
+  // Laundry lifecycle (collect/updateWeight/process/ready/returnOrder) đã gỡ
+  // 2026-07-03 — dự án chỉ còn SEND/RENTAL. Trạng thái cũ COLLECTED/PROCESSING/
+  // READY/RETURNED vẫn được chấp nhận ở complete()/checkout() cho dữ liệu lịch sử.
 
-  @Transactional
-  public OrderResponse updateWeight(Long id, UpdateOrderWeightRequest request, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("COLLECTED", "PROCESSING"));
-    order.setActualWeight(request.actualWeight());
-    if (StringUtils.hasText(request.weightUnit())) {
-      order.setWeightUnit(request.weightUnit().toUpperCase());
-    }
-    if (request.items() != null && !request.items().isEmpty()) {
-      detailRepository.deleteByOrderId(order.getId());
-      BigDecimal newTotal = saveItemDetails(order.getId(), request.items(), request.actualWeight());
-      order.setOriginalPrice(newTotal);
-      BigDecimal discount = order.getDiscount() == null ? BigDecimal.ZERO : order.getDiscount();
-      BigDecimal extraFee = order.getExtraFee() == null ? BigDecimal.ZERO : order.getExtraFee();
-      order.setTotalPrice(newTotal.subtract(discount).max(BigDecimal.ZERO).add(extraFee));
-    }
-    order.setStaffId(staffId);
-    LockerOrder saved = orderRepository.save(order);
-    addHistory(saved.getId(), saved.getStatus(), saved.getStatus(), staffId,
-        StringUtils.hasText(request.staffNote()) ? request.staffNote() : "Staff updated order weight");
-    return toResponse(saved);
-  }
-
-  @Transactional
-  public OrderResponse process(Long id, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("COLLECTED"));
-    return transition(order, "PROCESSING", staffId, null, "Staff started processing order");
-  }
-
-  @Transactional
-  public OrderResponse ready(Long id, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("PROCESSING", "COLLECTED"));
-    return transition(order, "READY", staffId, null, "Order is ready for return");
-  }
-
-  @Transactional
-  public OrderResponse returnOrder(Long id, Long boxId, Long staffId) {
-    LockerOrder order = find(id);
-    validateStatus(order, Set.of("READY", "PROCESSING"));
-    if (boxId != null) {
-      lockerClient.reserveBox(boxId);
-      occupyBoxQuietly(boxId);
-    }
-    order.setPinCode(generatePinCode());
-    order.setPinCodeIssuedAt(LocalDateTime.now());
-    order.setReturnedAt(LocalDateTime.now());
-    order.setPickupDeadline(LocalDateTime.now().plusHours(pickupHoursLimit));
-    return transition(order, "RETURNED", staffId, boxId, "Staff returned items to locker");
-  }
-
+  // EXPIRED: đồ đã dời vào kho (G3) — nhân viên trao trả tại quầy và chốt đơn
+  // qua checkout; ô đã được nhả từ lúc expire nên releaseBoxes dưới đây no-op.
   @Transactional
   public OrderResponse checkout(Long id, Long staffId, String note) {
     LockerOrder order = find(id);
-    validateStatus(order, Set.of("READY", "RETURNED", "STORING"));
+    validateStatus(order, Set.of("READY", "RETURNED", "STORING", "EXPIRED"));
     releaseBoxes(order);
     order.setCompletedAt(LocalDateTime.now());
     order.setPinCode(null);
@@ -932,6 +885,175 @@ public class OrderService {
     return Map.of("status", "completed");
   }
 
+  // G3: nhắc + tính phí quá hạn là chưa đủ — ô bị chiếm vô thời hạn tới khi có
+  // lệnh complete. Sau `overdue-release-hours` giờ kể từ pickupDeadline, chốt
+  // phí quá hạn, chuyển đơn sang EXPIRED (đồ dời vào kho, nhận lại qua nhân
+  // viên bằng checkout) và nhả ô. PIN bị thu hồi vì ô có thể cấp cho đơn khác.
+  @Transactional
+  public Map<String, Object> releaseOverdueOrders() {
+    if (overdueReleaseHours <= 0) {
+      return Map.of("expiredOrders", 0);
+    }
+    LocalDateTime cutoff = LocalDateTime.now().minusHours(overdueReleaseHours);
+    int expired = 0;
+    List<LockerOrder> candidates = new ArrayList<>();
+    candidates.addAll(orderRepository.findByStatusOrderByCreatedAtDesc("STORING"));
+    candidates.addAll(orderRepository.findByStatusOrderByCreatedAtDesc("RETURNED"));
+    for (LockerOrder order : candidates) {
+      if (order.getPickupDeadline() == null || order.getPickupDeadline().isAfter(cutoff)) {
+        continue;
+      }
+      BigDecimal overtime = calculatePickupOvertimeFee(order);
+      if (overtime.compareTo(BigDecimal.ZERO) > 0) {
+        order.setExtraFee(order.getExtraFee().add(overtime));
+        order.setTotalPrice(order.getTotalPrice().add(overtime));
+      }
+      releaseBoxes(order);
+      // Ô đã trả về pool nên tham chiếu box phải cắt — tránh double-release
+      // giải phóng nhầm ô đã được cấp cho đơn khác ở các lệnh sau này.
+      order.setSendBoxId(null);
+      order.setReceiveBoxId(null);
+      order.setPinCode(null);
+      transition(order, "EXPIRED", null, null,
+          "Quá hạn lấy hàng quá " + overdueReleaseHours
+              + " giờ: đồ chuyển vào kho lưu trữ, ô đã giải phóng");
+      notifyQuietly(order.getUserId(), "Đồ đã chuyển vào kho",
+          "Đơn " + order.getOrderCode()
+              + " quá hạn lấy hàng. Đồ đã được chuyển vào kho lưu trữ và ô tủ được giải phóng."
+              + " Vui lòng liên hệ nhân viên để nhận lại đồ.",
+          "ORDER_EXPIRED", order.getId());
+      if (order.getReceiverId() != null) {
+        notifyQuietly(order.getReceiverId(), "Đồ đã chuyển vào kho",
+            "Kiện hàng " + order.getOrderCode()
+                + " quá hạn lấy. Đồ đã chuyển vào kho lưu trữ; liên hệ nhân viên để nhận lại.",
+            "ORDER_EXPIRED", order.getId());
+      }
+      expired++;
+    }
+    if (expired > 0) {
+      log.info("Overdue orders moved to storage (EXPIRED) and cells released: {}", expired);
+    }
+    return Map.of("expiredOrders", expired);
+  }
+
+  // G4: trạng thái ô bên locker-service là bản sao best-effort của đơn
+  // (occupy/release nuốt lỗi) nên có thể lệch. Đối soát hai chiều:
+  //  - Ô RESERVED/OCCUPIED mà không đơn hoạt động nào tham chiếu → nhả về
+  //    AVAILABLE. Riêng RESERVED còn hạn giữ chỗ thì bỏ qua (có thể là đơn
+  //    vừa tạo chưa kịp thấy trong snapshot; sweep TTL của locker-service
+  //    sẽ xử lý nếu thật sự mồ côi).
+  //  - Đơn hoạt động mà ô lại AVAILABLE → giữ/chiếm lại cho khớp (đọc lại
+  //    đơn ngay trước khi sửa để tránh đơn vừa hoàn tất).
+  @Transactional
+  public Map<String, Object> reconcileBoxStates() {
+    List<Map<String, Object>> boxes;
+    try {
+      boxes = lockerClient.listBoxes().data();
+    } catch (Exception ex) {
+      log.warn("Box reconcile skipped, locker-service unreachable: {}", ex.getMessage());
+      return Map.of("skipped", true);
+    }
+    if (boxes == null) {
+      return Map.of("skipped", true);
+    }
+
+    List<LockerOrder> activeOrders = new ArrayList<>();
+    for (String status : List.of("INITIALIZED", "STORING", "RETURNED")) {
+      activeOrders.addAll(orderRepository.findByStatusOrderByCreatedAtDesc(status));
+    }
+    java.util.Set<Long> heldBoxIds = new java.util.HashSet<>();
+    for (LockerOrder order : activeOrders) {
+      if (order.getSendBoxId() != null) {
+        heldBoxIds.add(order.getSendBoxId());
+      }
+      if (order.getReceiveBoxId() != null) {
+        heldBoxIds.add(order.getReceiveBoxId());
+      }
+    }
+
+    LocalDateTime now = LocalDateTime.now();
+    Map<Long, String> boxStatusById = new HashMap<>();
+    int released = 0;
+    for (Map<String, Object> box : boxes) {
+      Long boxId = toLong(box.get("id"));
+      String status = box.get("status") == null ? "" : String.valueOf(box.get("status"));
+      if (boxId == null) {
+        continue;
+      }
+      boxStatusById.put(boxId, status);
+      if (heldBoxIds.contains(boxId)) {
+        continue;
+      }
+      boolean orphanOccupied = "OCCUPIED".equalsIgnoreCase(status);
+      boolean orphanReserved =
+          "RESERVED".equalsIgnoreCase(status) && reservedHoldExpired(box.get("reservedUntil"), now);
+      if (!orphanOccupied && !orphanReserved) {
+        continue;
+      }
+      try {
+        lockerClient.releaseBox(boxId);
+        released++;
+        log.warn("Reconcile: released orphan {} box {}", status, boxId);
+      } catch (Exception ex) {
+        log.warn("Reconcile: could not release box {}: {}", boxId, ex.getMessage());
+      }
+    }
+
+    int reclaimed = 0;
+    for (LockerOrder order : activeOrders) {
+      Long boxId = order.getReceiveBoxId() != null ? order.getReceiveBoxId() : order.getSendBoxId();
+      if (boxId == null || !"AVAILABLE".equalsIgnoreCase(boxStatusById.get(boxId))) {
+        continue;
+      }
+      String freshStatus =
+          orderRepository.findById(order.getId()).map(LockerOrder::getStatus).orElse("");
+      try {
+        if ("INITIALIZED".equals(freshStatus)) {
+          lockerClient.reserveBox(boxId);
+        } else if ("STORING".equals(freshStatus) || "RETURNED".equals(freshStatus)) {
+          lockerClient.occupyBox(boxId);
+        } else {
+          continue;
+        }
+        reclaimed++;
+        log.warn("Reconcile: re-held AVAILABLE box {} for active order {} ({})",
+            boxId, order.getId(), freshStatus);
+      } catch (Exception ex) {
+        log.warn("Reconcile: could not re-hold box {} for order {}: {}",
+            boxId, order.getId(), ex.getMessage());
+      }
+    }
+
+    if (released > 0 || reclaimed > 0) {
+      log.info("Box reconcile done: released={}, reclaimed={}", released, reclaimed);
+    }
+    return Map.of("releasedBoxes", released, "reclaimedBoxes", reclaimed);
+  }
+
+  private Long toLong(Object value) {
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    try {
+      return value == null ? null : Long.parseLong(String.valueOf(value));
+    } catch (NumberFormatException ex) {
+      return null;
+    }
+  }
+
+  // Hạn giữ chỗ đã qua (hoặc không có — dữ liệu cũ) thì RESERVED mồ côi mới
+  // được nhả; định dạng lạ coi như còn hạn để không release nhầm.
+  private boolean reservedHoldExpired(Object reservedUntil, LocalDateTime now) {
+    if (reservedUntil == null) {
+      return true;
+    }
+    try {
+      return LocalDateTime.parse(String.valueOf(reservedUntil)).isBefore(now);
+    } catch (Exception ex) {
+      return false;
+    }
+  }
+
   @Transactional(readOnly = true)
   public Map<String, Object> pickupReminders() {
     long count =
@@ -1081,6 +1203,25 @@ public class OrderService {
     }
   }
 
+  /**
+   * Chặn khách bỏ hàng / bắt đầu thuê khi đơn có phí (&gt;0) mà chưa thanh toán.
+   * Đơn miễn phí (totalPrice = 0/null) luôn được phép. Có thể tắt bằng cấu hình
+   * {@code app.order.require-payment-before-drop=false}.
+   */
+  private void assertPaidBeforeDrop(LockerOrder order) {
+    if (!requirePaymentBeforeDrop) {
+      return;
+    }
+    BigDecimal total = order.getTotalPrice();
+    boolean hasFee = total != null && total.compareTo(BigDecimal.ZERO) > 0;
+    boolean paid = "PAID".equalsIgnoreCase(order.getPaymentStatus());
+    if (hasFee && !paid) {
+      throw new BusinessException(
+          "ORDER_UNPAID",
+          "Vui lòng thanh toán đơn trước khi bỏ hàng vào tủ.");
+    }
+  }
+
   private void assertOwner(LockerOrder order, Long userId) {
     if (userId != null && !userId.equals(order.getUserId())) {
       throw new BusinessException("ORDER_FORBIDDEN", "Order does not belong to user");
@@ -1160,6 +1301,7 @@ public class OrderService {
       case "STORING" -> "PICKUP";
       case "COMPLETED" -> "DONE";
       case "CANCELED" -> "CANCELED";
+      case "EXPIRED" -> "CONTACT_STAFF";
       default -> "UNKNOWN";
     };
   }
@@ -1168,6 +1310,7 @@ public class OrderService {
     return switch (nextAction(order)) {
       case "PAY_AND_DROP" -> "Pay and place storage items in locker.";
       case "PICKUP" -> "Pick up items from locker.";
+      case "CONTACT_STAFF" -> "Items moved to storage; contact staff to retrieve them.";
       default -> order.getStatus();
     };
   }
@@ -1182,6 +1325,7 @@ public class OrderService {
       case "STORING" -> "Items stored in locker";
       case "COMPLETED" -> "Completed";
       case "CANCELED" -> "Canceled";
+      case "EXPIRED" -> "Pickup overdue, items moved to storage";
       default -> status;
     };
   }
