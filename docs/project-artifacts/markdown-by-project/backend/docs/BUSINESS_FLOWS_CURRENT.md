@@ -749,6 +749,21 @@ Tính năng **Flight Data** (Mảng 2): kết nối flight controller **ArduPilo
 
 **An toàn/ghi chú:** tính năng điều khiển bay thật — chỉ dùng khi có thẩm quyền vận hành drone; mode/lệnh đang nhắm ArduPilot (phổ biến với Mission Planner). Chưa smoke với SITL/drone thật trong phiên tạo (kết nối cần peer); đã verify codec bằng unit test (9/9, gồm CRC chuẩn).
 
+### 11.4 Theo Dõi Giao Drone Cho NGƯỜI NHẬN (push + live map) — mới 2026-07-03
+
+Luồng **cho khách NHẬN hàng** theo dõi chuyến giao bằng drone. Khác hoàn toàn 11.1–11.3 (phía pilot/MAVLink/maintenance): app user **chỉ tiêu thụ** dữ liệu gọn đã downsample từ backend, **KHÔNG** consume MAVLink. Feature mobile `smart-laundry-locker-mobile/lib/features/drone_delivery/**`.
+
+**Phase 1 — Push notification + timeline (2026-07-03):** backend đẩy FCM data payload `{ type, title, content, orderId, deliveryId, status, eta }` với `type` ∈ `drone_dispatched|drone_approaching|drone_arrived|drone_delivered|drone_delayed|drone_failed` (`status` cùng bộ tên). Mobile tap noti → trang timeline `DroneDeliveryTrackingPage(orderId)` (route `/drone-delivery`). Tái dùng channel FCM `aisl_high_importance_channel`. Endpoint fetch trạng thái `GET /api/orders/{orderId}/drone-delivery` (mobile sẵn sàng, **backend chưa có** → mobile tắt sau flag `droneDeliveryEnabled` + mock).
+
+**Phase 2 — Live map real-time (2026-07-03):** nút "Theo dõi trên bản đồ" ở timeline (chỉ hiện khi `status ∈ {dispatched, approaching}` + flag `droneLiveMapEnabled`) → `DroneLiveMapPage` (route `/drone-delivery/live-map`). Mobile subscribe **STOMP** `/ws` topic **`/topic/deliveries/{orderId}/position`** (on-demand: mở map mới subscribe, rời map thì unsubscribe), interpolate marker mượt + xử lý mất tín hiệu.
+
+Backend publisher (`notification-service`, branch `feat/notification-drone-position`):
+
+- Endpoint internal **`POST /internal/deliveries/{orderId}/position`** (`NotificationController` → `DronePositionService` → `WebSocketNotificationService.sendToDestination("/topic/deliveries/{orderId}/position", payload)`). Payload gọn: `{ orderId, status, lat, lng, heading, etaMinutes, speed?, battery?, ts }`. **Internal-only** (gateway chặn `/internal/**`), **KHÔNG lưu DB, KHÔNG FCM** (khác `DeliveryNotificationService` ở mục 16). Broker STOMP dùng lại `WebSocketConfig` (`/ws`, SimpleBroker `/topic`, JWT handshake) — không đổi config.
+- Nguồn dữ liệu dự kiến: **iot-service** nhận telemetry đầy đủ từ drone/ground-station → **downsample** (vd 1s/lần) → gọi endpoint này. TUYỆT ĐỐI không forward full MAVLink xuống user.
+
+Còn thiếu: iot-service chưa gọi publisher (hiện test bằng gọi thẳng internal endpoint); backend chưa có `GET /api/orders/{orderId}/drone-delivery`; authorization per-order trên topic `/topic/**` chưa siết (mọi user đã đăng nhập có thể subscribe orderId bất kỳ — chấp nhận ở Phase 2, siết sau nếu cần). Gắn với "Drone delivery service đầy đủ" (mục 11.1: battery-aware assignment, điều khiển bay thật).
+
 ## 12. Luồng Manager Operations
 
 Manager là flow vận hành, không phải full admin.

@@ -4,9 +4,11 @@ import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.NotificationRequest;
 import com.huynqb.laundrylocker.notification.dto.DeliveryStatusNotificationRequest;
 import com.huynqb.laundrylocker.notification.dto.DeviceTokenRequest;
+import com.huynqb.laundrylocker.notification.dto.DronePositionRequest;
 import com.huynqb.laundrylocker.notification.dto.FcmTokenRequest;
 import com.huynqb.laundrylocker.notification.dto.NotificationResponse;
 import com.huynqb.laundrylocker.notification.service.DeliveryNotificationService;
+import com.huynqb.laundrylocker.notification.service.DronePositionService;
 import com.huynqb.laundrylocker.notification.service.NotificationService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,6 +31,7 @@ public class NotificationController {
 
   private final NotificationService notificationService;
   private final DeliveryNotificationService deliveryNotificationService;
+  private final DronePositionService dronePositionService;
 
   @PostMapping("/internal/notifications")
   public ApiResponse<NotificationResponse> createInternal(@Valid @RequestBody NotificationRequest request) {
@@ -46,6 +49,20 @@ public class NotificationController {
         "DELIVERY_NOTIFICATION_SENT",
         "Delivery notification sent",
         deliveryNotificationService.notifyDeliveryStatus(request));
+  }
+
+  /**
+   * Đẩy vị trí drone real-time cho NGƯỜI NHẬN theo dõi live map (Phase 2) qua
+   * STOMP {@code /topic/deliveries/{orderId}/position}. Internal only — iot-service
+   * gọi sau khi downsample telemetry; gateway chặn /internal/** ra ngoài.
+   */
+  @PostMapping("/internal/deliveries/{orderId}/position")
+  public ApiResponse<Map<String, Object>> dronePosition(
+      @PathVariable Long orderId, @Valid @RequestBody DronePositionRequest request) {
+    return ApiResponse.ok(
+        "DRONE_POSITION_BROADCAST",
+        "Drone position broadcast",
+        dronePositionService.broadcast(orderId, request));
   }
 
   @PostMapping("/internal/notifications/order-status")

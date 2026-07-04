@@ -749,16 +749,20 @@ Tính năng **Flight Data** (Mảng 2): kết nối flight controller **ArduPilo
 
 **An toàn/ghi chú:** tính năng điều khiển bay thật — chỉ dùng khi có thẩm quyền vận hành drone; mode/lệnh đang nhắm ArduPilot (phổ biến với Mission Planner). Chưa smoke với SITL/drone thật trong phiên tạo (kết nối cần peer); đã verify codec bằng unit test (9/9, gồm CRC chuẩn).
 
-### 11.4 Theo Dõi Giao Drone Cho NGƯỜI NHẬN (mobile, push-only Phase 1) — mới 2026-07-03
+### 11.4 Theo Dõi Giao Drone Cho NGƯỜI NHẬN (push + live map) — mới 2026-07-03
 
-Luồng **cho khách NHẬN hàng** theo dõi chuyến giao bằng drone, **chỉ ở mobile**, **Phase 1 = chỉ push notification + timeline** (CHƯA live map/websocket). Khác hoàn toàn với 11.1–11.3 (phía pilot/MAVLink/maintenance). Feature mới `smart-laundry-locker-mobile/lib/features/drone_delivery/**` (đủ 4 layer, mirror `logistics_send`). Route `/drone-delivery` (`AppRouter.droneDeliveryTracking`), nhận `orderId` qua `extra`.
+Luồng **cho khách NHẬN hàng** theo dõi chuyến giao bằng drone. Khác hoàn toàn 11.1–11.3 (phía pilot/MAVLink/maintenance): app user **chỉ tiêu thụ** dữ liệu gọn đã downsample từ backend, **KHÔNG** consume MAVLink. Feature mobile `smart-laundry-locker-mobile/lib/features/drone_delivery/**`.
 
-**Backend cần cung cấp (CHƯA có — mobile đang tắt sau flag `droneDeliveryEnabled=false` + mock, KHÔNG gọi endpoint chết):**
+**Phase 1 — Push notification + timeline (2026-07-03):** backend đẩy FCM data payload `{ type, title, content, orderId, deliveryId, status, eta }` với `type` ∈ `drone_dispatched|drone_approaching|drone_arrived|drone_delivered|drone_delayed|drone_failed` (`status` cùng bộ tên). Mobile tap noti → trang timeline `DroneDeliveryTrackingPage(orderId)` (route `/drone-delivery`). Tái dùng channel FCM `aisl_high_importance_channel`. Endpoint fetch trạng thái `GET /api/orders/{orderId}/drone-delivery` (mobile sẵn sàng, **backend chưa có** → mobile tắt sau flag `droneDeliveryEnabled` + mock).
 
-- **FCM data payload** (backend đẩy khi trạng thái giao drone đổi): `{ type, title, content, orderId, deliveryId, status, eta }` với `type` ∈ `drone_dispatched | drone_approaching | drone_arrived | drone_delivered | drone_delayed | drone_failed`, `status` ∈ `dispatched | approaching | arrived | delivered | delayed | failed`. Mobile tap noti → deep-link `DroneDeliveryTrackingPage(orderId)`. Tái dùng channel FCM `aisl_high_importance_channel` sẵn có.
-- **Endpoint fetch trạng thái** (để mở app/pull-to-refresh, không phụ thuộc push): `GET /api/orders/{orderId}/drone-delivery` → trả `{ status, deliveryId, orderId, orderCode, droneCode, etaMinutes, updatedAt }`. Khi backend triển khai, mobile chỉ cần bật cờ `droneDeliveryEnabled`.
+**Phase 2 — Live map real-time (2026-07-03):** nút "Theo dõi trên bản đồ" ở timeline (chỉ hiện khi `status ∈ {dispatched, approaching}` + flag `droneLiveMapEnabled`) → `DroneLiveMapPage` (route `/drone-delivery/live-map`). Mobile subscribe **STOMP** `/ws` topic **`/topic/deliveries/{orderId}/position`** (on-demand: mở map mới subscribe, rời map thì unsubscribe), interpolate marker mượt + xử lý mất tín hiệu.
 
-**Phase 2 (live map — CHƯA làm):** contract `{ orderId, status, eta }` chỉ cần thêm `{ lat, lng, heading }` và subscribe STOMP `/ws` (đã có realtime hạ tầng) — không phải đập đi làm lại. Gắn với "Drone delivery service đầy đủ" (còn thiếu ở 11.1: battery-aware assignment, điều khiển bay thật, realtime tracking).
+Backend publisher (`notification-service`, branch `feat/notification-drone-position`):
+
+- Endpoint internal **`POST /internal/deliveries/{orderId}/position`** (`NotificationController` → `DronePositionService` → `WebSocketNotificationService.sendToDestination("/topic/deliveries/{orderId}/position", payload)`). Payload gọn: `{ orderId, status, lat, lng, heading, etaMinutes, speed?, battery?, ts }`. **Internal-only** (gateway chặn `/internal/**`), **KHÔNG lưu DB, KHÔNG FCM** (khác `DeliveryNotificationService` ở mục 16). Broker STOMP dùng lại `WebSocketConfig` (`/ws`, SimpleBroker `/topic`, JWT handshake) — không đổi config.
+- Nguồn dữ liệu dự kiến: **iot-service** nhận telemetry đầy đủ từ drone/ground-station → **downsample** (vd 1s/lần) → gọi endpoint này. TUYỆT ĐỐI không forward full MAVLink xuống user.
+
+Còn thiếu: iot-service chưa gọi publisher (hiện test bằng gọi thẳng internal endpoint); backend chưa có `GET /api/orders/{orderId}/drone-delivery`; authorization per-order trên topic `/topic/**` chưa siết (mọi user đã đăng nhập có thể subscribe orderId bất kỳ — chấp nhận ở Phase 2, siết sau nếu cần). Gắn với "Drone delivery service đầy đủ" (mục 11.1: battery-aware assignment, điều khiển bay thật).
 
 ## 12. Luồng Manager Operations
 
