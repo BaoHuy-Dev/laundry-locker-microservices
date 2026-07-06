@@ -71,7 +71,7 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
               && (path.startsWith("/api/lockers") || path.startsWith("/api/boxes"))
               && !isCustomerLockerAction(path);
       if (!hasRequiredRole(path, roles)
-          || (mutatingLockerStructure && !hasAny(roles, "ADMIN", "MANAGER"))) {
+          || (mutatingLockerStructure && !hasAny(roles, "ADMIN"))) {
         exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
         return exchange.getResponse().setComplete();
       }
@@ -131,18 +131,20 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
   }
 
   // Path-prefix RBAC. ADMIN is a superset of every operational role.
+  // Role model: CUSTOMER, ADMIN (web console), TECHNICIAN (locker upkeep + IoT),
+  // MAINTENANCE (drone team). MANAGER/STAFF were retired.
   private boolean hasRequiredRole(String path, List<String> roles) {
     if (path.startsWith("/api/admin")) {
       return hasAny(roles, "ADMIN");
     }
-    if (path.startsWith("/api/manage")) {
-      return hasAny(roles, "MANAGER", "ADMIN");
-    }
-    if (path.startsWith("/api/maintenance")) {
+    // Drone fleet + drone-delivery dispatch queue are the MAINTENANCE (drone
+    // team) surface; the rest of the maintenance API (faults, reports, box
+    // actions, schedules, landing pad) belongs to TECHNICIAN.
+    if (path.startsWith("/api/maintenance/drone")) {
       return hasAny(roles, "MAINTENANCE", "ADMIN");
     }
-    if (path.startsWith("/api/staff")) {
-      return hasAny(roles, "STAFF", "ADMIN");
+    if (path.startsWith("/api/maintenance")) {
+      return hasAny(roles, "MAINTENANCE", "TECHNICIAN", "ADMIN");
     }
     if (path.startsWith("/api/technician")) {
       return hasAny(roles, "TECHNICIAN", "ADMIN");
@@ -151,9 +153,13 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
   }
 
   // Cabinet/box structure changes are operator work; customers only report
-  // faults, file reports, or trigger an open on their own cell.
+  // faults, file reports, rate a resolved report, or trigger an open on
+  // their own cell.
   private boolean isCustomerLockerAction(String path) {
-    return path.endsWith("/fault") || path.endsWith("/report") || path.endsWith("/open");
+    return path.endsWith("/fault")
+        || path.endsWith("/report")
+        || path.endsWith("/open")
+        || path.endsWith("/rate");
   }
 
   private boolean hasAny(List<String> roles, String... required) {
@@ -169,6 +175,16 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
   }
 
   private boolean isPublic(String path, org.springframework.http.HttpMethod method) {
+    // Kiosk màn hình tủ (mô phỏng khi chưa có phần cứng): người nhận đứng tại
+    // tủ nhập PIN/QR/mã ủy quyền — bản thân mã là credential, không có JWT.
+    // Chỉ mở đúng các endpoint verify/unlock; phần còn lại của /api/iot vẫn
+    // yêu cầu JWT. Sai mã bị khóa tạm theo box (access-attempt lockout).
+    if (path.equals("/api/iot/verify-pin")
+        || path.equals("/api/iot/verify-access")
+        || path.equals("/api/iot/unlock")
+        || path.equals("/api/iot/unlock-with-code")) {
+      return true;
+    }
     if (path.startsWith("/api/auth")
         || path.startsWith("/api/admin/auth")
         || path.equals("/")
