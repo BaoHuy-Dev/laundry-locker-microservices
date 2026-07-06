@@ -559,18 +559,6 @@ public class OrderService {
     return getByPin(trimmed);
   }
 
-  @Transactional(readOnly = true)
-  public List<OrderResponse> manageList(String status, String type, Long lockerId) {
-    return orderRepository.findAll().stream()
-        .filter(o -> status == null || o.getStatus().equalsIgnoreCase(status))
-        .filter(o -> type == null || o.getType().equalsIgnoreCase(type))
-        .filter(o -> lockerId == null || lockerId.equals(o.getLockerId()))
-        .sorted(java.util.Comparator.comparing(LockerOrder::getCreatedAt).reversed())
-        .limit(500)
-        .map(this::toResponse)
-        .toList();
-  }
-
   @Transactional
   public int sendPickupReminders() {
     LocalDateTime now = LocalDateTime.now();
@@ -1086,9 +1074,40 @@ public class OrderService {
       boxId = request.boxIds().iterator().next();
     }
     if (boxId != null) {
-      lockerClient.reserveBox(boxId);
+      try {
+        lockerClient.reserveBox(boxId);
+      } catch (Exception ex) {
+        throw unwrapDownstreamError(ex, "BOX_RESERVE_FAILED", "Could not reserve box " + boxId);
+      }
     }
     return boxId;
+  }
+
+  /**
+   * Locker-service business errors (e.g. DRONE_CELL_RESTRICTED) arrive here as a
+   * FeignException wrapped in the circuit breaker's NoFallbackAvailableException,
+   * which the global handler would surface as a blank 500. Unwrap the original
+   * 4xx code/message so the client gets the real reason.
+   */
+  private RuntimeException unwrapDownstreamError(Exception ex, String fallbackCode, String fallbackMessage) {
+    Throwable current = ex;
+    while (current != null) {
+      if (current instanceof feign.FeignException feignEx
+          && feignEx.status() >= 400
+          && feignEx.status() < 500) {
+        try {
+          com.fasterxml.jackson.databind.JsonNode body =
+              new com.fasterxml.jackson.databind.ObjectMapper().readTree(feignEx.contentUTF8());
+          return new BusinessException(
+              body.path("code").asText(fallbackCode),
+              body.path("message").asText(fallbackMessage));
+        } catch (Exception parseFailure) {
+          return new BusinessException(fallbackCode, fallbackMessage);
+        }
+      }
+      current = current.getCause();
+    }
+    return ex instanceof RuntimeException runtime ? runtime : new RuntimeException(ex);
   }
 
   private BigDecimal saveDetailsAndCalculate(Long orderId, CreateOrderRequest request) {
