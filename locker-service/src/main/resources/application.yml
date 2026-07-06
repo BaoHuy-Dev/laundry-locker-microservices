@@ -72,3 +72,11 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: ${APP_RESILIENCE4J_CB_HALF_OPEN_CALLS:3}
         slow-call-duration-threshold: ${APP_RESILIENCE4J_CB_SLOW_CALL_DURATION:4s}
         slow-call-rate-threshold: ${APP_RESILIENCE4J_CB_SLOW_CALL_RATE_THRESHOLD:80}
+  # Force-open goes locker -> iot-service, which blocks up to 20s waiting for
+  # the cabinet's MQTT reply. The Resilience4j default TimeLimiter (1s) would
+  # kill that call before the hardware answers, so give Feign calls headroom.
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: ${APP_RESILIENCE4J_TL_TIMEOUT:25s}
+        cancel-running-future: true
