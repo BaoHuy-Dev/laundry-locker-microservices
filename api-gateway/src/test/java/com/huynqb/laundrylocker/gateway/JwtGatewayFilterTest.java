@@ -65,7 +65,7 @@ class JwtGatewayFilterTest {
   @Test
   void requiresAdminForAdminApi() {
     MockServerWebExchange exchange =
-        exchangeWithBearer(MockServerHttpRequest.get("/api/admin/orders"), token("access", "MANAGER"));
+        exchangeWithBearer(MockServerHttpRequest.get("/api/admin/orders"), token("access", "CUSTOMER"));
     AtomicBoolean chainCalled = new AtomicBoolean(false);
 
     filter.filter(exchange, chainThatMarks(chainCalled)).block();
@@ -75,16 +75,16 @@ class JwtGatewayFilterTest {
   }
 
   @Test
-  void allowsManagerForManageApiAndForwardsIdentityHeaders() {
+  void forwardsIdentityHeadersForAuthenticatedCustomer() {
     MockServerWebExchange exchange =
-        exchangeWithBearer(MockServerHttpRequest.get("/api/manage/orders"), token("access", "MANAGER"));
+        exchangeWithBearer(MockServerHttpRequest.get("/api/orders/my-orders"), token("access", "CUSTOMER"));
     AtomicReference<ServerWebExchange> forwarded = new AtomicReference<>();
 
     filter.filter(exchange, captureExchange(forwarded)).block();
 
     assertEquals("42", forwarded.get().getRequest().getHeaders().getFirst("X-User-Id"));
     assertEquals("7", forwarded.get().getRequest().getHeaders().getFirst("X-Account-Id"));
-    assertEquals("MANAGER", forwarded.get().getRequest().getHeaders().getFirst("X-User-Roles"));
+    assertEquals("CUSTOMER", forwarded.get().getRequest().getHeaders().getFirst("X-User-Roles"));
   }
 
   @Test
@@ -100,10 +100,107 @@ class JwtGatewayFilterTest {
   }
 
   @Test
+  void allowsTechnicianForLockerMaintenanceApi() {
+    MockServerWebExchange exchange =
+        exchangeWithBearer(
+            MockServerHttpRequest.get("/api/maintenance/reports"), token("access", "TECHNICIAN"));
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+    assertTrue(chainCalled.get());
+  }
+
+  @Test
+  void blocksTechnicianFromDroneFleetApi() {
+    MockServerWebExchange exchange =
+        exchangeWithBearer(
+            MockServerHttpRequest.get("/api/maintenance/drones"), token("access", "TECHNICIAN"));
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+    assertEquals(HttpStatus.FORBIDDEN, exchange.getResponse().getStatusCode());
+    assertFalse(chainCalled.get());
+  }
+
+  @Test
+  void blocksTechnicianFromDroneDeliveryQueue() {
+    MockServerWebExchange exchange =
+        exchangeWithBearer(
+            MockServerHttpRequest.get("/api/maintenance/drone-deliveries"),
+            token("access", "TECHNICIAN"));
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+    assertEquals(HttpStatus.FORBIDDEN, exchange.getResponse().getStatusCode());
+    assertFalse(chainCalled.get());
+  }
+
+  @Test
+  void allowsMaintenanceForDroneDeliveryQueue() {
+    MockServerWebExchange exchange =
+        exchangeWithBearer(
+            MockServerHttpRequest.get("/api/maintenance/drone-deliveries"),
+            token("access", "MAINTENANCE"));
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+    assertTrue(chainCalled.get());
+  }
+
+  @Test
+  void allowsMaintenanceForDroneFleetApi() {
+    MockServerWebExchange exchange =
+        exchangeWithBearer(
+            MockServerHttpRequest.get("/api/maintenance/drones"), token("access", "MAINTENANCE"));
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+    assertTrue(chainCalled.get());
+  }
+
+  @Test
+  void allowsCustomerToRateResolvedReport() {
+    MockServerWebExchange exchange =
+        exchangeWithBearer(
+            MockServerHttpRequest.post("/api/lockers/reports/9/rate"), token("access", "CUSTOMER"));
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+    assertTrue(chainCalled.get());
+  }
+
+  @Test
   void keepsOpenApiAndSwaggerUiPublic() {
     assertPublicGet("/v3/api-docs");
     assertPublicGet("/v3/api-docs/order-service");
     assertPublicGet("/swagger-ui/index.html");
+  }
+
+  @Test
+  void allowsKioskUnlockEndpointsWithoutJwtButKeepsOtherIotProtected() {
+    for (String path :
+        new String[] {
+          "/api/iot/verify-pin", "/api/iot/verify-access", "/api/iot/unlock", "/api/iot/unlock-with-code"
+        }) {
+      MockServerWebExchange exchange =
+          MockServerWebExchange.from(MockServerHttpRequest.post(path).build());
+      AtomicBoolean chainCalled = new AtomicBoolean(false);
+      filter.filter(exchange, chainThatMarks(chainCalled)).block();
+      assertTrue(chainCalled.get(), path + " should be public for the kiosk");
+    }
+
+    MockServerWebExchange exchange =
+        MockServerWebExchange.from(MockServerHttpRequest.post("/api/iot/pickup").build());
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+    assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    assertFalse(chainCalled.get());
   }
 
   @Test

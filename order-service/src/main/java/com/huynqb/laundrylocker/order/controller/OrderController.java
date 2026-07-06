@@ -78,34 +78,6 @@ public class OrderController {
     return ApiResponse.ok(orderService.getByAccess(code));
   }
 
-  @GetMapping("/api/manage/orders")
-  public ApiResponse<List<OrderResponse>> manageList(
-      @RequestParam(required = false) String status,
-      @RequestParam(required = false) String type,
-      @RequestParam(required = false) Long lockerId) {
-    return ApiResponse.ok(orderService.manageList(status, type, lockerId));
-  }
-
-  @GetMapping("/api/manage/orders/statistics")
-  public ApiResponse<Map<String, Object>> manageStatistics() {
-    return ApiResponse.ok(orderService.statistics());
-  }
-
-  // Manager thao tác đơn (gateway đã giới hạn /api/manage/** cho MANAGER/ADMIN).
-  // Ghi nhận manager làm actor trong timeline nếu request không chỉ định staffId.
-  @PatchMapping("/api/manage/orders/{id}/status")
-  public ApiResponse<OrderResponse> manageUpdateStatus(
-      @PathVariable Long id,
-      @Valid @RequestBody UpdateOrderStatusRequest request,
-      @RequestHeader(value = "X-User-Id", required = false) Long managerId) {
-    UpdateOrderStatusRequest effective =
-        request.staffId() == null
-            ? new UpdateOrderStatusRequest(request.status(), managerId, request.receiveBoxId())
-            : request;
-    return ApiResponse.ok(
-        "ORDER_STATUS_UPDATED", "Order status updated", orderService.updateStatus(id, effective));
-  }
-
   @PatchMapping("/api/orders/{id}/status")
   public ApiResponse<OrderResponse> updateStatus(
       @PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {

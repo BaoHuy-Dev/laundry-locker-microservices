@@ -15,6 +15,7 @@ import com.huynqb.laundrylocker.iot.dto.OrderLookupResponse;
 import com.huynqb.laundrylocker.iot.dto.PickupRequest;
 import com.huynqb.laundrylocker.iot.dto.PickupResponse;
 import com.huynqb.laundrylocker.iot.dto.UnlockRequest;
+import com.huynqb.laundrylocker.iot.dto.UnlockWithCodeRequest;
 import com.huynqb.laundrylocker.iot.dto.VerifyPinRequest;
 import com.huynqb.laundrylocker.iot.dto.VerifyPinResponse;
 import com.huynqb.laundrylocker.iot.model.AccessAttempt;
@@ -128,6 +129,49 @@ public class IotService {
 
   public VerifyPinResponse verifyPin(VerifyPinRequest request) {
     return verifyAccess(request.boxId(), request.pinCode());
+  }
+
+  /// Kiosk tủ mở khóa chỉ bằng mã (PIN/QR/mã ủy quyền) — tra đơn theo mã, suy
+  /// ra ô rồi đi cùng đường mở khóa MQTT như unlock thường. Audit riêng bằng
+  /// credential ACCESS_CODE để phân biệt với luồng mobile.
+  public Map<String, Object> unlockWithCode(UnlockWithCodeRequest request) {
+    OrderLookupResponse order;
+    try {
+      order = orderClient.getByAccess(request.code()).data();
+    } catch (Exception ex) {
+      return Map.of("accepted", false, "message", "Mã không hợp lệ hoặc đã hết hạn");
+    }
+    Long boxId = order.receiveBoxId() != null ? order.receiveBoxId() : order.sendBoxId();
+    if (boxId == null) {
+      return Map.of("accepted", false, "message", "Đơn này không gắn với ô tủ nào");
+    }
+    VerifyPinResponse verification = verifyAccess(boxId, request.code());
+    if (!Boolean.TRUE.equals(verification.valid())) {
+      logAccess(boxId, request.lockerId(), order.id(), null, "ACCESS_CODE", "DENIED", verification.message());
+      return Map.of("accepted", false, "boxId", boxId, "message", verification.message());
+    }
+    try {
+      com.fasterxml.jackson.databind.JsonNode node =
+          lockerMqttService.sendUnlockCommandAsync(request.lockerId(), boxId)
+              .get(20, java.util.concurrent.TimeUnit.SECONDS);
+      if (node.has("status") && "FAILED".equals(node.get("status").asText())) {
+        logAccess(boxId, request.lockerId(), order.id(), null, "ACCESS_CODE", "FAILED", "Hardware failed to open");
+        return Map.of("accepted", false, "boxId", boxId, "message", "Hardware failed to open");
+      }
+      lockerClient.openBox(boxId);
+      logAccess(boxId, request.lockerId(), order.id(), null, "ACCESS_CODE", "SUCCESS", null);
+      return Map.of(
+          "accepted", true,
+          "lockerId", request.lockerId(),
+          "boxId", boxId,
+          "orderId", order.id(),
+          "orderStatus", String.valueOf(order.status()),
+          "message", "Unlock command accepted");
+    } catch (Exception e) {
+      log.error("Timeout or error waiting for IoT device on unlock-with-code", e);
+      logAccess(boxId, request.lockerId(), order.id(), null, "ACCESS_CODE", "TIMEOUT", e.getMessage());
+      return Map.of("accepted", false, "boxId", boxId, "message", "IoT device timeout");
+    }
   }
 
   /** Accepts either a 6-digit PIN or a signed QR token (LLQR.*) as credential. */

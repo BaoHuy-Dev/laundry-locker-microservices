@@ -10,6 +10,7 @@ import com.huynqb.laundrylocker.iot.dto.ForceUnlockRequest;
 import com.huynqb.laundrylocker.iot.dto.PickupRequest;
 import com.huynqb.laundrylocker.iot.dto.PickupResponse;
 import com.huynqb.laundrylocker.iot.dto.UnlockRequest;
+import com.huynqb.laundrylocker.iot.dto.UnlockWithCodeRequest;
 import com.huynqb.laundrylocker.iot.dto.VerifyPinRequest;
 import com.huynqb.laundrylocker.iot.dto.VerifyPinResponse;
 import com.huynqb.laundrylocker.iot.service.IotService;
@@ -35,16 +36,16 @@ public class IotController {
     return ApiResponse.ok("IOT_STATUS_UPDATED", "Device status updated", iotService.updateStatus(request));
   }
 
-  // Operations visibility for Manager/Admin — cabinet heartbeat was collected
-  // but never surfaced anywhere until now.
-  @GetMapping("/api/manage/iot/device-status")
+  // Operations visibility for Admin (web console) — cabinet heartbeat was
+  // collected but never surfaced anywhere until now.
+  @GetMapping("/api/admin/iot/device-status")
   public ApiResponse<List<DeviceStatusResponse>> listDeviceStatuses() {
     return ApiResponse.ok(iotService.listDeviceStatuses());
   }
 
   // GAP 2: cabinet-reported hardware box state (door/sensor), kept separate from
   // the order-driven status so ops can spot mismatches. Optional ?lockerId= filter.
-  @GetMapping("/api/manage/iot/box-status")
+  @GetMapping("/api/admin/iot/box-status")
   public ApiResponse<List<BoxHardwareStatusResponse>> listBoxHardwareStatuses(
       @RequestParam(value = "lockerId", required = false) Long lockerId) {
     return ApiResponse.ok(iotService.listBoxHardwareStatuses(lockerId));
@@ -90,6 +91,15 @@ public class IotController {
   @PostMapping("/api/iot/verify-access")
   public ApiResponse<VerifyPinResponse> verifyAccess(@Valid @RequestBody VerifyPinRequest request) {
     return ApiResponse.ok(iotService.verifyAccess(request.boxId(), request.pinCode()));
+  }
+
+  // Kiosk unlock by code only (PIN / QR token / delegation code) — the kiosk
+  // does not know the boxId up front; iot-service resolves it from the order.
+  @PostMapping("/api/iot/unlock-with-code")
+  public ApiResponse<Map<String, Object>> unlockWithCode(
+      @Valid @RequestBody UnlockWithCodeRequest request) {
+    return ApiResponse.ok(
+        "IOT_UNLOCK_ACCEPTED", "Unlock command accepted", iotService.unlockWithCode(request));
   }
 
   @PostMapping("/api/iot/pickup")
