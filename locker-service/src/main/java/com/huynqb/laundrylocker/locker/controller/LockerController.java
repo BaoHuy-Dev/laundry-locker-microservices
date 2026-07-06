@@ -127,26 +127,11 @@ public class LockerController {
     return ApiResponse.ok("BOX_FAULT_CLEARED", "Box fault cleared", lockerService.clearFault(id));
   }
 
-  // ---- Manager (role MANAGER/ADMIN qua gateway) ----
+  // ---- Admin ops (role ADMIN qua gateway; MANAGER/STAFF đã bỏ) ----
 
-  @GetMapping("/api/manage/lockers/stats")
-  public ApiResponse<List<LockerStatsResponse>> manageStats(@RequestParam(required = false) Long storeId) {
+  @GetMapping("/api/admin/lockers/stats")
+  public ApiResponse<List<LockerStatsResponse>> adminStats(@RequestParam(required = false) Long storeId) {
     return ApiResponse.ok(lockerService.stats(storeId));
-  }
-
-  @GetMapping("/api/manage/lockers")
-  public ApiResponse<List<LockerResponse>> manageList(@RequestParam(required = false) Long storeId) {
-    return ApiResponse.ok(lockerService.listLockers(storeId));
-  }
-
-  @GetMapping("/api/manage/lockers/{id}/layout")
-  public ApiResponse<LockerLayoutResponse> manageLayout(@PathVariable Long id) {
-    return ApiResponse.ok(lockerService.layout(id));
-  }
-
-  @GetMapping("/api/manage/lockers/reports")
-  public ApiResponse<List<LockerReportResponse>> manageReports() {
-    return ApiResponse.ok(lockerService.allReports());
   }
 
   // ---- Maintenance (role MAINTENANCE/ADMIN qua gateway) ----
