@@ -106,6 +106,10 @@ services:
       # cho POST /api/auth/firebase (đăng nhập/đăng ký mobile qua phone/Google).
       # Trống thì FirebaseConfig fail-soft (chỉ log warn, không init) — endpoint sẽ lỗi cho tới khi đặt.
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
+      # Seed tài khoản ADMIN đầu tiên (idempotent). Dev mặc định như dưới;
+      # production PHẢI override BOOTSTRAP_ADMIN_* trong .env và đổi mật khẩu.
+      APP_BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@lockerly.local}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Admin@123456}
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars

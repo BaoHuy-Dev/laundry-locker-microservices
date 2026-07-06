@@ -80,6 +80,14 @@ resilience4j:
 app:
   firebase:
     credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
+  # Seed tài khoản ADMIN đầu tiên lúc khởi động (đăng ký công khai luôn ép
+  # CUSTOMER nên cần 1 admin mồi). Trống = tắt. Đổi mật khẩu sau lần đăng
+  # nhập đầu; trên droplet đặt qua .env.
+  bootstrap:
+    admin:
+      email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
+      phone: ${APP_BOOTSTRAP_ADMIN_PHONE:}
   security:
     jwt:
       secret: ${APP_SECURITY_JWT_SECRET:laundry-locker-microservices-secret-key-change-me-please-32chars}
