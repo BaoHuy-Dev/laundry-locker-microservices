@@ -32,12 +32,16 @@ import com.huynqb.laundrylocker.order.model.OrderDetail;
 import com.huynqb.laundrylocker.order.model.OrderRating;
 import com.huynqb.laundrylocker.order.model.OrderStatusHistory;
 import com.huynqb.laundrylocker.order.model.Promotion;
+import com.huynqb.laundrylocker.order.model.PromotionClaim;
+import com.huynqb.laundrylocker.order.model.PromotionUsage;
 import com.huynqb.laundrylocker.order.repository.LockerOrderRepository;
 import com.huynqb.laundrylocker.order.repository.OrderComplaintRepository;
 import com.huynqb.laundrylocker.order.repository.OrderDetailRepository;
 import com.huynqb.laundrylocker.order.repository.OrderRatingRepository;
 import com.huynqb.laundrylocker.order.repository.OrderStatusHistoryRepository;
+import com.huynqb.laundrylocker.order.repository.PromotionClaimRepository;
 import com.huynqb.laundrylocker.order.repository.PromotionRepository;
+import com.huynqb.laundrylocker.order.repository.PromotionUsageRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
@@ -72,6 +76,8 @@ public class OrderService {
   private final OrderRatingRepository ratingRepository;
   private final OrderComplaintRepository complaintRepository;
   private final PromotionRepository promotionRepository;
+  private final PromotionUsageRepository promotionUsageRepository;
+  private final PromotionClaimRepository promotionClaimRepository;
   private final RabbitTemplate rabbitTemplate;
   private final UserClient userClient;
   private final LockerClient lockerClient;
@@ -355,6 +361,7 @@ public class OrderService {
     }
     order.setCancelReason(reason);
     releaseBoxes(order);
+    refundPromotionUsages(order);
     return transition(order, "CANCELED", userId, null, "Order canceled");
   }
 
@@ -748,6 +755,9 @@ public class OrderService {
     promotion.setStatus(StringUtils.hasText(request.status()) ? request.status().toUpperCase() : "ACTIVE");
     promotion.setStartAt(request.startAt());
     promotion.setEndAt(request.endAt());
+    promotion.setLockerId(request.lockerId());
+    promotion.setTotalUsageLimit(request.totalUsageLimit());
+    promotion.setPerUserLimit(request.perUserLimit());
     promotion.setCreatedByUserId(createdByUserId);
     return promotionRepository.save(promotion);
   }
@@ -785,12 +795,25 @@ public class OrderService {
     promotion.setStatus(StringUtils.hasText(request.status()) ? request.status().toUpperCase() : promotion.getStatus());
     promotion.setStartAt(request.startAt());
     promotion.setEndAt(request.endAt());
+    promotion.setLockerId(request.lockerId());
+    promotion.setTotalUsageLimit(request.totalUsageLimit());
+    promotion.setPerUserLimit(request.perUserLimit());
     return promotionRepository.save(promotion);
   }
 
+  /// Xóa cứng một mã đã có lượt dùng/đã được lưu vào ví sẽ mất dữ liệu lịch
+  /// sử (audit khuyến mãi, số tiền đã giảm cho từng đơn). Chặn và yêu cầu
+  /// chuyển INACTIVE thay vì xóa.
   @Transactional
   public void deletePromotion(Long id) {
-    promotionRepository.delete(promotion(id));
+    Promotion promotion = promotion(id);
+    if (promotionUsageRepository.existsByPromotionId(id)
+        || promotionClaimRepository.existsByPromotionId(id)) {
+      throw new BusinessException(
+          "PROMOTION_HAS_HISTORY",
+          "Mã đã có lượt sử dụng hoặc đã được lưu vào ví — chuyển trạng thái INACTIVE thay vì xóa");
+    }
+    promotionRepository.delete(promotion);
   }
 
   @Transactional(readOnly = true)
@@ -808,13 +831,95 @@ public class OrderService {
 
   @Transactional(readOnly = true)
   public Map<String, Object> validatePromotion(String code) {
+    return validatePromotion(code, null, null);
+  }
+
+  /// Validate mã cho client: check hiệu lực + scope theo [lockerId] + lượt
+  /// dùng của [userId] (2 tham số null thì bỏ qua check tương ứng). Trả DTO
+  /// đã lọc thay vì entity thô (không lộ createdByUserId...).
+  public Map<String, Object> validatePromotion(String code, Long lockerId, Long userId) {
     Promotion promotion = promotionRepository.findByCodeIgnoreCase(code).orElse(null);
-    boolean valid = promotion != null && promotion.activeNow();
+    String reason = promotionIneligibleReason(promotion, lockerId, userId, null);
     Map<String, Object> result = new HashMap<>();
     result.put("code", code);
-    result.put("valid", valid);
-    result.put("promotion", promotion);
+    result.put("valid", reason == null);
+    if (reason != null) {
+      result.put("reason", "Mã " + code.toUpperCase() + ": " + reason);
+    }
+    result.put("promotion", promotion == null ? null : promotionSummary(promotion));
     return result;
+  }
+
+  /// Các field promotion an toàn để trả cho client (mobile PromoCodeField đọc
+  /// discountType/discountValue/maxDiscountAmount/minOrderAmount).
+  private Map<String, Object> promotionSummary(Promotion promotion) {
+    Map<String, Object> summary = new HashMap<>();
+    summary.put("id", promotion.getId());
+    summary.put("code", promotion.getCode());
+    summary.put("name", promotion.getName());
+    summary.put("description", promotion.getDescription());
+    summary.put("imageUrl", promotion.getImageUrl());
+    summary.put("discountType", promotion.getDiscountType());
+    summary.put("discountValue", promotion.getDiscountValue());
+    summary.put("maxDiscountAmount", promotion.getMaxDiscountAmount());
+    summary.put("minOrderAmount", promotion.getMinOrderAmount());
+    summary.put("stackable", promotion.getStackable());
+    summary.put("status", promotion.getStatus());
+    summary.put("startAt", promotion.getStartAt());
+    summary.put("endAt", promotion.getEndAt());
+    summary.put("lockerId", promotion.getLockerId());
+    summary.put("totalUsageLimit", promotion.getTotalUsageLimit());
+    summary.put("perUserLimit", promotion.getPerUserLimit());
+    summary.put("usageCount", promotion.getUsageCount());
+    return summary;
+  }
+
+  /// User lưu một mã vào "ví voucher". Idempotent: đã lưu rồi thì trả claim cũ.
+  @Transactional
+  public Map<String, Object> claimPromotion(Long promotionId, Long userId) {
+    Promotion promotion = promotion(promotionId);
+    if (!promotion.activeNow()) {
+      throw new BusinessException("PROMOTION_INVALID", "Khuyến mãi không còn hiệu lực");
+    }
+    PromotionClaim claim =
+        promotionClaimRepository
+            .findByPromotionIdAndUserId(promotionId, userId)
+            .orElseGet(() -> {
+              PromotionClaim created = new PromotionClaim();
+              created.setPromotionId(promotionId);
+              created.setUserId(userId);
+              return promotionClaimRepository.save(created);
+            });
+    return voucherView(claim, promotion);
+  }
+
+  /// "Ví voucher" của user: các mã đã lưu kèm trạng thái SAVED/USED/EXPIRED.
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> myVouchers(Long userId, String status) {
+    return promotionClaimRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        .map(claim -> {
+          Promotion promotion =
+              promotionRepository.findById(claim.getPromotionId()).orElse(null);
+          return promotion == null ? null : voucherView(claim, promotion);
+        })
+        .filter(java.util.Objects::nonNull)
+        .filter(v -> !StringUtils.hasText(status) || status.equalsIgnoreCase((String) v.get("status")))
+        .toList();
+  }
+
+  private Map<String, Object> voucherView(PromotionClaim claim, Promotion promotion) {
+    // SAVED nhưng khuyến mãi đã hết hiệu lực -> hiển thị EXPIRED.
+    String status = claim.getStatus();
+    if ("SAVED".equals(status) && !promotion.activeNow()) {
+      status = "EXPIRED";
+    }
+    Map<String, Object> view = new HashMap<>(promotionSummary(promotion));
+    view.put("id", claim.getId());
+    view.put("promotionId", promotion.getId());
+    view.put("status", status);
+    view.put("savedAt", claim.getCreatedAt());
+    view.put("usedAt", claim.getUsedAt());
+    return view;
   }
 
   @Transactional(readOnly = true)
@@ -1138,6 +1243,11 @@ public class OrderService {
     detailRepository.save(detail);
   }
 
+  /// Áp mã vào đơn — mã không hợp lệ thì THROW (400 PROMOTION_INVALID) thay vì
+  /// bỏ qua im lặng để khách không bị mất giảm giá mà không hay biết.
+  /// Enforce: hiệu lực, scope theo tủ, đơn tối thiểu, trần tổng lượt và trần
+  /// lượt mỗi user; ghi promotion_usages (hoàn khi hủy đơn) và đánh dấu
+  /// voucher đã lưu (claim) thành USED.
   private void applyPromotion(LockerOrder order, String promotionCode, List<String> promotionCodes) {
     List<String> codes = new ArrayList<>();
     if (StringUtils.hasText(promotionCode)) {
@@ -1146,29 +1256,96 @@ public class OrderService {
     if (promotionCodes != null) {
       promotionCodes.stream().filter(StringUtils::hasText).forEach(codes::add);
     }
+    if (codes.isEmpty()) {
+      return;
+    }
     BigDecimal discount = BigDecimal.ZERO;
     List<String> applied = new ArrayList<>();
     for (String code : codes) {
       Promotion promotion = promotionRepository.findByCodeIgnoreCase(code).orElse(null);
-      if (promotion == null || !promotion.activeNow()) {
-        continue;
+      String reason = promotionIneligibleReason(
+          promotion, order.getLockerId(), order.getUserId(), order.getTotalPrice());
+      if (reason != null) {
+        throw new BusinessException("PROMOTION_INVALID", "Mã " + code.toUpperCase() + ": " + reason);
       }
       if (!applied.isEmpty() && !Boolean.TRUE.equals(promotion.getStackable())) {
-        continue;
-      }
-      if (promotion.getMinOrderAmount() != null && order.getTotalPrice().compareTo(promotion.getMinOrderAmount()) < 0) {
-        continue;
+        throw new BusinessException(
+            "PROMOTION_INVALID", "Mã " + code.toUpperCase() + ": không thể dùng kèm mã khác");
       }
       BigDecimal amount = discountAmount(promotion, order.getTotalPrice());
       discount = discount.add(amount);
       applied.add(promotion.getCode());
       promotion.setUsageCount(promotion.getUsageCount() + 1);
+
+      PromotionUsage usage = new PromotionUsage();
+      usage.setPromotionId(promotion.getId());
+      usage.setUserId(order.getUserId());
+      usage.setOrderId(order.getId());
+      usage.setDiscountApplied(amount);
+      promotionUsageRepository.save(usage);
+
+      promotionClaimRepository
+          .findByPromotionIdAndUserId(promotion.getId(), order.getUserId())
+          .filter(claim -> "SAVED".equals(claim.getStatus()))
+          .ifPresent(claim -> {
+            claim.setStatus("USED");
+            claim.setUsedAt(LocalDateTime.now());
+            promotionClaimRepository.save(claim);
+          });
     }
     if (!applied.isEmpty()) {
       order.setPromotionCode(applied.get(0));
       order.setAppliedPromotionCodes(String.join(",", applied));
       order.setDiscount(discount);
       order.setTotalPrice(order.getTotalPrice().subtract(discount).max(BigDecimal.ZERO));
+    }
+  }
+
+  /// Lý do mã không dùng được (null = hợp lệ). [lockerId]/[userId] null thì
+  /// bỏ qua check tương ứng (validate ẩn danh vẫn check được hiệu lực).
+  private String promotionIneligibleReason(
+      Promotion promotion, Long lockerId, Long userId, BigDecimal orderTotal) {
+    if (promotion == null || !promotion.activeNow()) {
+      return "không hợp lệ hoặc đã hết hạn";
+    }
+    if (promotion.getLockerId() != null && lockerId != null
+        && !promotion.getLockerId().equals(lockerId)) {
+      return "chỉ áp dụng tại một tủ/kiosk khác";
+    }
+    if (orderTotal != null && promotion.getMinOrderAmount() != null
+        && orderTotal.compareTo(promotion.getMinOrderAmount()) < 0) {
+      return "đơn chưa đạt giá trị tối thiểu";
+    }
+    if (promotion.getTotalUsageLimit() != null
+        && promotion.getUsageCount() >= promotion.getTotalUsageLimit()) {
+      return "đã hết lượt sử dụng";
+    }
+    if (promotion.getPerUserLimit() != null && userId != null
+        && promotionUsageRepository.countByPromotionIdAndUserId(promotion.getId(), userId)
+            >= promotion.getPerUserLimit()) {
+      return "bạn đã dùng hết số lần cho phép";
+    }
+    return null;
+  }
+
+  /// Hủy đơn thì hoàn lượt sử dụng mã: xóa promotion_usages của đơn, giảm
+  /// usage_count và trả voucher đã lưu về SAVED để khách dùng lại.
+  private void refundPromotionUsages(LockerOrder order) {
+    List<PromotionUsage> usages = promotionUsageRepository.findByOrderId(order.getId());
+    for (PromotionUsage usage : usages) {
+      promotionRepository.findById(usage.getPromotionId()).ifPresent(promotion -> {
+        promotion.setUsageCount(Math.max(0, promotion.getUsageCount() - 1));
+        promotionRepository.save(promotion);
+      });
+      promotionClaimRepository
+          .findByPromotionIdAndUserId(usage.getPromotionId(), usage.getUserId())
+          .filter(claim -> "USED".equals(claim.getStatus()))
+          .ifPresent(claim -> {
+            claim.setStatus("SAVED");
+            claim.setUsedAt(null);
+            promotionClaimRepository.save(claim);
+          });
+      promotionUsageRepository.delete(usage);
     }
   }
 
