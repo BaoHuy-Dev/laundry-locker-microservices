@@ -14,4 +14,7 @@ public record PromotionRequest(
     Boolean stackable,
     String status,
     LocalDateTime startAt,
-    LocalDateTime endAt) {}
+    LocalDateTime endAt,
+    Long lockerId,
+    Integer totalUsageLimit,
+    Integer perUserLimit) {}

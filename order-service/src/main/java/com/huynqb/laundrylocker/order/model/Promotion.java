@@ -44,6 +44,18 @@ public class Promotion {
   @Column(nullable = false)
   private Boolean stackable = false;
 
+  /// Scope theo tủ/kiosk: null = áp dụng toàn hệ thống.
+  @Column(name = "locker_id")
+  private Long lockerId;
+
+  /// Trần tổng lượt dùng: null = không giới hạn.
+  @Column(name = "total_usage_limit")
+  private Integer totalUsageLimit;
+
+  /// Trần lượt dùng mỗi user: null = không giới hạn.
+  @Column(name = "per_user_limit")
+  private Integer perUserLimit;
+
   @Column(nullable = false, length = 30)
   private String status = "ACTIVE";
 

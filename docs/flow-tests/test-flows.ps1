@@ -306,6 +306,58 @@ $r = Register "extra.$suffix@test.local" "090$suffix"+"6" 'extra' $PASS
 Check 'new register defaults to CUSTOMER only' ($r.data.roles.Count -eq 1 -and $r.data.roles -contains 'CUSTOMER') "(roles=$($r.data.roles -join ','))"
 
 # ============================================================================
+Write-Host "`n=== 2.5 VOUCHER: admin CRUD theo kiosk -> user luu ma -> ap don -> gioi han luot ==="
+$VC = "VC$suffix"
+$promoBody = @{ code = $VC; name = 'Voucher test kiosk'; discountType = 'PERCENTAGE'; discountValue = 10; maxDiscountAmount = 5000; stackable = $false; status = 'ACTIVE'; lockerId = $LID; totalUsageLimit = 10; perUserLimit = 1 }
+$r = Api POST '/api/admin/promotions' $ADM $promoBody
+Check 'admin creates locker-scoped promotion' ($r.ok -and $r.data.lockerId -eq $LID) "(id=$($r.data.id) code=$VC)"
+$PROMO = $r.data.id
+
+$promoBody.name = 'Voucher test kiosk (sua)'
+$r = Api PUT "/api/admin/promotions/$PROMO" $ADM $promoBody
+Check 'admin updates promotion' ($r.ok -and $r.data.name -like '*sua*') ''
+
+$r = Api GET "/api/promotions/validate/${VC}?lockerId=$LID" $users.cust1.token $null
+Check 'validate dung tu -> valid' ($r.ok -and $r.data.valid -eq $true) ''
+$other = (Api GET '/api/lockers' $null $null).data | Where-Object { $_.id -ne $LID } | Select-Object -First 1
+$r = Api GET "/api/promotions/validate/${VC}?lockerId=$($other.id)" $users.cust1.token $null
+Check 'validate sai tu -> invalid + reason' ($r.ok -and $r.data.valid -eq $false -and $r.data.reason) "($($r.data.reason))"
+
+$r = Api GET '/api/promotions/vouchers/my' $null $null
+Check 'vouchers/my khong JWT -> 401' ($r.status -eq 401) "(status=$($r.status))"
+$r = Api POST "/api/promotions/$PROMO/claim" $users.cust1.token $null
+Check 'user luu ma vao vi (SAVED)' ($r.ok -and $r.data.status -eq 'SAVED') "($($r.code))"
+$r = Api POST "/api/promotions/$PROMO/claim" $users.cust1.token $null
+Check 'luu lai lan 2 van OK (idempotent)' $r.ok ''
+
+$r = Api POST '/api/orders/send' $users.cust1.token @{ lockerId = $LID; receiverPhone = $users.cust2.phone; note = 'voucher-test'; promotionCode = $VC }
+Check 'don ap voucher: giam 10% (1500d), tong 13500d' ($r.ok -and $r.data.discount -eq 1500 -and $r.data.totalPrice -eq 13500) "(discount=$($r.data.discount) total=$($r.data.totalPrice))"
+$OV = $r.data.id
+$r = Api GET '/api/promotions/vouchers/my' $users.cust1.token $null
+$mine = @($r.data | Where-Object { $_.promotionId -eq $PROMO }) | Select-Object -First 1
+Check 'voucher chuyen USED sau khi ap' ($mine.status -eq 'USED') "(status=$($mine.status))"
+
+$r = Api POST '/api/orders/send' $users.cust1.token @{ lockerId = $LID; receiverPhone = $users.cust2.phone; note = 'voucher-test-2'; promotionCode = $VC }
+Check 'dung lai ma -> 400 PROMOTION_INVALID (per-user limit)' ($r.status -eq 400 -and $r.code -eq 'PROMOTION_INVALID') "(msg=$($r.msg))"
+
+$r = Api PUT "/api/orders/$OV/cancel" $users.cust1.token $null
+Check 'huy don co voucher' $r.ok ''
+$r = Api GET '/api/promotions/vouchers/my' $users.cust1.token $null
+$mine = @($r.data | Where-Object { $_.promotionId -eq $PROMO }) | Select-Object -First 1
+Check 'huy don -> hoan luot, voucher ve SAVED' ($mine.status -eq 'SAVED') "(status=$($mine.status))"
+
+$r = Api DELETE "/api/admin/promotions/$PROMO" $ADM $null
+Check 'delete blocked once promotion has usage history (400)' ($r.status -eq 400 -and $r.code -eq 'PROMOTION_HAS_HISTORY') "(status=$($r.status) code=$($r.code))"
+$promoBody.status = 'INACTIVE'
+$r = Api PUT "/api/admin/promotions/$PROMO" $ADM $promoBody
+Check 'admin deactivates instead of deleting' ($r.ok -and $r.data.status -eq 'INACTIVE') ''
+
+$r = Api POST '/api/admin/promotions' $ADM @{ code = "VCEMPTY$suffix"; name = 'Chua ai dung'; discountType = 'FIXED_AMOUNT'; discountValue = 1000; status = 'ACTIVE' }
+$EMPTY_PROMO = $r.data.id
+$r = Api DELETE "/api/admin/promotions/$EMPTY_PROMO" $ADM $null
+Check 'admin deletes promotion with no usage history' $r.ok ''
+
+# ============================================================================
 Write-Host "`n=== SUMMARY ==="
 $pass = ($script:results | Where-Object { $_ -like '`[PASS`]*' }).Count
 $fail = ($script:results | Where-Object { $_ -like '`[FAIL`]*' }).Count

@@ -200,13 +200,16 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
       return true;
     }
     // Catalogue browsing is anonymous; any mutation requires a JWT.
+    // Ví voucher (/api/promotions/vouchers/**) là dữ liệu cá nhân — cần JWT
+    // để gateway gắn X-User-Id thật, không cho client tự chèn header.
     boolean readOnly = org.springframework.http.HttpMethod.GET.equals(method);
     return readOnly
         && (path.startsWith("/api/stores")
             || path.startsWith("/api/lockers")
             || path.startsWith("/api/services")
             || path.startsWith("/api/laundry-services")
-            || path.startsWith("/api/promotions"));
+            || (path.startsWith("/api/promotions")
+                && !path.startsWith("/api/promotions/vouchers")));
   }
 
   @Override

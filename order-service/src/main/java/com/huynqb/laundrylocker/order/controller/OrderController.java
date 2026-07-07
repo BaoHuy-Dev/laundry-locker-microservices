@@ -305,9 +305,31 @@ public class OrderController {
     return activePromotions();
   }
 
+  // Validate mã cho client: lockerId để check scope theo tủ; X-User-Id (gateway
+  // gắn khi có JWT) để check lượt dùng còn lại của chính user đó.
   @GetMapping("/api/promotions/validate/{code}")
-  public ApiResponse<Map<String, Object>> validatePromotion(@PathVariable String code) {
-    return ApiResponse.ok(orderService.validatePromotion(code));
+  public ApiResponse<Map<String, Object>> validatePromotion(
+      @PathVariable String code,
+      @RequestParam(required = false) Long lockerId,
+      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    return ApiResponse.ok(orderService.validatePromotion(code, lockerId, userId));
+  }
+
+  // ---- Ví voucher của user (lưu mã -> dùng khi đặt đơn) ----
+
+  @PostMapping("/api/promotions/{promotionId}/claim")
+  public ApiResponse<Map<String, Object>> claimPromotion(
+      @PathVariable Long promotionId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(
+        "PROMOTION_CLAIMED", "Promotion saved to wallet",
+        orderService.claimPromotion(promotionId, userId));
+  }
+
+  @GetMapping("/api/promotions/vouchers/my")
+  public ApiResponse<List<Map<String, Object>>> myVouchers(
+      @RequestHeader("X-User-Id") Long userId,
+      @RequestParam(required = false) String status) {
+    return ApiResponse.ok(orderService.myVouchers(userId, status));
   }
 
   @GetMapping("/internal/orders/stores/{storeId}/ratings")

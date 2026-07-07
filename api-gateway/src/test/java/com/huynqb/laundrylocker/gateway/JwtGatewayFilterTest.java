@@ -183,6 +183,19 @@ class JwtGatewayFilterTest {
   }
 
   @Test
+  void keepsPromotionCatalogPublicButVoucherWalletProtected() {
+    assertPublicGet("/api/promotions/active");
+    assertPublicGet("/api/promotions/validate/SUMMER20");
+
+    MockServerWebExchange exchange =
+        MockServerWebExchange.from(MockServerHttpRequest.get("/api/promotions/vouchers/my").build());
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+    filter.filter(exchange, chainThatMarks(chainCalled)).block();
+    assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    assertFalse(chainCalled.get());
+  }
+
+  @Test
   void allowsKioskUnlockEndpointsWithoutJwtButKeepsOtherIotProtected() {
     for (String path :
         new String[] {
