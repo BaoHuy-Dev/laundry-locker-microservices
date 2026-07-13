@@ -985,11 +985,13 @@ public class LockerService {
   /// iot-service. Never throws — a down/slow iot-service must not break the
   /// booking/maintenance flow that just changed the box in the DB.
   private void syncBoxStateQuietly(LockerBox box, String state) {
-    try {
-      iotClient.syncBoxState(new IotClient.BoxStateSyncRequest(box.getLockerId(), box.getId(), state, null));
-    } catch (Exception ex) {
-      log.debug("Box-state sync to IoT skipped for box {} ({}): {}", box.getId(), state, ex.getMessage());
-    }
+    java.util.concurrent.CompletableFuture.runAsync(() -> {
+      try {
+        iotClient.syncBoxState(new IotClient.BoxStateSyncRequest(box.getLockerId(), box.getId(), state, null));
+      } catch (Exception ex) {
+        log.debug("Box-state sync to IoT skipped for box {} ({}): {}", box.getId(), state, ex.getMessage());
+      }
+    });
   }
 
   /// Maintenance box-health: the order-driven logical box status (this service)
