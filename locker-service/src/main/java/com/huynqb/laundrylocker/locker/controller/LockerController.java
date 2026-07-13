@@ -56,8 +56,20 @@ public class LockerController {
     return ApiResponse.ok(lockerService.listLockers(storeId));
   }
 
+  // Public endpoint for Kiosk to list lockers without token
+  @GetMapping("/api/iot/lockers")
+  public ApiResponse<List<LockerResponse>> listLockersForKiosk(@RequestParam(required = false) Long storeId) {
+    return ApiResponse.ok(lockerService.listLockers(storeId));
+  }
+
   @GetMapping("/api/lockers/{id}")
   public ApiResponse<LockerResponse> getLocker(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.getLocker(id));
+  }
+
+  // Public endpoint for Kiosk to get locker by id without token
+  @GetMapping("/api/iot/lockers/{id}")
+  public ApiResponse<LockerResponse> getLockerForKiosk(@PathVariable Long id) {
     return ApiResponse.ok(lockerService.getLocker(id));
   }
 
