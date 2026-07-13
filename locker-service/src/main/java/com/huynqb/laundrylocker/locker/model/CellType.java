@@ -10,12 +10,12 @@ package com.huynqb.laundrylocker.locker.model;
  *   <li>Logic phân bổ ô khi tạo đơn hàng.</li>
  * </ul>
  *
- * <h3>Bố cục vật lý của tủ demo (CAB-DEMO-01)</h3>
+ * <h3>Bố cục vật lý của tủ thực tế (CAB-PROD)</h3>
  * <pre>
- *  col →  0     1     2     3
- * row 1        [D]   [D]   [D]    ← DRONE: nhận hàng từ drone thả xuống
- * row 2  [XL]  [S]   [S]   [S]    ← XL ở cột 0, STANDARD ở cột 1-3
- * row 3        [S]   [S]   [S]    ← STANDARD đa dịch vụ
+ *  col →  0 (Màn hình)   1 (Phải)    2 (Phải)
+ * row 0                  [D]         [D]    ← DRONE: nhận hàng từ drone thả xuống
+ * row 1  [XL]            [S]         [S]    ← STANDARD ở cột 1-2
+ * row 2                  [S]         [S]    ← STANDARD đa dịch vụ
  * </pre>
  *
  * <p>Các hằng số này được dùng để tránh "magic string" trong service và validator.
