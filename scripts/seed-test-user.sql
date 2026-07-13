@@ -74,6 +74,18 @@ BEGIN
         total_points_redeemed = 145,
         updated_at = NOW();
 
+    -- 3.5. Create/Update wallet with 500,000 VND
+    INSERT INTO payment_schema.wallets (
+        user_id, balance, currency, version, created_at, updated_at
+    ) VALUES (
+        v_user_id, 500000.00, 'VND', 1, NOW(), NOW()
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+        balance = 500000.00,
+        updated_at = NOW(),
+        version = payment_schema.wallets.version + 1;
+
+
     -- Get references for orders
     SELECT id INTO v_locker_id FROM lockers WHERE status = 'ACTIVE' LIMIT 1;
     SELECT id INTO v_store_id FROM stores WHERE status = 'ACTIVE' LIMIT 1;
