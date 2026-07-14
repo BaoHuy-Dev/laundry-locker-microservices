@@ -72,7 +72,7 @@ import org.springframework.util.StringUtils;
 public class OrderService {
 
   private static final SecureRandom RANDOM = new SecureRandom();
-  private static final Set<String> CANCELABLE = Set.of("INITIALIZED", "RESERVED", "WAITING");
+  private static final Set<String> CANCELABLE = Set.of("INITIALIZED", "RESERVED", "WAITING", "AWAITING_DISPATCH");
 
   private final LockerOrderRepository orderRepository;
   private final OrderDetailRepository detailRepository;
@@ -262,9 +262,9 @@ public class OrderService {
     order.setReservedBoxId(reservedBoxId);
     order.setType("DRONE_DELIVERY");
     order.setServiceCategory("DRONE_DELIVERY");
-    order.setStatus("INITIALIZED");
+    order.setStatus("AWAITING_DISPATCH");
     order.setPaymentStatus("UNPAID");
-    order.setDeliveryStage("PENDING_PAYMENT");
+    order.setDeliveryStage("AWAITING_DISPATCH");
     order.setParcelWeightGrams(request.parcelWeightGrams());
     order.setDescription(request.description());
     order.setIdempotencyKey(idempotencyKey);
@@ -414,6 +414,7 @@ public class OrderService {
     LockerOrder order = find(id);
     assertOwnerOrReceiver(order, userId);
     validateStatus(order, Set.of("STORING", "RETURNED"));
+    assertPaidBeforePickup(order);
     BigDecimal overtime = calculatePickupOvertimeFee(order);
     if (overtime.compareTo(BigDecimal.ZERO) > 0) {
       order.setExtraFee(order.getExtraFee().add(overtime));
@@ -431,6 +432,7 @@ public class OrderService {
     if (!CANCELABLE.contains(order.getStatus())) {
       throw new BusinessException("ORDER_STATUS_INVALID", "Order cannot be canceled at this status");
     }
+    assertDroneCancelable(order);
     order.setCancelReason(reason);
     releaseBoxes(order);
     refundPromotionUsages(order);
@@ -610,10 +612,12 @@ public class OrderService {
 
   @Transactional(readOnly = true)
   public OrderResponse getByPin(String pinCode) {
-    return toResponse(
+    LockerOrder order =
         orderRepository
             .findByPinCode(pinCode)
-            .orElseThrow(() -> new BusinessException("ORDER_NOT_FOUND", "Order not found for PIN")));
+            .orElseThrow(() -> new BusinessException("ORDER_NOT_FOUND", "Order not found for PIN"));
+    assertPaidBeforePickup(order);
+    return toResponse(order);
   }
 
   // Single entry point for the cabinet screen: a 6-digit PIN or a signed QR
@@ -633,6 +637,7 @@ public class OrderService {
       if (!qrTokenService.matches(trimmed, order.getId(), order.getPinCode())) {
         throw new BusinessException("INVALID_ACCESS_CODE", "QR token expired or revoked");
       }
+      assertPaidBeforePickup(order);
       return toResponse(order);
     }
     return getByPin(trimmed);
@@ -1493,6 +1498,31 @@ public class OrderService {
     }
   }
 
+  private void assertPaidBeforePickup(LockerOrder order) {
+    if (!"DRONE_DELIVERY".equalsIgnoreCase(order.getType())) {
+      return;
+    }
+    if (!"READY_FOR_PICKUP".equalsIgnoreCase(order.getDeliveryStage())) {
+      return;
+    }
+    if (!"PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+      throw new BusinessException(
+          "DRONE_PAYMENT_REQUIRED_BEFORE_PICKUP",
+          "Vui lòng thanh toán đơn drone trước khi mở tủ nhận hàng.");
+    }
+  }
+
+  private void assertDroneCancelable(LockerOrder order) {
+    if (!"DRONE_DELIVERY".equalsIgnoreCase(order.getType())) {
+      return;
+    }
+    if (!"AWAITING_DISPATCH".equalsIgnoreCase(order.getDeliveryStage())) {
+      throw new BusinessException(
+          "DRONE_ORDER_STATUS_INVALID",
+          "Drone order can only be canceled before maintenance accepts it.");
+    }
+  }
+
   private void assertOwner(LockerOrder order, Long userId) {
     if (userId != null && !userId.equals(order.getUserId())) {
       throw new BusinessException("ORDER_FORBIDDEN", "Order does not belong to user");
@@ -1534,6 +1564,7 @@ public class OrderService {
         order.getType(),
         order.getServiceCategory(),
         order.getStatus(),
+        order.getDeliveryStage(),
         order.getPinCode(),
         qrTokenService.issue(order.getId(), order.getPinCode()),
         order.getActualWeight(),
@@ -1586,6 +1617,18 @@ public class OrderService {
   }
 
   private String nextAction(LockerOrder order) {
+    if ("DRONE_DELIVERY".equalsIgnoreCase(order.getType())) {
+      String deliveryStage = order.getDeliveryStage() == null ? "" : order.getDeliveryStage().toUpperCase();
+      if ("READY_FOR_PICKUP".equals(deliveryStage)) {
+        return "PAID".equalsIgnoreCase(order.getPaymentStatus()) ? "PICKUP" : "PAY_BEFORE_PICKUP";
+      }
+      return switch (order.getStatus()) {
+        case "AWAITING_DISPATCH" -> "WAIT_FOR_DRONE";
+        case "COMPLETED" -> "DONE";
+        case "CANCELED" -> "CANCELED";
+        default -> "UNKNOWN";
+      };
+    }
     return switch (order.getStatus()) {
       case "INITIALIZED" -> "PAY_AND_DROP";
       case "STORING" -> "PICKUP";
@@ -1599,6 +1642,8 @@ public class OrderService {
   private String nextActionMessage(LockerOrder order) {
     return switch (nextAction(order)) {
       case "PAY_AND_DROP" -> "Pay and place storage items in locker.";
+      case "WAIT_FOR_DRONE" -> "Maintenance will accept and launch the drone delivery.";
+      case "PAY_BEFORE_PICKUP" -> "Pay for the drone delivery before opening the locker.";
       case "PICKUP" -> "Pick up items from locker.";
       case "CONTACT_STAFF" -> "Items moved to storage; contact staff to retrieve them.";
       default -> order.getStatus();
@@ -1606,12 +1651,17 @@ public class OrderService {
   }
 
   private boolean paymentRequired(LockerOrder order) {
+    if ("DRONE_DELIVERY".equalsIgnoreCase(order.getType())) {
+      return "READY_FOR_PICKUP".equalsIgnoreCase(order.getDeliveryStage())
+          && !"PAID".equalsIgnoreCase(order.getPaymentStatus());
+    }
     return "INITIALIZED".equals(order.getStatus());
   }
 
   private String statusDescription(String status) {
     return switch (status) {
       case "INITIALIZED" -> "Order created";
+      case "AWAITING_DISPATCH" -> "Awaiting drone dispatch";
       case "STORING" -> "Items stored in locker";
       case "COMPLETED" -> "Completed";
       case "CANCELED" -> "Canceled";

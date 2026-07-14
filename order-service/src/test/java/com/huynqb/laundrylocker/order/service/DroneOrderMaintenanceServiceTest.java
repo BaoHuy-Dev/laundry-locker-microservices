@@ -124,7 +124,7 @@ class DroneOrderMaintenanceServiceTest {
     order.setOrderCode("ORD-" + orderId);
     order.setUserId(44L);
     order.setType("DRONE_DELIVERY");
-    order.setPaymentStatus("PAID");
+    order.setPaymentStatus("UNPAID");
     order.setStatus("AWAITING_DISPATCH");
     order.setDeliveryStage(deliveryStage);
     order.setDestinationLockerId(5L);

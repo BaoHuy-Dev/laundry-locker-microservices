@@ -42,9 +42,6 @@ public class DroneOrderMaintenanceService {
   public DroneMissionResponse accept(
       Long orderId, Long userId, String idempotencyKey, AcceptDroneOrderRequest request) {
     LockerOrder order = findDroneOrder(orderId);
-    if (!"PAID".equalsIgnoreCase(order.getPaymentStatus())) {
-      throw new BusinessException("DRONE_ORDER_UNPAID", "Drone order must be paid before acceptance");
-    }
     if (!"AWAITING_DISPATCH".equals(order.getStatus())) {
       throw new BusinessException("DRONE_ORDER_STATUS_INVALID", "Drone order is not awaiting dispatch");
     }

@@ -17,6 +17,7 @@ public record OrderResponse(
     String type,
     String serviceCategory,
     String status,
+    String deliveryStage,
     String pinCode,
     String qrToken,
     BigDecimal actualWeight,
