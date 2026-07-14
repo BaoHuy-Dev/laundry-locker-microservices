@@ -32,6 +32,9 @@ public class LockerOrder {
   @Column(name = "receiver_id")
   private Long receiverId;
 
+  @Column(name = "receiver_user_id")
+  private Long receiverUserId;
+
   @Column(name = "receiver_phone")
   private String receiverPhone;
 
@@ -41,8 +44,14 @@ public class LockerOrder {
   @Column(name = "locker_id")
   private Long lockerId;
 
+  @Column(name = "destination_locker_id")
+  private Long destinationLockerId;
+
   @Column(name = "send_box_id")
   private Long sendBoxId;
+
+  @Column(name = "reserved_box_id")
+  private Long reservedBoxId;
 
   @Column(name = "receive_box_id")
   private Long receiveBoxId;
@@ -65,11 +74,17 @@ public class LockerOrder {
   @Column(name = "payment_status", nullable = false, length = 20)
   private String paymentStatus = "UNPAID"; // UNPAID | PAID | REFUNDED
 
+  @Column(name = "delivery_stage", length = 40)
+  private String deliveryStage;
+
   @Column(name = "paid_at")
   private LocalDateTime paidAt;
 
   @Column(name = "actual_weight", precision = 10, scale = 2)
   private BigDecimal actualWeight;
+
+  @Column(name = "parcel_weight_grams")
+  private Integer parcelWeightGrams;
 
   @Column(name = "weight_unit", length = 20)
   private String weightUnit = "kg";
@@ -139,6 +154,9 @@ public class LockerOrder {
 
   @Column(name = "delivery_address")
   private String deliveryAddress;
+
+  @Column(name = "idempotency_key", length = 120)
+  private String idempotencyKey;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;

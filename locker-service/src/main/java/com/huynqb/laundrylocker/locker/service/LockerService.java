@@ -676,6 +676,11 @@ public class LockerService {
         .toList();
   }
 
+  @Transactional(readOnly = true)
+  public DroneUnitResponse getDroneUnit(Long id) {
+    return toDroneUnit(findDroneUnit(id));
+  }
+
   @Transactional
   public DroneUnitResponse claimDrone(Long id, Long userId) {
     DroneUnit unit = findDroneUnit(id);

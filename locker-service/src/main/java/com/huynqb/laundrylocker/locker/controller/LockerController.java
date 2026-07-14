@@ -125,6 +125,11 @@ public class LockerController {
     return ApiResponse.ok(lockerService.layout(id));
   }
 
+  @GetMapping("/internal/lockers/{id}/layout")
+  public ApiResponse<LockerLayoutResponse> layoutInternal(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.layout(id));
+  }
+
   @PostMapping("/api/boxes/{id}/fault")
   public ApiResponse<CellResponse> markFault(
       @PathVariable Long id,
@@ -255,6 +260,17 @@ public class LockerController {
   @GetMapping("/api/maintenance/drones")
   public ApiResponse<List<DroneUnitResponse>> maintenanceDrones() {
     return ApiResponse.ok(lockerService.listDroneUnits());
+  }
+
+  @GetMapping("/internal/drones/{id}")
+  public ApiResponse<DroneUnitResponse> internalDrone(@PathVariable Long id) {
+    return ApiResponse.ok(lockerService.getDroneUnit(id));
+  }
+
+  @PostMapping("/internal/drones/{id}/status")
+  public ApiResponse<DroneUnitResponse> internalDroneStatus(
+      @PathVariable Long id, @Valid @RequestBody DroneStatusRequest request) {
+    return ApiResponse.ok(lockerService.updateDroneStatus(id, request.status(), request.reason(), null));
   }
 
   @PostMapping("/api/maintenance/drones/{id}/claim")

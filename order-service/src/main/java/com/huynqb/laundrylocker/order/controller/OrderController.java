@@ -2,8 +2,12 @@ package com.huynqb.laundrylocker.order.controller;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.OrderSummary;
+import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
 import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.CreateDroneDeliveryOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DelegateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.DroneDeliveryOrderResponse;
+import com.huynqb.laundrylocker.order.dto.DroneMissionResponse;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintResponse;
 import com.huynqb.laundrylocker.order.dto.OrderRatingRequest;
@@ -16,11 +20,13 @@ import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
 import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
+import com.huynqb.laundrylocker.order.service.DroneOrderMaintenanceService;
 import com.huynqb.laundrylocker.order.service.OrderService;
 import jakarta.validation.Valid;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -36,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OrderController {
 
+  private final DroneOrderMaintenanceService droneOrderMaintenanceService;
   private final OrderService orderService;
 
   @PostMapping("/api/orders")
@@ -53,6 +60,17 @@ public class OrderController {
   public ApiResponse<OrderResponse> createRental(
       @Valid @RequestBody RentalOrderRequest request, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("ORDER_CREATED", "Rental order created", orderService.createRental(request, userId));
+  }
+
+  @PostMapping("/api/orders/drone-deliveries")
+  public ApiResponse<DroneDeliveryOrderResponse> createDroneDelivery(
+      @Valid @RequestBody CreateDroneDeliveryOrderRequest request,
+      @RequestHeader("X-User-Id") Long userId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    return ApiResponse.ok(
+        "ORDER_CREATED",
+        "Drone delivery order created",
+        orderService.createDroneDelivery(request, userId, idempotencyKey));
   }
 
   @PostMapping("/api/orders/{orderId}/extend-rental")
@@ -141,6 +159,45 @@ public class OrderController {
   @GetMapping("/api/orders/{id}")
   public ApiResponse<OrderResponse> get(@PathVariable Long id) {
     return ApiResponse.ok(orderService.get(id));
+  }
+
+  @GetMapping("/api/orders/{orderId}/drone-delivery")
+  public ApiResponse<DroneDeliveryOrderResponse> getDroneDelivery(
+      @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(orderService.getDroneDelivery(orderId, userId));
+  }
+
+  @GetMapping("/api/maintenance/drone-orders")
+  public ApiResponse<List<DroneMissionResponse>> maintenanceDroneOrders(
+      @RequestParam(required = false) String deliveryStage) {
+    return ApiResponse.ok(droneOrderMaintenanceService.queue(deliveryStage));
+  }
+
+  @PostMapping("/api/maintenance/drone-orders/{orderId}/accept")
+  public ResponseEntity<ApiResponse<DroneMissionResponse>> acceptDroneOrder(
+      @PathVariable Long orderId,
+      @Valid @RequestBody AcceptDroneOrderRequest request,
+      @RequestHeader("X-User-Id") Long userId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    return ResponseEntity.accepted()
+        .body(
+            ApiResponse.ok(
+                "DRONE_ORDER_ACCEPTED",
+                "Drone order accepted",
+                droneOrderMaintenanceService.accept(orderId, userId, idempotencyKey, request)));
+  }
+
+  @PostMapping("/api/maintenance/drone-orders/{orderId}/launch")
+  public ResponseEntity<ApiResponse<DroneMissionResponse>> launchDroneOrder(
+      @PathVariable Long orderId,
+      @RequestHeader("X-User-Id") Long userId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    return ResponseEntity.accepted()
+        .body(
+            ApiResponse.ok(
+                "DRONE_ORDER_LAUNCHING",
+                "Drone launch requested",
+                droneOrderMaintenanceService.launch(orderId, userId, idempotencyKey)));
   }
 
   @GetMapping("/api/orders/{orderId}/status")

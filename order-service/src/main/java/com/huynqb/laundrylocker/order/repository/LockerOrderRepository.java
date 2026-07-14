@@ -16,4 +16,8 @@ public interface LockerOrderRepository extends JpaRepository<LockerOrder, Long> 
   Optional<LockerOrder> findByOrderCode(String orderCode);
 
   Optional<LockerOrder> findByPinCode(String pinCode);
+
+  Optional<LockerOrder> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey);
+
+  List<LockerOrder> findByTypeAndStatusOrderByCreatedAtAsc(String type, String status);
 }
