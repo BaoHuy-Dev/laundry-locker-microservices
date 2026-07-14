@@ -76,3 +76,10 @@ resilience4j:
 app:
   security:
     qr-secret: ${APP_SECURITY_QR_SECRET:laundry-locker-dev-qr-secret-change-me-32chars}
+  drone:
+    demo:
+      enabled: ${APP_DRONE_DEMO_ENABLED:true}
+      allowed-user-ids: ${APP_DRONE_DEMO_ALLOWED_USER_IDS:}
+      source-locker-id: ${APP_DRONE_DEMO_SOURCE_LOCKER_ID:1}
+      stage-delay-ms: ${APP_DRONE_DEMO_STAGE_DELAY_MS:7000}
+      scheduler-delay-ms: ${APP_DRONE_DEMO_SCHEDULER_DELAY_MS:1000}

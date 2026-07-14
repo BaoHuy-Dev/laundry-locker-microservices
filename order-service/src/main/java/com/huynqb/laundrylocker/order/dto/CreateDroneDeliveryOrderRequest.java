@@ -8,4 +8,15 @@ public record CreateDroneDeliveryOrderRequest(
     Long preferredBoxId,
     String description,
     @NotNull Integer parcelWeightGrams,
-    @NotBlank String paymentMethod) {}
+    @NotBlank String paymentMethod,
+    String fulfillmentMode) {
+
+  public CreateDroneDeliveryOrderRequest(
+      Long destinationLockerId,
+      Long preferredBoxId,
+      String description,
+      Integer parcelWeightGrams,
+      String paymentMethod) {
+    this(destinationLockerId, preferredBoxId, description, parcelWeightGrams, paymentMethod, null);
+  }
+}

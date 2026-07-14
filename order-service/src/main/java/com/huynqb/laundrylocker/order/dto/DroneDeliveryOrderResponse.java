@@ -18,4 +18,11 @@ public record DroneDeliveryOrderResponse(
     String description,
     BigDecimal totalPrice,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt) {}
+    LocalDateTime updatedAt,
+    String fulfillmentMode,
+    Long missionId,
+    String missionStatus,
+    Long droneUnitId,
+    String droneCode,
+    Long sourceLockerId,
+    Integer etaMinutes) {}

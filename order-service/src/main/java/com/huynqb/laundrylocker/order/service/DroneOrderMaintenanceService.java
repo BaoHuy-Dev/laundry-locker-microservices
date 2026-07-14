@@ -1,9 +1,11 @@
 package com.huynqb.laundrylocker.order.service;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.common.dto.NotificationRequest;
 import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
 import com.huynqb.laundrylocker.order.client.LockerDroneClient;
+import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DroneMissionResponse;
 import com.huynqb.laundrylocker.order.dto.DroneStatusUpdateRequest;
@@ -29,6 +31,10 @@ public class DroneOrderMaintenanceService {
   private final LockerOrderRepository orderRepository;
   private final DroneMissionRepository missionRepository;
   private final LockerDroneClient lockerDroneClient;
+  private final NotificationClient notificationClient;
+
+  @org.springframework.beans.factory.annotation.Value("${app.drone.demo.source-locker-id:1}")
+  private Long demoSourceLockerId = 1L;
 
   @Transactional(readOnly = true)
   public List<DroneMissionResponse> queue(String deliveryStage) {
@@ -57,12 +63,17 @@ public class DroneOrderMaintenanceService {
     DroneUnitDto drone = fetchDrone(request.droneUnitId());
     validateDronePreflight(drone);
     LockerLayoutDto layout = fetchLockerLayout(requireDestinationLockerId(order));
-    validateLockerPreflight(layout);
+    if (isDemo(order)) {
+      validateLockerActive(layout);
+    } else {
+      validateLockerPreflight(layout);
+    }
 
     DroneMission mission = existingMission == null ? new DroneMission() : existingMission;
     mission.setOrderId(order.getId());
     mission.setDroneUnitId(drone.id());
-    mission.setSourceLockerId(drone.lockerId());
+    mission.setDroneCode(drone.code());
+    mission.setSourceLockerId(isDemo(order) ? demoSourceLockerId : drone.lockerId());
     mission.setDestinationLockerId(requireDestinationLockerId(order));
     mission.setAssignedByUserId(userId);
     mission.setStatus("READY_TO_LAUNCH");
@@ -73,6 +84,7 @@ public class DroneOrderMaintenanceService {
     order.setDeliveryStage("ACCEPTED");
     order.setStaffId(userId);
     orderRepository.save(order);
+    notifyCustomerQuietly(order, "ACCEPTED", "Đội bay đã tiếp nhận đơn drone của bạn.");
     return toResponse(order, mission, drone);
   }
 
@@ -143,14 +155,37 @@ public class DroneOrderMaintenanceService {
   }
 
   private void validateLockerPreflight(LockerLayoutDto layout) {
-    if (!"ACTIVE".equals(layout.status())) {
-      throw new BusinessException("LOCKER_INACTIVE", "Destination locker is not active");
-    }
+    validateLockerActive(layout);
     if (!Boolean.TRUE.equals(layout.landingPad())) {
       throw new BusinessException("LANDING_PAD_ABSENT", "Destination locker has no landing pad");
     }
     if (!"OK".equals(layout.landingPadStatus())) {
       throw new BusinessException("LANDING_PAD_UNAVAILABLE", "Landing pad is not ready");
+    }
+  }
+
+  private void validateLockerActive(LockerLayoutDto layout) {
+    if (!"ACTIVE".equals(layout.status())) {
+      throw new BusinessException("LOCKER_INACTIVE", "Destination locker is not active");
+    }
+  }
+
+  private boolean isDemo(LockerOrder order) {
+    return "DEMO".equalsIgnoreCase(order.getFulfillmentMode());
+  }
+
+  private void notifyCustomerQuietly(LockerOrder order, String stage, String message) {
+    try {
+      notificationClient.requestNotification(
+          new NotificationRequest(
+              order.getUserId(),
+              "Cập nhật giao drone",
+              message,
+              "DRONE_DELIVERY_STATUS_CHANGED",
+              order.getId(),
+              "ORDER"));
+    } catch (Exception ignored) {
+      // Notification is best-effort and must not roll back mission acceptance.
     }
   }
 

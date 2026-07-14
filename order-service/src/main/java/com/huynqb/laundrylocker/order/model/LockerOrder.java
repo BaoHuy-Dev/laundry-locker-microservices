@@ -77,6 +77,9 @@ public class LockerOrder {
   @Column(name = "delivery_stage", length = 40)
   private String deliveryStage;
 
+  @Column(name = "fulfillment_mode", length = 20)
+  private String fulfillmentMode = "STANDARD";
+
   @Column(name = "paid_at")
   private LocalDateTime paidAt;
 
