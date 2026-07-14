@@ -25,6 +25,10 @@ spring:
               uri: lb://order-service
               predicates:
                 - Path=/api/orders/**,/api/admin/orders,/api/admin/orders/**,/api/admin/scheduler,/api/admin/scheduler/**,/internal/orders/**
+            - id: order-service-maintenance-drone
+              uri: lb://order-service
+              predicates:
+                - Path=/api/maintenance/drone-orders/**
             - id: locker-service
               uri: lb://locker-service
               predicates:

@@ -45,6 +45,10 @@ public class OrderPaymentEventListener {
               if (!"PAID".equals(order.getPaymentStatus())) {
                 order.setPaymentStatus("PAID");
                 order.setPaidAt(LocalDateTime.now());
+                if ("DRONE_DELIVERY".equals(order.getType())) {
+                  order.setStatus("AWAITING_DISPATCH");
+                  order.setDeliveryStage("AWAITING_DISPATCH");
+                }
                 orderRepository.save(order);
                 log.info("Order {} marked PAID via payment event", orderId);
               }
