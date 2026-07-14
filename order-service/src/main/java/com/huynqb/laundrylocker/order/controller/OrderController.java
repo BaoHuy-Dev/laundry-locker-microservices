@@ -21,6 +21,7 @@ import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
 import com.huynqb.laundrylocker.order.service.DroneOrderMaintenanceService;
+import com.huynqb.laundrylocker.order.service.DroneDeliveryQueryService;
 import com.huynqb.laundrylocker.order.service.OrderService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -43,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
   private final DroneOrderMaintenanceService droneOrderMaintenanceService;
+  private final DroneDeliveryQueryService droneDeliveryQueryService;
   private final OrderService orderService;
 
   @PostMapping("/api/orders")
@@ -164,7 +166,7 @@ public class OrderController {
   @GetMapping("/api/orders/{orderId}/drone-delivery")
   public ApiResponse<DroneDeliveryOrderResponse> getDroneDelivery(
       @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
-    return ApiResponse.ok(orderService.getDroneDelivery(orderId, userId));
+    return ApiResponse.ok(droneDeliveryQueryService.get(orderId, userId));
   }
 
   @GetMapping("/api/maintenance/drone-orders")

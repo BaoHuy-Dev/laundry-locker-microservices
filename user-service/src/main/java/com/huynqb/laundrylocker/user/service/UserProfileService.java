@@ -56,6 +56,16 @@ public class UserProfileService {
   }
 
   @Transactional(readOnly = true)
+  public List<UserSummary> listByRole(String role) {
+    String expected = role == null ? "" : role.trim().toUpperCase();
+    return userProfileRepository.findAll().stream()
+        .filter(user -> "ACTIVE".equalsIgnoreCase(user.getStatus()))
+        .filter(user -> parseRoles(user.getRoles()).contains(expected))
+        .map(this::toSummary)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public List<com.huynqb.laundrylocker.user.dto.AdminUserView> listAdminViews(
       String search, String status, String role) {
     String q = search == null ? null : search.toLowerCase();

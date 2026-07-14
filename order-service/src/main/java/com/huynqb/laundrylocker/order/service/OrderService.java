@@ -1,5 +1,6 @@
 package com.huynqb.laundrylocker.order.service;
 
+import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.NotificationRequest;
 import com.huynqb.laundrylocker.common.dto.OrderSummary;
 import com.huynqb.laundrylocker.common.event.DomainEvent;
@@ -106,6 +107,12 @@ public class OrderService {
 
   @Value("${app.order.send-base-fee:15000}")
   private long sendBaseFee;
+
+  @Value("${app.drone.demo.enabled:true}")
+  private boolean droneDemoEnabled = true;
+
+  @Value("${app.drone.demo.allowed-user-ids:}")
+  private String droneDemoAllowedUserIds = "";
 
   @Value("${app.order.rental-rate-standard:5000}")
   private long rentalRateStandard;
@@ -248,6 +255,7 @@ public class OrderService {
       return toDroneDeliveryResponse(existing.get());
     }
 
+    String fulfillmentMode = resolveDroneFulfillmentMode(request.fulfillmentMode(), userId);
     userClient.getUser(userId);
     Long reservedBoxId = resolveAndReserveDroneBox(request);
 
@@ -265,13 +273,45 @@ public class OrderService {
     order.setStatus("AWAITING_DISPATCH");
     order.setPaymentStatus("UNPAID");
     order.setDeliveryStage("AWAITING_DISPATCH");
+    order.setFulfillmentMode(fulfillmentMode);
     order.setParcelWeightGrams(request.parcelWeightGrams());
     order.setDescription(request.description());
     order.setIdempotencyKey(idempotencyKey);
     order.setTotalPrice(BigDecimal.valueOf(sendBaseFee));
     order.setOriginalPrice(BigDecimal.valueOf(sendBaseFee));
 
-    return toDroneDeliveryResponse(orderRepository.save(order));
+    LockerOrder saved = orderRepository.save(order);
+    notifyMaintenanceDroneOrderCreated(saved);
+    return toDroneDeliveryResponse(saved);
+  }
+
+  private String resolveDroneFulfillmentMode(String requestedMode, Long userId) {
+    if (!StringUtils.hasText(requestedMode)) {
+      return canUseDroneDemo(userId) ? "DEMO" : "STANDARD";
+    }
+    String normalized = requestedMode.trim().toUpperCase();
+    if (!Set.of("DEMO", "STANDARD").contains(normalized)) {
+      throw new BusinessException(
+          "DRONE_FULFILLMENT_MODE_INVALID", "fulfillmentMode must be DEMO or STANDARD");
+    }
+    if ("DEMO".equals(normalized) && !canUseDroneDemo(userId)) {
+      throw new BusinessException(
+          "DRONE_DEMO_NOT_ALLOWED", "Drone demo mode is not enabled for this user");
+    }
+    return normalized;
+  }
+
+  private boolean canUseDroneDemo(Long userId) {
+    if (!droneDemoEnabled) {
+      return false;
+    }
+    if (!StringUtils.hasText(droneDemoAllowedUserIds)) {
+      return true;
+    }
+    String expected = String.valueOf(userId);
+    return java.util.Arrays.stream(droneDemoAllowedUserIds.split(","))
+        .map(String::trim)
+        .anyMatch(expected::equals);
   }
 
   @Transactional(readOnly = true)
@@ -389,6 +429,28 @@ public class OrderService {
       notificationClient.requestNotification(new NotificationRequest(userId, title, message, type, orderId, "ORDER"));
     } catch (Exception ex) {
       log.warn("Could not notify user {} for order {}: {}", userId, orderId, ex.getMessage());
+    }
+  }
+
+  private void notifyMaintenanceDroneOrderCreated(LockerOrder order) {
+    try {
+      ApiResponse<List<com.huynqb.laundrylocker.common.dto.UserSummary>> response =
+          userClient.getUsersByRole("MAINTENANCE");
+      if (response == null || response.data() == null) {
+        return;
+      }
+      for (var user : response.data()) {
+        notificationClient.requestNotification(
+            new NotificationRequest(
+                user.id(),
+                "Có đơn drone mới",
+                "Đơn " + order.getOrderCode() + " đang chờ đội bay tiếp nhận.",
+                "DRONE_ORDER_CREATED",
+                order.getId(),
+                "ORDER"));
+      }
+    } catch (Exception ex) {
+      log.warn("Could not notify maintenance users for drone order {}: {}", order.getId(), ex.getMessage());
     }
   }
 
@@ -1604,7 +1666,14 @@ public class OrderService {
         order.getDescription(),
         order.getTotalPrice(),
         order.getCreatedAt(),
-        order.getUpdatedAt());
+        order.getUpdatedAt(),
+        order.getFulfillmentMode(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   private OrderRatingResponse toRating(OrderRating rating) {

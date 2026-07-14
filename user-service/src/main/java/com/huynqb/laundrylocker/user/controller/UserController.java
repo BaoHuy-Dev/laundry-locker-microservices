@@ -241,4 +241,9 @@ public class UserController {
   public ApiResponse<UserSummary> getByPhoneInternal(@org.springframework.web.bind.annotation.RequestParam String phone) {
     return ApiResponse.ok(userProfileService.getByPhone(phone));
   }
+
+  @GetMapping("/internal/users")
+  public ApiResponse<List<UserSummary>> listInternalByRole(@RequestParam String role) {
+    return ApiResponse.ok(userProfileService.listByRole(role));
+  }
 }

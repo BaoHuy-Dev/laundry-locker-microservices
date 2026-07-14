@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.order.client.LockerDroneClient;
+import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DroneMissionResponse;
 import com.huynqb.laundrylocker.order.dto.DroneStatusUpdateRequest;
@@ -30,11 +31,12 @@ class DroneOrderMaintenanceServiceTest {
   @Mock private LockerOrderRepository orderRepository;
   @Mock private DroneMissionRepository missionRepository;
   @Mock private LockerDroneClient lockerDroneClient;
+  @Mock private NotificationClient notificationClient;
 
   @Test
   void acceptCreatesReadyToLaunchMissionWhenPreflightPasses() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient);
+        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
     LockerOrder order = droneOrder(21L, "AWAITING_DISPATCH");
     when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
     when(missionRepository.findByOrderId(21L)).thenReturn(Optional.empty());
@@ -66,7 +68,7 @@ class DroneOrderMaintenanceServiceTest {
   @Test
   void acceptReturnsExistingMissionForSameIdempotencyKey() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient);
+        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
     LockerOrder order = droneOrder(21L, "ACCEPTED");
     DroneMission mission = new DroneMission();
     mission.setId(301L);
@@ -93,7 +95,7 @@ class DroneOrderMaintenanceServiceTest {
   @Test
   void launchMarksMissionLaunchingAndRequestsDroneStateChange() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient);
+        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
     LockerOrder order = droneOrder(21L, "ACCEPTED");
     DroneMission mission = new DroneMission();
     mission.setId(301L);
@@ -118,12 +120,37 @@ class DroneOrderMaintenanceServiceTest {
     verify(orderRepository).save(order);
   }
 
+  @Test
+  void acceptDemoOrderUsesConfiguredSourceAndBypassesLandingPadHardware() {
+    DroneOrderMaintenanceService service =
+        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
+    LockerOrder order = droneOrder(21L, "AWAITING_DISPATCH");
+    order.setFulfillmentMode("DEMO");
+    when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
+    when(missionRepository.findByOrderId(21L)).thenReturn(Optional.empty());
+    when(lockerDroneClient.getDroneUnit(9L))
+        .thenReturn(ApiResponse.ok(new DroneUnitDto(9L, 3L, "DRONE-09", "IDLE", 87, true)));
+    when(lockerDroneClient.getLockerLayout(5L))
+        .thenReturn(ApiResponse.ok(new LockerLayoutDto(5L, "CAB-05", "Locker 5", "ACTIVE", false, null)));
+    when(missionRepository.save(any(DroneMission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    service.accept(21L, 99L, "accept-demo", new AcceptDroneOrderRequest(9L));
+
+    verify(missionRepository)
+        .save(
+            org.mockito.ArgumentMatchers.argThat(
+                mission -> Long.valueOf(1L).equals(mission.getSourceLockerId())
+                    && "DRONE-09".equals(mission.getDroneCode())));
+    assertEquals("ACCEPTED", order.getDeliveryStage());
+  }
+
   private LockerOrder droneOrder(Long orderId, String deliveryStage) {
     LockerOrder order = new LockerOrder();
     order.setId(orderId);
     order.setOrderCode("ORD-" + orderId);
     order.setUserId(44L);
     order.setType("DRONE_DELIVERY");
+    order.setFulfillmentMode("STANDARD");
     order.setPaymentStatus("UNPAID");
     order.setStatus("AWAITING_DISPATCH");
     order.setDeliveryStage(deliveryStage);

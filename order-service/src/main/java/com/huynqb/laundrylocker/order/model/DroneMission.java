@@ -28,6 +28,9 @@ public class DroneMission {
   @Column(name = "drone_unit_id")
   private Long droneUnitId;
 
+  @Column(name = "drone_code", length = 80)
+  private String droneCode;
+
   @Column(name = "source_locker_id")
   private Long sourceLockerId;
 

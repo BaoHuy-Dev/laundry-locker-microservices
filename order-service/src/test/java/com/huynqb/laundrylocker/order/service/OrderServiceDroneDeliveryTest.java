@@ -29,7 +29,9 @@ import com.huynqb.laundrylocker.order.repository.PromotionClaimRepository;
 import com.huynqb.laundrylocker.order.repository.PromotionRepository;
 import com.huynqb.laundrylocker.order.repository.PromotionUsageRepository;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,6 +79,8 @@ class OrderServiceDroneDeliveryTest {
             notificationClient,
             qrTokenService);
     ReflectionTestUtils.setField(orderService, "sendBaseFee", 15000L);
+    ReflectionTestUtils.setField(orderService, "droneDemoEnabled", true);
+    ReflectionTestUtils.setField(orderService, "droneDemoAllowedUserIds", "");
   }
 
   @Test
@@ -99,6 +103,12 @@ class OrderServiceDroneDeliveryTest {
     when(orderRepository.findByUserIdAndIdempotencyKey(44L, "idem-2")).thenReturn(Optional.empty());
     when(userClient.getUser(44L))
         .thenReturn(ApiResponse.ok(new UserSummary(44L, "u@test", "0901", "User", "ACTIVE")));
+    when(userClient.getUsersByRole("MAINTENANCE"))
+        .thenReturn(
+            ApiResponse.ok(
+                List.of(
+                    new UserSummary(91L, "m1@test", "0911", "M1", "ACTIVE", Set.of("MAINTENANCE")),
+                    new UserSummary(92L, "m2@test", "0912", "M2", "ACTIVE", Set.of("MAINTENANCE")))));
     when(lockerCellClient.getCell(9001L))
         .thenReturn(ApiResponse.ok(new CellDto(9001L, 7, "M", "DRONE", 0, 0, "AVAILABLE", null)));
     when(lockerClient.reserveBox(9001L, "DRONE"))
@@ -120,7 +130,28 @@ class OrderServiceDroneDeliveryTest {
     assertEquals(9001L, response.reservedBoxId());
     assertEquals("DRONE_DELIVERY", response.type());
     assertEquals("AWAITING_DISPATCH", response.deliveryStage());
+    assertEquals("DEMO", response.fulfillmentMode());
     verify(lockerClient).reserveBox(9001L, "DRONE");
+    verify(notificationClient, org.mockito.Mockito.times(2)).requestNotification(any());
+  }
+
+  @Test
+  void explicitDemoIsRejectedForUserOutsideConfiguredAllowlistBeforeBoxReservation() {
+    ReflectionTestUtils.setField(orderService, "droneDemoAllowedUserIds", "91,92");
+
+    BusinessException error =
+        assertThrows(
+            BusinessException.class,
+            () ->
+                orderService.createDroneDelivery(
+                    new CreateDroneDeliveryOrderRequest(
+                        5L, 9001L, "Tai lieu", 1200, "CASH", "DEMO"),
+                    44L,
+                    "idem-denied"));
+
+    assertEquals("DRONE_DEMO_NOT_ALLOWED", error.getCode());
+    verify(lockerClient, never()).reserveBox(any(), any());
+    verify(orderRepository, never()).save(any());
   }
 
   @Test
