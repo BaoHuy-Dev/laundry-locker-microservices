@@ -3,7 +3,9 @@ package com.huynqb.laundrylocker.order.controller;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.OrderSummary;
 import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.CreateDroneDeliveryOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DelegateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.DroneDeliveryOrderResponse;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintResponse;
 import com.huynqb.laundrylocker.order.dto.OrderRatingRequest;
@@ -53,6 +55,17 @@ public class OrderController {
   public ApiResponse<OrderResponse> createRental(
       @Valid @RequestBody RentalOrderRequest request, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("ORDER_CREATED", "Rental order created", orderService.createRental(request, userId));
+  }
+
+  @PostMapping("/api/orders/drone-deliveries")
+  public ApiResponse<DroneDeliveryOrderResponse> createDroneDelivery(
+      @Valid @RequestBody CreateDroneDeliveryOrderRequest request,
+      @RequestHeader("X-User-Id") Long userId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    return ApiResponse.ok(
+        "ORDER_CREATED",
+        "Drone delivery order created",
+        orderService.createDroneDelivery(request, userId, idempotencyKey));
   }
 
   @PostMapping("/api/orders/{orderId}/extend-rental")
@@ -141,6 +154,12 @@ public class OrderController {
   @GetMapping("/api/orders/{id}")
   public ApiResponse<OrderResponse> get(@PathVariable Long id) {
     return ApiResponse.ok(orderService.get(id));
+  }
+
+  @GetMapping("/api/orders/{orderId}/drone-delivery")
+  public ApiResponse<DroneDeliveryOrderResponse> getDroneDelivery(
+      @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(orderService.getDroneDelivery(orderId, userId));
   }
 
   @GetMapping("/api/orders/{orderId}/status")

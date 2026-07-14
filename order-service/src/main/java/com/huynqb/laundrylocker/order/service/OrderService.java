@@ -11,8 +11,10 @@ import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.client.UserClient;
 import com.huynqb.laundrylocker.order.dto.CellDto;
+import com.huynqb.laundrylocker.order.dto.CreateDroneDeliveryOrderRequest;
 import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DelegateOrderRequest;
+import com.huynqb.laundrylocker.order.dto.DroneDeliveryOrderResponse;
 import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
 import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.OrderComplaintRequest;
@@ -49,9 +51,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -234,6 +238,50 @@ public class OrderService {
   }
 
   @Transactional
+  public DroneDeliveryOrderResponse createDroneDelivery(
+      CreateDroneDeliveryOrderRequest request, Long userId, String idempotencyKey) {
+    Optional<LockerOrder> existing =
+        StringUtils.hasText(idempotencyKey)
+            ? orderRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)
+            : Optional.empty();
+    if (existing.isPresent()) {
+      return toDroneDeliveryResponse(existing.get());
+    }
+
+    userClient.getUser(userId);
+    Long reservedBoxId = resolveAndReserveDroneBox(request);
+
+    LockerOrder order = new LockerOrder();
+    order.setOrderCode(generateOrderCode());
+    order.setUserId(userId);
+    order.setReceiverId(userId);
+    order.setReceiverUserId(userId);
+    order.setLockerId(request.destinationLockerId());
+    order.setDestinationLockerId(request.destinationLockerId());
+    order.setSendBoxId(reservedBoxId);
+    order.setReservedBoxId(reservedBoxId);
+    order.setType("DRONE_DELIVERY");
+    order.setServiceCategory("DRONE_DELIVERY");
+    order.setStatus("INITIALIZED");
+    order.setPaymentStatus("UNPAID");
+    order.setDeliveryStage("PENDING_PAYMENT");
+    order.setParcelWeightGrams(request.parcelWeightGrams());
+    order.setDescription(request.description());
+    order.setIdempotencyKey(idempotencyKey);
+    order.setTotalPrice(BigDecimal.valueOf(sendBaseFee));
+    order.setOriginalPrice(BigDecimal.valueOf(sendBaseFee));
+
+    return toDroneDeliveryResponse(orderRepository.save(order));
+  }
+
+  @Transactional(readOnly = true)
+  public DroneDeliveryOrderResponse getDroneDelivery(Long orderId, Long userId) {
+    LockerOrder order = find(orderId);
+    assertOwner(order, userId);
+    return toDroneDeliveryResponse(order);
+  }
+
+  @Transactional
   public OrderResponse extendRental(Long id, Long userId, int hours) {
     LockerOrder order = find(id);
     assertOwner(order, userId);
@@ -285,6 +333,30 @@ public class OrderService {
       throw ex;
     } catch (Exception ex) {
       throw new BusinessException("BOX_NOT_AVAILABLE", "No available cell of requested type");
+    }
+  }
+
+  private Long resolveAndReserveDroneBox(CreateDroneDeliveryOrderRequest request) {
+    Long boxId = request.preferredBoxId();
+    if (boxId == null) {
+      boxId = findAvailableCell(request.destinationLockerId(), null, "DRONE");
+    } else {
+      CellDto cell = lockerCellClient.getCell(boxId).data();
+      if (cell == null) {
+        throw new BusinessException("BOX_NOT_FOUND", "Box not found");
+      }
+      if (!"DRONE".equalsIgnoreCase(cell.cellType())) {
+        throw new BusinessException("DRONE_CELL_REQUIRED", "Selected box must be a DRONE cell");
+      }
+      if (!"AVAILABLE".equalsIgnoreCase(cell.status())) {
+        throw new BusinessException("BOX_NOT_AVAILABLE", "Selected drone cell is not available");
+      }
+    }
+    try {
+      lockerClient.reserveBox(boxId, "DRONE");
+      return boxId;
+    } catch (Exception ex) {
+      throw unwrapDownstreamError(ex, "BOX_RESERVE_FAILED", "Could not reserve drone box " + boxId);
     }
   }
 
@@ -1102,7 +1174,7 @@ public class OrderService {
           orderRepository.findById(order.getId()).map(LockerOrder::getStatus).orElse("");
       try {
         if ("INITIALIZED".equals(freshStatus)) {
-          lockerClient.reserveBox(boxId);
+          lockerClient.reserveBox(boxId, null);
         } else if ("STORING".equals(freshStatus) || "RETURNED".equals(freshStatus)) {
           lockerClient.occupyBox(boxId);
         } else {
@@ -1180,7 +1252,7 @@ public class OrderService {
     }
     if (boxId != null) {
       try {
-        lockerClient.reserveBox(boxId);
+        lockerClient.reserveBox(boxId, null);
       } catch (Exception ex) {
         throw unwrapDownstreamError(ex, "BOX_RESERVE_FAILED", "Could not reserve box " + boxId);
       }
@@ -1361,11 +1433,14 @@ public class OrderService {
   }
 
   private void releaseBoxes(LockerOrder order) {
-    if (order.getSendBoxId() != null) {
-      lockerClient.releaseBox(order.getSendBoxId());
-    }
-    if (order.getReceiveBoxId() != null) {
-      lockerClient.releaseBox(order.getReceiveBoxId());
+    Set<Long> boxIds = new LinkedHashSet<>();
+    boxIds.add(order.getSendBoxId());
+    boxIds.add(order.getReceiveBoxId());
+    boxIds.add(order.getReservedBoxId());
+    for (Long boxId : boxIds) {
+      if (boxId != null) {
+        lockerClient.releaseBox(boxId);
+      }
     }
   }
 
@@ -1482,6 +1557,25 @@ public class OrderService {
         details);
   }
 
+  private DroneDeliveryOrderResponse toDroneDeliveryResponse(LockerOrder order) {
+    return new DroneDeliveryOrderResponse(
+        order.getId(),
+        order.getOrderCode(),
+        order.getUserId(),
+        firstNonNull(order.getReceiverUserId(), order.getReceiverId()),
+        firstNonNull(order.getDestinationLockerId(), order.getLockerId()),
+        firstNonNull(order.getReservedBoxId(), order.getSendBoxId()),
+        order.getType(),
+        order.getStatus(),
+        order.getDeliveryStage(),
+        order.getPaymentStatus(),
+        order.getParcelWeightGrams(),
+        order.getDescription(),
+        order.getTotalPrice(),
+        order.getCreatedAt(),
+        order.getUpdatedAt());
+  }
+
   private OrderRatingResponse toRating(OrderRating rating) {
     return new OrderRatingResponse(rating.getId(), rating.getOrderId(), rating.getUserId(), rating.getRating(), rating.getComment(), rating.getCreatedAt());
   }
@@ -1579,5 +1673,9 @@ public class OrderService {
     // 36^6 vượt quá Integer.MAX_VALUE nên phải sinh bằng long
     String randomPart = Long.toString(RANDOM.nextLong(2_176_782_336L), 36).toUpperCase();
     return "ORD-" + LocalDate.now().toString().replace("-", "") + "-" + randomPart;
+  }
+
+  private Long firstNonNull(Long primary, Long fallback) {
+    return primary != null ? primary : fallback;
   }
 }
