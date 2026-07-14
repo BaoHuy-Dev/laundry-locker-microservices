@@ -22,14 +22,14 @@ class OrderPaymentEventListenerTest {
   @Mock private LockerOrderRepository orderRepository;
 
   @Test
-  void paymentCompletedMovesDroneOrderToAwaitingDispatch() {
+  void paymentCompletedMarksDroneOrderPaidWithoutChangingDispatchStage() {
     OrderPaymentEventListener listener = new OrderPaymentEventListener(orderRepository);
     LockerOrder order = new LockerOrder();
     order.setId(21L);
     order.setType("DRONE_DELIVERY");
     order.setPaymentStatus("UNPAID");
-    order.setStatus("INITIALIZED");
-    order.setDeliveryStage("PENDING_PAYMENT");
+    order.setStatus("AWAITING_DISPATCH");
+    order.setDeliveryStage("ACCEPTED");
     when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
     when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -41,7 +41,7 @@ class OrderPaymentEventListenerTest {
 
     assertEquals("PAID", order.getPaymentStatus());
     assertEquals("AWAITING_DISPATCH", order.getStatus());
-    assertEquals("AWAITING_DISPATCH", order.getDeliveryStage());
+    assertEquals("ACCEPTED", order.getDeliveryStage());
     verify(orderRepository).save(order);
   }
 }

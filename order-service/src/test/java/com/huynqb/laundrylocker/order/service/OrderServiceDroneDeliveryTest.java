@@ -2,6 +2,7 @@ package com.huynqb.laundrylocker.order.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
 import com.huynqb.laundrylocker.common.dto.UserSummary;
+import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.order.client.LockerCellClient;
 import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
@@ -117,8 +119,22 @@ class OrderServiceDroneDeliveryTest {
     assertEquals(77L, response.orderId());
     assertEquals(9001L, response.reservedBoxId());
     assertEquals("DRONE_DELIVERY", response.type());
-    assertEquals("PENDING_PAYMENT", response.deliveryStage());
+    assertEquals("AWAITING_DISPATCH", response.deliveryStage());
     verify(lockerClient).reserveBox(9001L, "DRONE");
+  }
+
+  @Test
+  void getByAccessBlocksUnpaidDronePickupWhenReadyForPickup() {
+    LockerOrder order = droneOrder(33L, 44L, 5L, 9001L, "idem-4");
+    order.setStatus("STORING");
+    order.setDeliveryStage("READY_FOR_PICKUP");
+    order.setPinCode("123456");
+    when(orderRepository.findByPinCode("123456")).thenReturn(Optional.of(order));
+
+    BusinessException ex =
+        assertThrows(BusinessException.class, () -> orderService.getByAccess("123456"));
+
+    assertEquals("DRONE_PAYMENT_REQUIRED_BEFORE_PICKUP", ex.getCode());
   }
 
   @Test
@@ -147,9 +163,9 @@ class OrderServiceDroneDeliveryTest {
     order.setReservedBoxId(boxId);
     order.setType("DRONE_DELIVERY");
     order.setServiceCategory("DRONE_DELIVERY");
-    order.setStatus("INITIALIZED");
+    order.setStatus("AWAITING_DISPATCH");
     order.setPaymentStatus("UNPAID");
-    order.setDeliveryStage("PENDING_PAYMENT");
+    order.setDeliveryStage("AWAITING_DISPATCH");
     order.setParcelWeightGrams(1200);
     order.setIdempotencyKey(idempotencyKey);
     order.setTotalPrice(BigDecimal.valueOf(15000));
