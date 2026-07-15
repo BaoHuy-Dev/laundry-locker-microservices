@@ -267,6 +267,22 @@ Idempotency-Key: launch-<unique-key>
 
 Điều kiện mission phải là `READY_TO_LAUNCH`. Thành công trả HTTP `202`, mission/order chuyển `LAUNCHING`, drone chuyển `IN_FLIGHT`.
 
+### 6.5b Maintenance hủy trước launch
+
+```http
+POST /api/maintenance/drone-orders/{orderId}/cancel
+Authorization: Bearer <MAINTENANCE-or-ADMIN-token>
+```
+
+Chỉ hợp lệ khi order đang ở `deliveryStage=ACCEPTED` và mission vẫn là `READY_TO_LAUNCH`.
+
+Backend sẽ:
+
+- giải phóng `reservedBoxId`
+- xóa mission chuẩn bị launch
+- cập nhật order thành `status=CANCELED`, `deliveryStage=CANCELED`
+- gửi `DRONE_DELIVERY_STATUS_CHANGED` để customer biết đơn bị hủy trước khi cất cánh
+
 ## 7. Payment Và Pickup Gate
 
 Payment không chặn các bước:

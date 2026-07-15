@@ -4,6 +4,7 @@ import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.NotificationRequest;
 import com.huynqb.laundrylocker.common.exception.BusinessException;
 import com.huynqb.laundrylocker.common.exception.NotFoundException;
+import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.LockerDroneClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
@@ -32,6 +33,7 @@ public class DroneOrderMaintenanceService {
   private final DroneMissionRepository missionRepository;
   private final LockerDroneClient lockerDroneClient;
   private final NotificationClient notificationClient;
+  private final LockerClient lockerClient;
 
   @org.springframework.beans.factory.annotation.Value("${app.drone.demo.source-locker-id:1}")
   private Long demoSourceLockerId = 1L;
@@ -113,6 +115,32 @@ public class DroneOrderMaintenanceService {
     order.setStaffId(userId);
     orderRepository.save(order);
     return toResponse(order, mission, updatedDrone);
+  }
+
+  @Transactional
+  public DroneMissionResponse cancel(Long orderId, Long userId) {
+    LockerOrder order = findDroneOrder(orderId);
+    if ("CANCELED".equals(order.getStatus())) {
+      return toResponse(order, null, null);
+    }
+
+    DroneMission mission =
+        missionRepository.findByOrderId(orderId).orElseThrow(() -> new NotFoundException("DroneMission", orderId));
+    if (!"ACCEPTED".equals(order.getDeliveryStage()) || !"READY_TO_LAUNCH".equals(mission.getStatus())) {
+      throw new BusinessException("DRONE_ORDER_STATUS_INVALID", "Drone order can only be canceled before launch");
+    }
+
+    if (order.getReservedBoxId() != null) {
+      lockerClient.releaseBox(order.getReservedBoxId());
+    }
+    missionRepository.delete(mission);
+
+    order.setStatus("CANCELED");
+    order.setDeliveryStage("CANCELED");
+    order.setStaffId(userId);
+    orderRepository.save(order);
+    notifyCustomerQuietly(order, "CANCELED", "Đơn drone đã bị hủy trước khi khởi phóng.");
+    return toResponse(order, null, null);
   }
 
   private LockerOrder findDroneOrder(Long orderId) {
