@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.LockerDroneClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
@@ -32,11 +33,13 @@ class DroneOrderMaintenanceServiceTest {
   @Mock private DroneMissionRepository missionRepository;
   @Mock private LockerDroneClient lockerDroneClient;
   @Mock private NotificationClient notificationClient;
+  @Mock private LockerClient lockerClient;
 
   @Test
   void acceptCreatesReadyToLaunchMissionWhenPreflightPasses() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
+        new DroneOrderMaintenanceService(
+            orderRepository, missionRepository, lockerDroneClient, notificationClient, lockerClient);
     LockerOrder order = droneOrder(21L, "AWAITING_DISPATCH");
     when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
     when(missionRepository.findByOrderId(21L)).thenReturn(Optional.empty());
@@ -68,7 +71,8 @@ class DroneOrderMaintenanceServiceTest {
   @Test
   void acceptReturnsExistingMissionForSameIdempotencyKey() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
+        new DroneOrderMaintenanceService(
+            orderRepository, missionRepository, lockerDroneClient, notificationClient, lockerClient);
     LockerOrder order = droneOrder(21L, "ACCEPTED");
     DroneMission mission = new DroneMission();
     mission.setId(301L);
@@ -95,7 +99,8 @@ class DroneOrderMaintenanceServiceTest {
   @Test
   void launchMarksMissionLaunchingAndRequestsDroneStateChange() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
+        new DroneOrderMaintenanceService(
+            orderRepository, missionRepository, lockerDroneClient, notificationClient, lockerClient);
     LockerOrder order = droneOrder(21L, "ACCEPTED");
     DroneMission mission = new DroneMission();
     mission.setId(301L);
@@ -123,7 +128,8 @@ class DroneOrderMaintenanceServiceTest {
   @Test
   void acceptDemoOrderUsesConfiguredSourceAndBypassesLandingPadHardware() {
     DroneOrderMaintenanceService service =
-        new DroneOrderMaintenanceService(orderRepository, missionRepository, lockerDroneClient, notificationClient);
+        new DroneOrderMaintenanceService(
+            orderRepository, missionRepository, lockerDroneClient, notificationClient, lockerClient);
     LockerOrder order = droneOrder(21L, "AWAITING_DISPATCH");
     order.setFulfillmentMode("DEMO");
     when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
@@ -142,6 +148,57 @@ class DroneOrderMaintenanceServiceTest {
                 mission -> Long.valueOf(1L).equals(mission.getSourceLockerId())
                     && "DRONE-09".equals(mission.getDroneCode())));
     assertEquals("ACCEPTED", order.getDeliveryStage());
+  }
+
+  @Test
+  void cancelAcceptedMissionReleasesReservedBoxAndMarksOrderCanceled() {
+    DroneOrderMaintenanceService service =
+        new DroneOrderMaintenanceService(
+            orderRepository, missionRepository, lockerDroneClient, notificationClient, lockerClient);
+    LockerOrder order = droneOrder(21L, "ACCEPTED");
+    DroneMission mission = new DroneMission();
+    mission.setId(301L);
+    mission.setOrderId(21L);
+    mission.setDroneUnitId(9L);
+    mission.setSourceLockerId(3L);
+    mission.setDestinationLockerId(5L);
+    mission.setStatus("READY_TO_LAUNCH");
+    when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
+    when(missionRepository.findByOrderId(21L)).thenReturn(Optional.of(mission));
+    when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(lockerClient.releaseBox(9001L)).thenReturn(ApiResponse.ok(null));
+
+    DroneMissionResponse response = service.cancel(21L, 99L);
+
+    assertEquals(21L, response.orderId());
+    assertEquals("CANCELED", response.deliveryStage());
+    assertEquals("CANCELED", order.getStatus());
+    verify(lockerClient).releaseBox(9001L);
+    verify(missionRepository).delete(mission);
+    verify(orderRepository).save(order);
+  }
+
+  @Test
+  void cancelRejectsWhenMissionAlreadyLaunching() {
+    DroneOrderMaintenanceService service =
+        new DroneOrderMaintenanceService(
+            orderRepository, missionRepository, lockerDroneClient, notificationClient, lockerClient);
+    LockerOrder order = droneOrder(21L, "LAUNCHING");
+    DroneMission mission = new DroneMission();
+    mission.setId(301L);
+    mission.setOrderId(21L);
+    mission.setDroneUnitId(9L);
+    mission.setSourceLockerId(3L);
+    mission.setDestinationLockerId(5L);
+    mission.setStatus("LAUNCHING");
+    when(orderRepository.findById(21L)).thenReturn(Optional.of(order));
+    when(missionRepository.findByOrderId(21L)).thenReturn(Optional.of(mission));
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        com.huynqb.laundrylocker.common.exception.BusinessException.class,
+        () -> service.cancel(21L, 99L));
+    verify(lockerClient, never()).releaseBox(any());
+    verify(missionRepository, never()).delete(any());
   }
 
   private LockerOrder droneOrder(Long orderId, String deliveryStage) {

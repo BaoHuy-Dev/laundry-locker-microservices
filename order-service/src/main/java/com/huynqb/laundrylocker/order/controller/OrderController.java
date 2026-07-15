@@ -202,6 +202,17 @@ public class OrderController {
                 droneOrderMaintenanceService.launch(orderId, userId, idempotencyKey)));
   }
 
+  @PostMapping("/api/maintenance/drone-orders/{orderId}/cancel")
+  public ResponseEntity<ApiResponse<DroneMissionResponse>> cancelDroneOrder(
+      @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
+    return ResponseEntity.accepted()
+        .body(
+            ApiResponse.ok(
+                "DRONE_ORDER_CANCELED",
+                "Drone order canceled before launch",
+                droneOrderMaintenanceService.cancel(orderId, userId)));
+  }
+
   @GetMapping("/api/orders/{orderId}/status")
   public ApiResponse<OrderStatusResponse> status(@PathVariable Long orderId) {
     return ApiResponse.ok(orderService.status(orderId));
