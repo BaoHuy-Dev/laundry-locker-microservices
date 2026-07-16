@@ -8,14 +8,17 @@ import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.LockerDroneClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
+import com.huynqb.laundrylocker.order.dto.CancelDroneOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DroneMissionResponse;
 import com.huynqb.laundrylocker.order.dto.DroneStatusUpdateRequest;
 import com.huynqb.laundrylocker.order.dto.DroneUnitDto;
 import com.huynqb.laundrylocker.order.dto.LockerLayoutDto;
 import com.huynqb.laundrylocker.order.model.DroneMission;
 import com.huynqb.laundrylocker.order.model.LockerOrder;
+import com.huynqb.laundrylocker.order.model.OrderStatusHistory;
 import com.huynqb.laundrylocker.order.repository.DroneMissionRepository;
 import com.huynqb.laundrylocker.order.repository.LockerOrderRepository;
+import com.huynqb.laundrylocker.order.repository.OrderStatusHistoryRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,11 +35,9 @@ public class DroneOrderMaintenanceService {
   private final LockerOrderRepository orderRepository;
   private final DroneMissionRepository missionRepository;
   private final LockerDroneClient lockerDroneClient;
-  private final NotificationClient notificationClient;
   private final LockerClient lockerClient;
-
-  @org.springframework.beans.factory.annotation.Value("${app.drone.demo.source-locker-id:1}")
-  private Long demoSourceLockerId = 1L;
+  private final OrderStatusHistoryRepository historyRepository;
+  private final NotificationClient notificationClient;
 
   @Transactional(readOnly = true)
   public List<DroneMissionResponse> queue(String deliveryStage) {
@@ -50,6 +51,9 @@ public class DroneOrderMaintenanceService {
   public DroneMissionResponse accept(
       Long orderId, Long userId, String idempotencyKey, AcceptDroneOrderRequest request) {
     LockerOrder order = findDroneOrder(orderId);
+    if (!"PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+      throw new BusinessException("DRONE_ORDER_UNPAID", "Drone order must be paid before acceptance");
+    }
     if (!"AWAITING_DISPATCH".equals(order.getStatus())) {
       throw new BusinessException("DRONE_ORDER_STATUS_INVALID", "Drone order is not awaiting dispatch");
     }
@@ -65,17 +69,12 @@ public class DroneOrderMaintenanceService {
     DroneUnitDto drone = fetchDrone(request.droneUnitId());
     validateDronePreflight(drone);
     LockerLayoutDto layout = fetchLockerLayout(requireDestinationLockerId(order));
-    if (isDemo(order)) {
-      validateLockerActive(layout);
-    } else {
-      validateLockerPreflight(layout);
-    }
+    validateLockerPreflight(layout);
 
     DroneMission mission = existingMission == null ? new DroneMission() : existingMission;
     mission.setOrderId(order.getId());
     mission.setDroneUnitId(drone.id());
-    mission.setDroneCode(drone.code());
-    mission.setSourceLockerId(isDemo(order) ? demoSourceLockerId : drone.lockerId());
+    mission.setSourceLockerId(drone.lockerId());
     mission.setDestinationLockerId(requireDestinationLockerId(order));
     mission.setAssignedByUserId(userId);
     mission.setStatus("READY_TO_LAUNCH");
@@ -86,7 +85,6 @@ public class DroneOrderMaintenanceService {
     order.setDeliveryStage("ACCEPTED");
     order.setStaffId(userId);
     orderRepository.save(order);
-    notifyCustomerQuietly(order, "ACCEPTED", "Đội bay đã tiếp nhận đơn drone của bạn.");
     return toResponse(order, mission, drone);
   }
 
@@ -118,29 +116,75 @@ public class DroneOrderMaintenanceService {
   }
 
   @Transactional
-  public DroneMissionResponse cancel(Long orderId, Long userId) {
+  public DroneMissionResponse cancel(Long orderId, Long userId, CancelDroneOrderRequest request) {
     LockerOrder order = findDroneOrder(orderId);
-    if ("CANCELED".equals(order.getStatus())) {
-      return toResponse(order, null, null);
+    if (!"ACCEPTED".equals(order.getDeliveryStage())) {
+      throw new BusinessException(
+          "DRONE_ORDER_STATUS_INVALID", "Drone order can only be canceled before launch");
     }
 
     DroneMission mission =
-        missionRepository.findByOrderId(orderId).orElseThrow(() -> new NotFoundException("DroneMission", orderId));
-    if (!"ACCEPTED".equals(order.getDeliveryStage()) || !"READY_TO_LAUNCH".equals(mission.getStatus())) {
-      throw new BusinessException("DRONE_ORDER_STATUS_INVALID", "Drone order can only be canceled before launch");
+        missionRepository
+            .findByOrderId(orderId)
+            .orElseThrow(() -> new NotFoundException("DroneMission", orderId));
+    if (!"READY_TO_LAUNCH".equals(mission.getStatus())) {
+      throw new BusinessException(
+          "DRONE_MISSION_STATUS_INVALID", "Drone mission is not ready to launch");
     }
 
+    String note = StringUtils.hasText(request.note()) ? request.note().trim() : null;
+    if (Integer.valueOf(5).equals(request.reasonCode()) && !StringUtils.hasText(note)) {
+      throw new BusinessException(
+          "DRONE_CANCEL_NOTE_REQUIRED", "A note is required when reason is OTHER");
+    }
+
+    String oldStatus = order.getStatus();
     if (order.getReservedBoxId() != null) {
       lockerClient.releaseBox(order.getReservedBoxId());
     }
-    missionRepository.delete(mission);
 
+    order.setCancelReason(request.reasonCode());
+    order.setStaffNote(note);
+    order.setStaffId(userId);
     order.setStatus("CANCELED");
     order.setDeliveryStage("CANCELED");
-    order.setStaffId(userId);
     orderRepository.save(order);
-    notifyCustomerQuietly(order, "CANCELED", "Đơn drone đã bị hủy trước khi khởi phóng.");
-    return toResponse(order, null, null);
+
+    OrderStatusHistory history = new OrderStatusHistory();
+    history.setOrderId(order.getId());
+    history.setOldStatus(oldStatus);
+    history.setNewStatus("CANCELED");
+    history.setChangedByUserId(userId);
+    history.setNote(cancelReasonLabel(request.reasonCode()) + (note == null ? "" : " · " + note));
+    historyRepository.save(history);
+
+    missionRepository.delete(mission);
+
+    try {
+      notificationClient.requestNotification(
+          new NotificationRequest(
+              order.getUserId(),
+              "Nhiệm vụ drone đã bị hủy",
+              "Đội bay đã hủy nhiệm vụ trước khi phóng.",
+              "DRONE_DELIVERY_STATUS_CHANGED",
+              order.getId(),
+              "ORDER"));
+    } catch (RuntimeException ignored) {
+      // Best-effort notification; cancellation itself must still succeed.
+    }
+
+    DroneUnitDto drone = mission.getDroneUnitId() == null ? null : fetchDrone(mission.getDroneUnitId());
+    return new DroneMissionResponse(
+        order.getId(),
+        mission.getId(),
+        "CANCELED",
+        "CANCELED",
+        mission.getDroneUnitId(),
+        drone == null ? null : drone.code(),
+        mission.getSourceLockerId(),
+        mission.getDestinationLockerId(),
+        order.getReservedBoxId(),
+        order.getDescription());
   }
 
   private LockerOrder findDroneOrder(Long orderId) {
@@ -183,37 +227,14 @@ public class DroneOrderMaintenanceService {
   }
 
   private void validateLockerPreflight(LockerLayoutDto layout) {
-    validateLockerActive(layout);
+    if (!"ACTIVE".equals(layout.status())) {
+      throw new BusinessException("LOCKER_INACTIVE", "Destination locker is not active");
+    }
     if (!Boolean.TRUE.equals(layout.landingPad())) {
       throw new BusinessException("LANDING_PAD_ABSENT", "Destination locker has no landing pad");
     }
     if (!"OK".equals(layout.landingPadStatus())) {
       throw new BusinessException("LANDING_PAD_UNAVAILABLE", "Landing pad is not ready");
-    }
-  }
-
-  private void validateLockerActive(LockerLayoutDto layout) {
-    if (!"ACTIVE".equals(layout.status())) {
-      throw new BusinessException("LOCKER_INACTIVE", "Destination locker is not active");
-    }
-  }
-
-  private boolean isDemo(LockerOrder order) {
-    return "DEMO".equalsIgnoreCase(order.getFulfillmentMode());
-  }
-
-  private void notifyCustomerQuietly(LockerOrder order, String stage, String message) {
-    try {
-      notificationClient.requestNotification(
-          new NotificationRequest(
-              order.getUserId(),
-              "Cập nhật giao drone",
-              message,
-              "DRONE_DELIVERY_STATUS_CHANGED",
-              order.getId(),
-              "ORDER"));
-    } catch (Exception ignored) {
-      // Notification is best-effort and must not roll back mission acceptance.
     }
   }
 
@@ -236,5 +257,16 @@ public class DroneOrderMaintenanceService {
         mission == null ? requireDestinationLockerId(order) : mission.getDestinationLockerId(),
         order.getReservedBoxId(),
         order.getDescription());
+  }
+
+  private String cancelReasonLabel(Integer reasonCode) {
+    return switch (reasonCode == null ? -1 : reasonCode) {
+      case 1 -> "Weather";
+      case 2 -> "Drone fault";
+      case 3 -> "Landing pad unavailable";
+      case 4 -> "Operational reason";
+      case 5 -> "Other";
+      default -> "Unknown";
+    };
   }
 }
