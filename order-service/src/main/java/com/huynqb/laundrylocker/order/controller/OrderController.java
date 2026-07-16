@@ -3,6 +3,7 @@ package com.huynqb.laundrylocker.order.controller;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.OrderSummary;
 import com.huynqb.laundrylocker.order.dto.AcceptDroneOrderRequest;
+import com.huynqb.laundrylocker.order.dto.CancelDroneOrderRequest;
 import com.huynqb.laundrylocker.order.dto.CreateOrderRequest;
 import com.huynqb.laundrylocker.order.dto.CreateDroneDeliveryOrderRequest;
 import com.huynqb.laundrylocker.order.dto.DelegateOrderRequest;
@@ -21,7 +22,6 @@ import com.huynqb.laundrylocker.order.dto.SendOrderRequest;
 import com.huynqb.laundrylocker.order.dto.UpdateOrderStatusRequest;
 import com.huynqb.laundrylocker.order.model.Promotion;
 import com.huynqb.laundrylocker.order.service.DroneOrderMaintenanceService;
-import com.huynqb.laundrylocker.order.service.DroneDeliveryQueryService;
 import com.huynqb.laundrylocker.order.service.OrderService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -44,7 +44,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
   private final DroneOrderMaintenanceService droneOrderMaintenanceService;
-  private final DroneDeliveryQueryService droneDeliveryQueryService;
   private final OrderService orderService;
 
   @PostMapping("/api/orders")
@@ -166,7 +165,7 @@ public class OrderController {
   @GetMapping("/api/orders/{orderId}/drone-delivery")
   public ApiResponse<DroneDeliveryOrderResponse> getDroneDelivery(
       @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
-    return ApiResponse.ok(droneDeliveryQueryService.get(orderId, userId));
+    return ApiResponse.ok(orderService.getDroneDelivery(orderId, userId));
   }
 
   @GetMapping("/api/maintenance/drone-orders")
@@ -203,14 +202,14 @@ public class OrderController {
   }
 
   @PostMapping("/api/maintenance/drone-orders/{orderId}/cancel")
-  public ResponseEntity<ApiResponse<DroneMissionResponse>> cancelDroneOrder(
-      @PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
-    return ResponseEntity.accepted()
-        .body(
-            ApiResponse.ok(
-                "DRONE_ORDER_CANCELED",
-                "Drone order canceled before launch",
-                droneOrderMaintenanceService.cancel(orderId, userId)));
+  public ApiResponse<DroneMissionResponse> cancelDroneOrder(
+      @PathVariable Long orderId,
+      @Valid @RequestBody CancelDroneOrderRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
+    return ApiResponse.ok(
+        "DRONE_ORDER_CANCELED",
+        "Drone order canceled",
+        droneOrderMaintenanceService.cancel(orderId, userId, request));
   }
 
   @GetMapping("/api/orders/{orderId}/status")

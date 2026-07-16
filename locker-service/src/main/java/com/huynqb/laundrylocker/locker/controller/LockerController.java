@@ -37,7 +37,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -270,7 +269,7 @@ public class LockerController {
   @PostMapping("/internal/drones/{id}/status")
   public ApiResponse<DroneUnitResponse> internalDroneStatus(
       @PathVariable Long id, @Valid @RequestBody DroneStatusRequest request) {
-    return ApiResponse.ok(lockerService.updateDroneStatus(id, request.status(), request.reason(), null));
+    return ApiResponse.ok(lockerService.updateDroneStatusInternal(id, request.status(), request.reason()));
   }
 
   @PostMapping("/api/maintenance/drones/{id}/claim")
@@ -281,7 +280,7 @@ public class LockerController {
 
   @PostMapping("/api/maintenance/drones/{id}/release")
   public ApiResponse<DroneUnitResponse> maintenanceReleaseDrone(
-      @PathVariable Long id, @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+      @PathVariable Long id, @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok("DRONE_RELEASED", "Drone released", lockerService.releaseDrone(id, userId));
   }
 
@@ -289,7 +288,7 @@ public class LockerController {
   public ApiResponse<DroneUnitResponse> maintenanceDroneStatus(
       @PathVariable Long id,
       @Valid @RequestBody DroneStatusRequest request,
-      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+      @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok(
         "DRONE_STATUS_UPDATED", "Drone status updated",
         lockerService.updateDroneStatus(id, request.status(), request.reason(), userId));
@@ -297,10 +296,12 @@ public class LockerController {
 
   @PostMapping("/api/maintenance/drones/{id}/battery")
   public ApiResponse<DroneUnitResponse> maintenanceDroneBattery(
-      @PathVariable Long id, @Valid @RequestBody DroneBatteryRequest request) {
+      @PathVariable Long id,
+      @Valid @RequestBody DroneBatteryRequest request,
+      @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok(
         "DRONE_BATTERY_UPDATED", "Drone battery updated",
-        lockerService.updateDroneBattery(id, request.batteryPercent()));
+        lockerService.updateDroneBattery(id, request.batteryPercent(), userId));
   }
 
   @GetMapping("/api/maintenance/drones/{id}/logs")
@@ -312,7 +313,7 @@ public class LockerController {
   public ApiResponse<DroneMaintenanceLogResponse> maintenanceAddDroneLog(
       @PathVariable Long id,
       @RequestBody Map<String, String> body,
-      @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+      @RequestHeader("X-User-Id") Long userId) {
     return ApiResponse.ok(
         "DRONE_LOG_ADDED", "Drone log added",
         lockerService.addDroneLog(id, body.get("note"), userId));

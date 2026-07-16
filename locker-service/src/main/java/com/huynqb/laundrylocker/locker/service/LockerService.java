@@ -12,9 +12,7 @@ import com.huynqb.laundrylocker.locker.dto.BoxAnomalyResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxHealthResponse;
 import com.huynqb.laundrylocker.locker.dto.BoxRequest;
 import com.huynqb.laundrylocker.locker.dto.CellResponse;
-import com.huynqb.laundrylocker.locker.dto.DroneBatteryRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneMaintenanceLogResponse;
-import com.huynqb.laundrylocker.locker.dto.DroneStatusRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneUnitRequest;
 import com.huynqb.laundrylocker.locker.dto.DroneUnitResponse;
 import com.huynqb.laundrylocker.locker.dto.DroneUpdateRequest;
@@ -684,20 +682,37 @@ public class LockerService {
   @Transactional
   public DroneUnitResponse claimDrone(Long id, Long userId) {
     DroneUnit unit = findDroneUnit(id);
+    if (unit.getAssignedTechnicianId() != null && !unit.getAssignedTechnicianId().equals(userId)) {
+      throw new BusinessException("DRONE_ALREADY_ASSIGNED", "Drone is already assigned to another technician");
+    }
     unit.setAssignedTechnicianId(userId);
     return toDroneUnit(droneUnitRepository.save(unit));
   }
 
   @Transactional
   public DroneUnitResponse updateDroneStatus(Long id, String status, String reason, Long actorUserId) {
+    return updateDroneStatusInternal(id, status, reason, actorUserId, true);
+  }
+
+  @Transactional
+  public DroneUnitResponse updateDroneStatusInternal(Long id, String status, String reason) {
+    return updateDroneStatusInternal(id, status, reason, null, false);
+  }
+
+  private DroneUnitResponse updateDroneStatusInternal(
+      Long id, String status, String reason, Long actorUserId, boolean requireOwnership) {
     if (!DroneStatus.ALL.contains(status)) {
       throw new BusinessException("DRONE_STATUS_INVALID", "Unknown drone status: " + status);
     }
     boolean fault = DroneStatus.FAULT.equals(status);
-    if (fault && !StringUtils.hasText(reason)) {
+    String normalizedReason = normalizeText(reason);
+    if (fault && !StringUtils.hasText(normalizedReason)) {
       throw new BusinessException("DRONE_FAULT_REASON_REQUIRED", "A reason is required to mark a drone as FAULT");
     }
     DroneUnit unit = findDroneUnit(id);
+    if (requireOwnership) {
+      requireDroneOwnership(unit, actorUserId);
+    }
     // #7 An toan: khong cho cat canh khi pin qua thap.
     if (DroneStatus.IN_FLIGHT.equals(status)
         && unit.getBatteryPercent() != null
@@ -708,18 +723,18 @@ public class LockerService {
     }
     String previousStatus = unit.getStatus();
     unit.setStatus(status);
-    unit.setFaultReason(fault ? reason : null);
+    unit.setFaultReason(fault ? normalizedReason : null);
     // #7 Roi trang thai CHARGING => ghi nhan mốc sac xong gan nhat.
     if (DroneStatus.CHARGING.equals(previousStatus) && !DroneStatus.CHARGING.equals(status)) {
       unit.setLastChargedAt(LocalDateTime.now());
     }
     DroneUnit saved = droneUnitRepository.save(unit);
     String note = "Chuyển trạng thái %s → %s%s"
-        .formatted(previousStatus, status, fault && StringUtils.hasText(reason) ? ": " + reason : "");
+        .formatted(previousStatus, status, fault && StringUtils.hasText(normalizedReason) ? ": " + normalizedReason : "");
     appendDroneLog(saved.getId(), note, actorUserId);
     // #2 Dong bo voi hang doi phieu su co: FAULT mo phieu, hoi phuc thi dong phieu.
     if (fault && !DroneStatus.FAULT.equals(previousStatus)) {
-      openDroneFaultReport(saved, reason, actorUserId);
+      openDroneFaultReport(saved, normalizedReason, actorUserId);
     } else if (DroneStatus.FAULT.equals(previousStatus) && !fault) {
       resolveDroneFaultReport(saved.getId(), actorUserId);
     }
@@ -730,6 +745,7 @@ public class LockerService {
   @Transactional
   public DroneUnitResponse releaseDrone(Long id, Long actorUserId) {
     DroneUnit unit = findDroneUnit(id);
+    requireDroneOwnership(unit, actorUserId);
     unit.setAssignedTechnicianId(null);
     DroneUnit saved = droneUnitRepository.save(unit);
     appendDroneLog(saved.getId(), "Nhả quyền phụ trách drone", actorUserId);
@@ -799,13 +815,16 @@ public class LockerService {
   }
 
   @Transactional
-  public DroneUnitResponse updateDroneBattery(Long id, Integer batteryPercent) {
+  public DroneUnitResponse updateDroneBattery(Long id, Integer batteryPercent, Long actorUserId) {
     DroneUnit unit = findDroneUnit(id);
+    requireDroneOwnership(unit, actorUserId);
     unit.setBatteryPercent(batteryPercent);
     if (batteryPercent == 100) {
       unit.setLastChargedAt(LocalDateTime.now());
     }
-    return toDroneUnit(droneUnitRepository.save(unit));
+    DroneUnit saved = droneUnitRepository.save(unit);
+    appendDroneLog(saved.getId(), "Cập nhật pin " + batteryPercent + "%", actorUserId);
+    return toDroneUnit(saved);
   }
 
   @Transactional(readOnly = true)
@@ -817,16 +836,36 @@ public class LockerService {
 
   @Transactional
   public DroneMaintenanceLogResponse addDroneLog(Long droneUnitId, String note, Long actorUserId) {
-    findDroneUnit(droneUnitId);
-    return toDroneLog(appendDroneLog(droneUnitId, note, actorUserId));
+    DroneUnit unit = findDroneUnit(droneUnitId);
+    requireDroneOwnership(unit, actorUserId);
+    String normalized = normalizeText(note);
+    if (!StringUtils.hasText(normalized)) {
+      throw new BusinessException("DRONE_LOG_NOTE_REQUIRED", "Drone maintenance note is required");
+    }
+    return toDroneLog(appendDroneLog(droneUnitId, normalized, actorUserId));
   }
 
   private DroneMaintenanceLog appendDroneLog(Long droneUnitId, String note, Long actorUserId) {
     DroneMaintenanceLog log = new DroneMaintenanceLog();
     log.setDroneUnitId(droneUnitId);
     log.setActorUserId(actorUserId);
-    log.setNote(note);
+    log.setNote(normalizeText(note));
     return droneMaintenanceLogRepository.save(log);
+  }
+
+  private void requireDroneOwnership(DroneUnit unit, Long actorUserId) {
+    if (actorUserId == null
+        || unit.getAssignedTechnicianId() == null
+        || !actorUserId.equals(unit.getAssignedTechnicianId())) {
+      throw new BusinessException("DRONE_OWNERSHIP_REQUIRED", "You must be the assigned technician for this drone");
+    }
+  }
+
+  private String normalizeText(String value) {
+    if (!StringUtils.hasText(value)) {
+      return null;
+    }
+    return value.trim();
   }
 
   private DroneUnit findDroneUnit(Long id) {
