@@ -11,7 +11,7 @@
 
 > - `.com` **không** miễn phí, kể cả Student Pack.
 > - Muốn `.vn` thật free **2 năm** (công dân VN 18–23 tuổi): dùng **`.id.vn`** qua
->   VNNIC (Tenten/VinaHost/BKNS), cần CCCD. Các bước còn lại y hệt.
+    > VNNIC (Tenten/VinaHost/BKNS), cần CCCD. Các bước còn lại y hệt.
 > - ⚠️ `.tech` chỉ free **năm đầu**, năm 2 trả phí → đặt nhắc lịch ~tháng 5/2027.
 
 ## 2. Đưa domain về Cloudflare (quản lý DNS + cấp CDN/SSL)
@@ -26,10 +26,10 @@
 
 Cloudflare → **DNS → Records → Add record**:
 
-| Type | Name | Content | Proxy status | Ghi chú |
-|---|---|---|---|---|
-| `A` | `api` | `146.190.84.136` | **DNS only** (mây xám) | Trỏ tới droplet để Nginx/Certbot xử lý |
-| `CNAME`/auto | `admin` | (Worker tự thêm) | Proxied | Tạo tự động khi gắn custom domain cho Worker — xem [03](03-frontend-web.md) |
+| Type         | Name    | Content          | Proxy status           | Ghi chú                                                                     |
+|--------------|---------|------------------|------------------------|-----------------------------------------------------------------------------|
+| `A`          | `api`   | `146.190.84.136` | **DNS only** (mây xám) | Trỏ tới droplet để Nginx/Certbot xử lý                                      |
+| `CNAME`/auto | `admin` | (Worker tự thêm) | Proxied                | Tạo tự động khi gắn custom domain cho Worker — xem [03](03-frontend-web.md) |
 
 > ⚠️ **Record `api` bắt buộc để DNS only (mây xám) khi cấp SSL.** Let's Encrypt cần
 > nối thẳng tới droplet. Nếu bật Proxied (mây cam) trước khi có cert → Certbot fail

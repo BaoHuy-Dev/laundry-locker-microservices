@@ -1,10 +1,14 @@
 # Smart Locker IoT
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
-Python/uv runtime for the smart locker cabinet side. This project is intended to run on a Raspberry Pi and talk to cabinet hardware through serial/RS485 while using MQTT for backend/device messages.
+Python/uv runtime for the smart locker cabinet side. This project is intended to run on a Raspberry Pi and talk to
+cabinet hardware through serial/RS485 while using MQTT for backend/device messages.
 
 ## Current Role In The System
 
@@ -38,7 +42,8 @@ uv sync
 uv run python main.py
 ```
 
-On a normal PC without the Arduino/serial hardware attached, serial initialization may fail. Use simulation settings for software-only checks.
+On a normal PC without the Arduino/serial hardware attached, serial initialization may fail. Use simulation settings for
+software-only checks.
 
 ## Backend Dependency
 
@@ -64,7 +69,8 @@ http://localhost:8088
 
 ## MQTT Notes
 
-Backend `iot-service` currently defaults to a public broker unless overridden by environment/config. For real integration, make sure both sides point to the same broker.
+Backend `iot-service` currently defaults to a public broker unless overridden by environment/config. For real
+integration, make sure both sides point to the same broker.
 
 Typical concepts used by the cabinet runtime:
 

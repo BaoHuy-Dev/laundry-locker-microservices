@@ -1,12 +1,16 @@
 # Landing Page - Auto-Play Frame Animation Guide
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## 🎬 Tổng quan
 
-Landing page sử dụng 241 frame images với hiệu ứng **auto-play video-like** - mỗi section tự động phát như một video ngắn khi vào viewport, sau đó người dùng có thể scroll để kiểm soát.
+Landing page sử dụng 241 frame images với hiệu ứng **auto-play video-like** - mỗi section tự động phát như một video
+ngắn khi vào viewport, sau đó người dùng có thể scroll để kiểm soát.
 
 ## 📦 Phân chia Frames theo Loại Locker
 
@@ -307,13 +311,13 @@ Track để optimize:
 ## 🌐 Browser Support
 
 | Browser | Auto-play | Canvas | Performance |
-| ------- | --------- | ------ | ----------- |
-| Chrome  | ✅        | ✅     | Excellent   |
-| Firefox | ✅        | ✅     | Excellent   |
-| Safari  | ✅        | ✅     | Good        |
-| Edge    | ✅        | ✅     | Excellent   |
-| Mobile  | ✅        | ✅     | Good        |
-| IE11    | ❌        | ⚠️     | Not tested  |
+|---------|-----------|--------|-------------|
+| Chrome  | ✅         | ✅      | Excellent   |
+| Firefox | ✅         | ✅      | Excellent   |
+| Safari  | ✅         | ✅      | Good        |
+| Edge    | ✅         | ✅      | Excellent   |
+| Mobile  | ✅         | ✅      | Good        |
+| IE11    | ❌         | ⚠️     | Not tested  |
 
 ---
 

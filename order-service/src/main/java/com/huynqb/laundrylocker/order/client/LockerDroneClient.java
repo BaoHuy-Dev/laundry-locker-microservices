@@ -13,13 +13,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 @FeignClient(name = "locker-service", contextId = "lockerDroneClient")
 public interface LockerDroneClient {
 
-  @GetMapping("/internal/drones/{id}")
-  ApiResponse<DroneUnitDto> getDroneUnit(@PathVariable Long id);
+    @GetMapping("/internal/drones/{id}")
+    ApiResponse<DroneUnitDto> getDroneUnit(@PathVariable Long id);
 
-  @GetMapping("/internal/lockers/{id}/layout")
-  ApiResponse<LockerLayoutDto> getLockerLayout(@PathVariable Long id);
+    @GetMapping("/internal/lockers/{id}/layout")
+    ApiResponse<LockerLayoutDto> getLockerLayout(@PathVariable Long id);
 
-  @PostMapping("/internal/drones/{id}/status")
-  ApiResponse<DroneUnitDto> updateDroneStatus(
-      @PathVariable Long id, @RequestBody DroneStatusUpdateRequest request);
+    @PostMapping("/internal/drones/{id}/status")
+    ApiResponse<DroneUnitDto> updateDroneStatus(
+            @PathVariable Long id, @RequestBody DroneStatusUpdateRequest request);
 }

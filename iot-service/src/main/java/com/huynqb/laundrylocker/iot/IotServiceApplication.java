@@ -8,7 +8,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication(scanBasePackages = {"com.huynqb.laundrylocker.iot", "com.huynqb.laundrylocker.common"})
 public class IotServiceApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(IotServiceApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(IotServiceApplication.class, args);
+    }
 }

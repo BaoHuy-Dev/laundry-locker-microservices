@@ -1,12 +1,16 @@
 # Scroll-Synchronized Frame Animation
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## 🎯 Concept
 
-Tất cả 241 frames hoạt động như **một vật thể 3D duy nhất** di chuyển liên tục theo scroll position. Không có auto-play, không có delay - frames phản ứng trực tiếp và tức thì với mọi chuyển động scroll của user.
+Tất cả 241 frames hoạt động như **một vật thể 3D duy nhất** di chuyển liên tục theo scroll position. Không có auto-play,
+không có delay - frames phản ứng trực tiếp và tức thì với mọi chuyển động scroll của user.
 
 ## 🔄 Cơ chế hoạt động
 
@@ -200,20 +204,20 @@ useEffect(() => {
 ### Story Flow
 
 1. **Hero**: Giới thiệu tổng quan hệ thống locker (70 frames)
-   - User scroll qua toàn bộ giới thiệu
-   - Mỗi pixel scroll = progress trong introduction
+    - User scroll qua toàn bộ giới thiệu
+    - Mỗi pixel scroll = progress trong introduction
 
 2. **Section 1**: Chi tiết locker nhỏ (20 frames)
-   - Nhanh, súc tích
-   - 3-4 lần scroll wheel để hoàn thành
+    - Nhanh, súc tích
+    - 3-4 lần scroll wheel để hoàn thành
 
 3. **Section 2**: Chi tiết locker lớn (75 frames)
-   - Nhiều detail hơn
-   - 8-10 lần scroll wheel
+    - Nhiều detail hơn
+    - 8-10 lần scroll wheel
 
 4. **Section 3**: Chi tiết locker premium (76 frames)
-   - Full feature showcase
-   - 8-10 lần scroll wheel
+    - Full feature showcase
+    - 8-10 lần scroll wheel
 
 ## 🛠️ Customization
 
@@ -320,7 +324,7 @@ scrollProgress = scrollYProgress * multiplier;
 ## 📈 Comparison: Auto-play vs Scroll-Sync
 
 | Feature        | Auto-play | Scroll-Sync    |
-| -------------- | --------- | -------------- |
+|----------------|-----------|----------------|
 | Control        | Limited   | Full           |
 | Speed          | Fixed     | Variable       |
 | Repeat         | Manual    | Automatic      |

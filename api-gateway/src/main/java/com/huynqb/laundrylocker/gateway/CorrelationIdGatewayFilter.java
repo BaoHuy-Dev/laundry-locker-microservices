@@ -12,19 +12,19 @@ import reactor.core.publisher.Mono;
 @Component
 public class CorrelationIdGatewayFilter implements GlobalFilter, Ordered {
 
-  @Override
-  public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-    String correlationId =
-        CorrelationIds.resolve(exchange.getRequest().getHeaders().getFirst(CorrelationIds.HEADER_NAME));
-    ServerHttpRequest request =
-        exchange.getRequest().mutate().header(CorrelationIds.HEADER_NAME, correlationId).build();
-    ServerWebExchange mutatedExchange = exchange.mutate().request(request).build();
-    mutatedExchange.getResponse().getHeaders().set(CorrelationIds.HEADER_NAME, correlationId);
-    return chain.filter(mutatedExchange);
-  }
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String correlationId =
+                CorrelationIds.resolve(exchange.getRequest().getHeaders().getFirst(CorrelationIds.HEADER_NAME));
+        ServerHttpRequest request =
+                exchange.getRequest().mutate().header(CorrelationIds.HEADER_NAME, correlationId).build();
+        ServerWebExchange mutatedExchange = exchange.mutate().request(request).build();
+        mutatedExchange.getResponse().getHeaders().set(CorrelationIds.HEADER_NAME, correlationId);
+        return chain.filter(mutatedExchange);
+    }
 
-  @Override
-  public int getOrder() {
-    return Ordered.HIGHEST_PRECEDENCE;
-  }
+    @Override
+    public int getOrder() {
+        return Ordered.HIGHEST_PRECEDENCE;
+    }
 }

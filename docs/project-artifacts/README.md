@@ -1,9 +1,12 @@
 # Project Artifacts
 
-Thu muc nay gom cac tai lieu, ket qua chay, anh smoke-test va script tien ich duoc copy tu root workspace `G:\BigProject` vao backend.
+Thu muc nay gom cac tai lieu, ket qua chay, anh smoke-test va script tien ich duoc copy tu root workspace
+`G:\BigProject` vao backend.
 
-> Luu y: cac file goc o root workspace chua bi xoa hoac di chuyen. Thu muc nay la ban gom lai de backend co du bo tai lieu ban giao va artifact kiem thu.
-> Cac file moi truong/secret/local note nhu `env.txt`, `pro.txt`, `Application.txt` va file host rieng khong duoc copy vao day.
+> Luu y: cac file goc o root workspace chua bi xoa hoac di chuyen. Thu muc nay la ban gom lai de backend co du bo tai
+> lieu ban giao va artifact kiem thu.
+> Cac file moi truong/secret/local note nhu `env.txt`, `pro.txt`, `Application.txt` va file host rieng khong duoc copy
+> vao day.
 
 ## Cau truc
 
@@ -29,4 +32,5 @@ Thu muc nay gom cac tai lieu, ket qua chay, anh smoke-test va script tien ich du
 
 ## Cap nhat
 
-Khi tai root workspace co them tai lieu hoac anh moi, copy vao dung thu muc con tuong ung trong `docs/project-artifacts/`. Khong copy file chua secret/local environment.
+Khi tai root workspace co them tai lieu hoac anh moi, copy vao dung thu muc con tuong ung trong
+`docs/project-artifacts/`. Khong copy file chua secret/local environment.

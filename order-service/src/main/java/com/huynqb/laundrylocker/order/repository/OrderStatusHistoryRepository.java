@@ -1,10 +1,11 @@
 package com.huynqb.laundrylocker.order.repository;
 
 import com.huynqb.laundrylocker.order.model.OrderStatusHistory;
-import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
 
 public interface OrderStatusHistoryRepository extends JpaRepository<OrderStatusHistory, Long> {
 
-  List<OrderStatusHistory> findByOrderIdOrderByCreatedAtAsc(Long orderId);
+    List<OrderStatusHistory> findByOrderIdOrderByCreatedAtAsc(Long orderId);
 }

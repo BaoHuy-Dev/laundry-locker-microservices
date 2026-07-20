@@ -13,31 +13,31 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-  private final JwtStompPrincipalChannelInterceptor jwtStompPrincipalChannelInterceptor;
-  private final JwtHandshakePrincipalHandler jwtHandshakePrincipalHandler;
+    private final JwtStompPrincipalChannelInterceptor jwtStompPrincipalChannelInterceptor;
+    private final JwtHandshakePrincipalHandler jwtHandshakePrincipalHandler;
 
-  @Override
-  public void configureMessageBroker(MessageBrokerRegistry config) {
-    config.enableSimpleBroker("/topic", "/queue");
-    config.setApplicationDestinationPrefixes("/app");
-    config.setUserDestinationPrefix("/user");
-  }
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry config) {
+        config.enableSimpleBroker("/topic", "/queue");
+        config.setApplicationDestinationPrefixes("/app");
+        config.setUserDestinationPrefix("/user");
+    }
 
-  @Override
-  public void configureClientInboundChannel(ChannelRegistration registration) {
-    registration.interceptors(jwtStompPrincipalChannelInterceptor);
-  }
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(jwtStompPrincipalChannelInterceptor);
+    }
 
-  @Override
-  public void registerStompEndpoints(StompEndpointRegistry registry) {
-    registry
-        .addEndpoint("/ws")
-        .setHandshakeHandler(jwtHandshakePrincipalHandler)
-        .setAllowedOriginPatterns("*")
-        .withSockJS();
-    registry
-        .addEndpoint("/ws")
-        .setHandshakeHandler(jwtHandshakePrincipalHandler)
-        .setAllowedOriginPatterns("*");
-  }
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry
+                .addEndpoint("/ws")
+                .setHandshakeHandler(jwtHandshakePrincipalHandler)
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+        registry
+                .addEndpoint("/ws")
+                .setHandshakeHandler(jwtHandshakePrincipalHandler)
+                .setAllowedOriginPatterns("*");
+    }
 }

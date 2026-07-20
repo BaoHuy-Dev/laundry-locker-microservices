@@ -1,6 +1,7 @@
 # Drone Delivery Demo Workflow
 
-Tài liệu này là contract review chung cho backend và mobile của luồng giao hàng bằng drone. Luồng demo dùng cùng `orderId`, order, mission và API với hướng production; phần phần cứng được thay bằng scheduler mô phỏng stage.
+Tài liệu này là contract review chung cho backend và mobile của luồng giao hàng bằng drone. Luồng demo dùng cùng
+`orderId`, order, mission và API với hướng production; phần phần cứng được thay bằng scheduler mô phỏng stage.
 
 ## 1. Phạm Vi Hiện Tại
 
@@ -25,38 +26,39 @@ Chưa có:
 
 Toàn bộ flow dùng một public identifier là `orderId`.
 
-| Dữ liệu | Chủ sở hữu | Ý nghĩa |
-|---|---|---|
-| `LockerOrder` | `order-service` | Nghiệp vụ customer, payment, locker/box, PIN, pickup, completion |
-| `DroneMission` | `order-service` trong slice hiện tại | Drone được gán, source/destination, mission status |
-| Drone fleet | `locker-service` | Drone IDLE/IN_FLIGHT, pin, active status |
-| Notification | `notification-service` | Lưu notification và gửi FCM |
-| Timeline mobile | Mobile `features/drone_delivery` | Read-only; không tự tạo stage hay ID local |
+| Dữ liệu         | Chủ sở hữu                           | Ý nghĩa                                                          |
+|-----------------|--------------------------------------|------------------------------------------------------------------|
+| `LockerOrder`   | `order-service`                      | Nghiệp vụ customer, payment, locker/box, PIN, pickup, completion |
+| `DroneMission`  | `order-service` trong slice hiện tại | Drone được gán, source/destination, mission status               |
+| Drone fleet     | `locker-service`                     | Drone IDLE/IN_FLIGHT, pin, active status                         |
+| Notification    | `notification-service`               | Lưu notification và gửi FCM                                      |
+| Timeline mobile | Mobile `features/drone_delivery`     | Read-only; không tự tạo stage hay ID local                       |
 
 Ba loại trạng thái không được dùng thay thế lẫn nhau:
 
-| Trường | Ví dụ | Mục đích |
-|---|---|---|
-| `order.status` | `AWAITING_DISPATCH`, `STORING`, `COMPLETED` | Vòng đời nghiệp vụ order/pickup |
-| `order.deliveryStage` | `ACCEPTED`, `EN_ROUTE`, `READY_FOR_PICKUP` | Mốc hiển thị cho customer và maintenance |
-| `mission.status` | `READY_TO_LAUNCH`, `LAUNCHING`, `DEPOSITED` | Trạng thái kỹ thuật của mission |
+| Trường                | Ví dụ                                       | Mục đích                                 |
+|-----------------------|---------------------------------------------|------------------------------------------|
+| `order.status`        | `AWAITING_DISPATCH`, `STORING`, `COMPLETED` | Vòng đời nghiệp vụ order/pickup          |
+| `order.deliveryStage` | `ACCEPTED`, `EN_ROUTE`, `READY_FOR_PICKUP`  | Mốc hiển thị cho customer và maintenance |
+| `mission.status`      | `READY_TO_LAUNCH`, `LAUNCHING`, `DEPOSITED` | Trạng thái kỹ thuật của mission          |
 
 ## 3. DEMO Và STANDARD
 
 `fulfillmentMode` được lưu trên từng order:
 
 - `DEMO`: dùng source locker cấu hình; destination chỉ cần `ACTIVE`; scheduler mô phỏng chuyến bay.
-- `STANDARD`: source lấy từ drone được gán; destination phải `ACTIVE`, có landing pad và `landingPadStatus=OK`; không được simulator tự tiến stage.
+- `STANDARD`: source lấy từ drone được gán; destination phải `ACTIVE`, có landing pad và `landingPadStatus=OK`; không
+  được simulator tự tiến stage.
 
 Quyền tạo DEMO do backend quyết định trước khi reserve ô:
 
-| Biến môi trường | Mặc định | Ý nghĩa |
-|---|---:|---|
-| `APP_DRONE_DEMO_ENABLED` | `true` | Bật/tắt khả năng tạo order DEMO |
-| `APP_DRONE_DEMO_ALLOWED_USER_IDS` | rỗng | Danh sách user ID cách nhau bằng dấu phẩy; rỗng nghĩa là cho mọi authenticated user khi DEMO đang bật |
-| `APP_DRONE_DEMO_SOURCE_LOCKER_ID` | `1` | Locker/trạm nguồn cố định của demo |
-| `APP_DRONE_DEMO_STAGE_DELAY_MS` | `7000` | Thời gian tối thiểu giữa hai stage demo |
-| `APP_DRONE_DEMO_SCHEDULER_DELAY_MS` | `1000` | Chu kỳ scheduler kiểm tra mission |
+| Biến môi trường                     | Mặc định | Ý nghĩa                                                                                               |
+|-------------------------------------|---------:|-------------------------------------------------------------------------------------------------------|
+| `APP_DRONE_DEMO_ENABLED`            |   `true` | Bật/tắt khả năng tạo order DEMO                                                                       |
+| `APP_DRONE_DEMO_ALLOWED_USER_IDS`   |     rỗng | Danh sách user ID cách nhau bằng dấu phẩy; rỗng nghĩa là cho mọi authenticated user khi DEMO đang bật |
+| `APP_DRONE_DEMO_SOURCE_LOCKER_ID`   |      `1` | Locker/trạm nguồn cố định của demo                                                                    |
+| `APP_DRONE_DEMO_STAGE_DELAY_MS`     |   `7000` | Thời gian tối thiểu giữa hai stage demo                                                               |
+| `APP_DRONE_DEMO_SCHEDULER_DELAY_MS` |   `1000` | Chu kỳ scheduler kiểm tra mission                                                                     |
 
 Quy tắc resolve mode:
 
@@ -66,7 +68,8 @@ Quy tắc resolve mode:
 4. Mode không hợp lệ trả `DRONE_FULFILLMENT_MODE_INVALID`.
 5. Yêu cầu DEMO trái quyền trả `DRONE_DEMO_NOT_ALLOWED` trước khi reserve box.
 
-Khuyến nghị VPS/production: đặt allowlist rõ ràng hoặc `APP_DRONE_DEMO_ENABLED=false`; không để allowlist rỗng nếu không muốn mọi customer dùng demo.
+Khuyến nghị VPS/production: đặt allowlist rõ ràng hoặc `APP_DRONE_DEMO_ENABLED=false`; không để allowlist rỗng nếu không
+muốn mọi customer dùng demo.
 
 ## 4. State Machine
 
@@ -265,7 +268,8 @@ Authorization: Bearer <MAINTENANCE-or-ADMIN-token>
 Idempotency-Key: launch-<unique-key>
 ```
 
-Điều kiện mission phải là `READY_TO_LAUNCH`. Thành công trả HTTP `202`, mission/order chuyển `LAUNCHING`, drone chuyển `IN_FLIGHT`.
+Điều kiện mission phải là `READY_TO_LAUNCH`. Thành công trả HTTP `202`, mission/order chuyển `LAUNCHING`, drone chuyển
+`IN_FLIGHT`.
 
 ### 6.5b Maintenance hủy trước launch
 
@@ -305,14 +309,15 @@ Order chưa thanh toán trả:
 DRONE_PAYMENT_REQUIRED_BEFORE_PICKUP
 ```
 
-Mobile phải giữ nút `Thanh toán` và ẩn/chặn `Mở tủ`, `Tôi đã lấy đồ - hoàn tất`, `Ủy quyền người khác lấy hộ` cho đến khi `paymentStatus=PAID`.
+Mobile phải giữ nút `Thanh toán` và ẩn/chặn `Mở tủ`, `Tôi đã lấy đồ - hoàn tất`, `Ủy quyền người khác lấy hộ` cho đến
+khi `paymentStatus=PAID`.
 
 ## 8. Notification Contract
 
-| Type | Người nhận | Khi nào | Deep link mobile |
-|---|---|---|---|
-| `DRONE_ORDER_CREATED` | Tất cả user ACTIVE có role MAINTENANCE | Order mới tạo thành công | `AppRouter.maintenanceHome` |
-| `DRONE_DELIVERY_STATUS_CHANGED` | Owner của order | `ACCEPTED`, `DEPARTED`, `APPROACHING`, `ARRIVED`, `READY_FOR_PICKUP` | `AppRouter.droneDeliveryTracking` với `orderId` |
+| Type                            | Người nhận                             | Khi nào                                                              | Deep link mobile                                |
+|---------------------------------|----------------------------------------|----------------------------------------------------------------------|-------------------------------------------------|
+| `DRONE_ORDER_CREATED`           | Tất cả user ACTIVE có role MAINTENANCE | Order mới tạo thành công                                             | `AppRouter.maintenanceHome`                     |
+| `DRONE_DELIVERY_STATUS_CHANGED` | Owner của order                        | `ACCEPTED`, `DEPARTED`, `APPROACHING`, `ARRIVED`, `READY_FOR_PICKUP` | `AppRouter.droneDeliveryTracking` với `orderId` |
 
 Nguyên tắc:
 
@@ -359,28 +364,28 @@ Sẵn sàng nhận hàng
 
 ### Backend
 
-| Khu vực | File |
-|---|---|
-| Create order, mode permission, MAINTENANCE notification | `order-service/.../service/OrderService.java` |
-| Accept/launch/preflight | `order-service/.../service/DroneOrderMaintenanceService.java` |
-| Scheduler demo | `order-service/.../service/DroneDeliverySimulator.java` |
-| Customer read model | `order-service/.../service/DroneDeliveryQueryService.java` |
-| API | `order-service/.../controller/OrderController.java` |
-| Order/mission schema | `LockerOrder.java`, `DroneMission.java`, `V9__drone_demo_tracking.sql` |
-| Role fan-out | `order-service/.../client/UserClient.java`, `user-service/.../UserController.java`, `UserProfileService.java` |
-| Config | `order-service/src/main/resources/application.yml` |
+| Khu vực                                                 | File                                                                                                          |
+|---------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| Create order, mode permission, MAINTENANCE notification | `order-service/.../service/OrderService.java`                                                                 |
+| Accept/launch/preflight                                 | `order-service/.../service/DroneOrderMaintenanceService.java`                                                 |
+| Scheduler demo                                          | `order-service/.../service/DroneDeliverySimulator.java`                                                       |
+| Customer read model                                     | `order-service/.../service/DroneDeliveryQueryService.java`                                                    |
+| API                                                     | `order-service/.../controller/OrderController.java`                                                           |
+| Order/mission schema                                    | `LockerOrder.java`, `DroneMission.java`, `V9__drone_demo_tracking.sql`                                        |
+| Role fan-out                                            | `order-service/.../client/UserClient.java`, `user-service/.../UserController.java`, `UserProfileService.java` |
+| Config                                                  | `order-service/src/main/resources/application.yml`                                                            |
 
 ### Mobile
 
-| Khu vực | File |
-|---|---|
-| Stage model | `lib/features/drone_delivery/domain/entities/drone_delivery_stage.dart` |
-| Backend response parser | `lib/features/drone_delivery/infrastructure/models/drone_delivery_response.dart` |
-| Polling | `lib/features/drone_delivery/presentation/providers/drone_delivery_providers.dart` |
-| Timeline UI | `lib/features/drone_delivery/presentation/widgets/drone_delivery_timeline.dart` |
-| Tracking page | `lib/features/drone_delivery/presentation/pages/drone_delivery_tracking_page.dart` |
-| Entry từ order detail | `lib/features/locker_ops/presentation/pages/my_locker_orders_page.dart` |
-| FCM routing | `lib/core/services/firebase_messaging_service.dart` |
+| Khu vực                 | File                                                                               |
+|-------------------------|------------------------------------------------------------------------------------|
+| Stage model             | `lib/features/drone_delivery/domain/entities/drone_delivery_stage.dart`            |
+| Backend response parser | `lib/features/drone_delivery/infrastructure/models/drone_delivery_response.dart`   |
+| Polling                 | `lib/features/drone_delivery/presentation/providers/drone_delivery_providers.dart` |
+| Timeline UI             | `lib/features/drone_delivery/presentation/widgets/drone_delivery_timeline.dart`    |
+| Tracking page           | `lib/features/drone_delivery/presentation/pages/drone_delivery_tracking_page.dart` |
+| Entry từ order detail   | `lib/features/locker_ops/presentation/pages/my_locker_orders_page.dart`            |
+| FCM routing             | `lib/core/services/firebase_messaging_service.dart`                                |
 
 ## 11. Checklist Review
 
@@ -479,7 +484,8 @@ Smoke test đề xuất:
 ## 14. Legacy Và Rủi Ro Còn Lại
 
 - Legacy `/api/drone-deliveries*` vẫn tồn tại nhưng không phải flow chính của mobile mới.
-- Simulator chưa có distributed lock; nếu chạy nhiều replica order-service, cần bổ sung locking/leader election trước khi xem đây là production scheduler.
+- Simulator chưa có distributed lock; nếu chạy nhiều replica order-service, cần bổ sung locking/leader election trước
+  khi xem đây là production scheduler.
 - Notification fan-out hiện query toàn bộ user rồi filter role trong user-service; cần pagination/index nếu số user lớn.
 - Đồng bộ drone về `IDLE` là best-effort; khi locker-service lỗi có thể cần reconciliation job.
 - Stage demo không chứng minh drone/parcel/locker đã thay đổi vật lý.

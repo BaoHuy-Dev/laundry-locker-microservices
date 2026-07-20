@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(scanBasePackages = {"com.huynqb.laundrylocker.locker", "com.huynqb.laundrylocker.common"})
 public class LockerServiceApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(LockerServiceApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(LockerServiceApplication.class, args);
+    }
 }

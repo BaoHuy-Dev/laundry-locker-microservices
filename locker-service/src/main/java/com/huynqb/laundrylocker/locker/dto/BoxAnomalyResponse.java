@@ -8,15 +8,16 @@ import java.time.LocalDateTime;
 /// locker location so the technician can navigate there (same metadata shape as
 /// FaultCellResponse).
 public record BoxAnomalyResponse(
-    Long lockerId,
-    String lockerCode,
-    String lockerName,
-    String lockerAddress,
-    Double lockerLatitude,
-    Double lockerLongitude,
-    Long boxId,
-    Integer boxNumber,
-    String cellType,
-    String logicalStatus,
-    String hwState,
-    LocalDateTime lastReportedAt) {}
+        Long lockerId,
+        String lockerCode,
+        String lockerName,
+        String lockerAddress,
+        Double lockerLatitude,
+        Double lockerLongitude,
+        Long boxId,
+        Integer boxNumber,
+        String cellType,
+        String logicalStatus,
+        String hwState,
+        LocalDateTime lastReportedAt) {
+}

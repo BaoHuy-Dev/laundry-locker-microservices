@@ -12,6 +12,7 @@ Trước khi phân tích hoặc sửa bất kỳ thứ gì, bắt buộc đọc 
 2. `docs/BUSINESS_FLOWS_CURRENT.md` — roles, endpoints, flows nghiệp vụ (nguồn sự thật)
 
 Nếu cần thêm context, đọc tiếp:
+
 3. `docs/CURRENT_PROJECT_STATUS.md`
 4. `docs/project-artifacts/guides/HANDOFF_CODEX.md`
 
@@ -24,6 +25,7 @@ Nếu cần thêm context, đọc tiếp:
 ### Trước khi code
 
 Xác định rõ:
+
 - Task đang làm là gì
 - Khu vực/file dự kiến sẽ sửa
 - Khu vực/file không được sửa
@@ -79,6 +81,7 @@ docker compose up -d <service>
 ### 1. `docs/PROJECT_PROGRESS_TRACKER.md`
 
 Ghi:
+
 - Đã làm gì
 - File/khu vực đã thay đổi
 - Trạng thái component/flow
@@ -89,6 +92,7 @@ Ghi:
 ### 2. `docs/BUSINESS_FLOWS_CURRENT.md`
 
 Cập nhật nếu thay đổi ảnh hưởng tới:
+
 - Luồng nghiệp vụ, roles, quyền
 - Endpoint/API contract
 - Database/migration/seed
@@ -112,6 +116,7 @@ mvn clean package -DskipTests       # hoặc test phù hợp nếu sửa code
 ```
 
 Commit message:
+
 ```
 feat(<scope>): mô tả ngắn
 fix(<scope>): mô tả ngắn
@@ -136,16 +141,17 @@ chore: mô tả ngắn
 
 ## THÔNG TIN NHANH
 
-| Thứ | Giá trị |
-|---|---|
-| Gateway local | `http://localhost:18080` |
-| Eureka | `http://localhost:8761` |
-| RabbitMQ UI | `http://localhost:15672` (guest/guest) |
-| PostgreSQL | `localhost:15432` (postgres/postgres) |
-| Backend deployed | `http://146.190.84.136:8080` |
-| Auto-deploy | merge → `develop` → GitHub Actions → deploy |
+| Thứ              | Giá trị                                     |
+|------------------|---------------------------------------------|
+| Gateway local    | `http://localhost:18080`                    |
+| Eureka           | `http://localhost:8761`                     |
+| RabbitMQ UI      | `http://localhost:15672` (guest/guest)      |
+| PostgreSQL       | `localhost:15432` (postgres/postgres)       |
+| Backend deployed | `http://146.190.84.136:8080`                |
+| Auto-deploy      | merge → `develop` → GitHub Actions → deploy |
 
 Login body dùng `identifier`, không phải `email`:
+
 ```json
 { "identifier": "email@example.com", "password": "12345678" }
 ```

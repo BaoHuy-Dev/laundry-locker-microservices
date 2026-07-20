@@ -13,8 +13,8 @@ ALTER TABLE locker_schema.locker_reports
     ADD COLUMN drone_unit_id BIGINT;
 ALTER TABLE locker_schema.locker_reports
     ADD CONSTRAINT fk_locker_reports_drone
-    FOREIGN KEY (drone_unit_id) REFERENCES locker_schema.drone_units(id);
-CREATE INDEX idx_locker_reports_drone ON locker_schema.locker_reports(drone_unit_id);
+        FOREIGN KEY (drone_unit_id) REFERENCES locker_schema.drone_units (id);
+CREATE INDEX idx_locker_reports_drone ON locker_schema.locker_reports (drone_unit_id);
 
 -- #3 lich dinh ky co the nham vao 1 drone thay vi 1 tu -> locker_id cho phep NULL
 ALTER TABLE locker_schema.maintenance_schedules
@@ -23,8 +23,8 @@ ALTER TABLE locker_schema.maintenance_schedules
     ADD COLUMN drone_unit_id BIGINT;
 ALTER TABLE locker_schema.maintenance_schedules
     ADD CONSTRAINT fk_maintenance_schedules_drone
-    FOREIGN KEY (drone_unit_id) REFERENCES locker_schema.drone_units(id);
-CREATE INDEX idx_maintenance_schedules_drone ON locker_schema.maintenance_schedules(drone_unit_id);
+        FOREIGN KEY (drone_unit_id) REFERENCES locker_schema.drone_units (id);
+CREATE INDEX idx_maintenance_schedules_drone ON locker_schema.maintenance_schedules (drone_unit_id);
 
 -- #6 trang thai bai dap drone tren noc tu: OK / FAULT / MAINTENANCE
 ALTER TABLE locker_schema.lockers

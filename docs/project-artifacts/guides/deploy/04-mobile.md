@@ -7,6 +7,7 @@ Repo: `smart-laundry-locker-mobile` (Flutter).
 ## A. Đổi `.env`
 
 File `smart-laundry-locker-mobile/.env` (gitignored):
+
 ```env
 API_URL=https://api.locker-drone.tech/api
 API_BASE_URL=https://api.locker-drone.tech
@@ -33,6 +34,7 @@ flutter run                      # hoặc: flutter build apk --release
 > Cứ chạy build_runner đầy đủ.
 
 ## C. Kiểm tra
+
 - Mở app → đăng nhập / gọi API thành công qua `https://api.locker-drone.tech`.
 - Không còn lỗi cleartext / network trên máy thật.
 

@@ -1,25 +1,29 @@
 # Flutter current role flow
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## Scope
 
 Project: `D:\BigProject\smart-laundry-locker-flutter`
 
-This document records the current Flutter role/navigation shape before and during the USER-only merge. The merge keeps non-USER role flows unchanged.
+This document records the current Flutter role/navigation shape before and during the USER-only merge. The merge keeps
+non-USER role flows unchanged.
 
 ## Roles found
 
-| Role name in code/token | Current Flutter usage | Notes |
-| --- | --- | --- |
-| `CUSTOMER` / USER | Main app shell: Home, Lockers, QR, Orders, Profile. | This is the default customer/user experience. The new laundry order flow was added here only. |
-| `COURIER` | Courier mode toggle, courier dashboard widgets, courier order screens, active delivery, courier map. | This is the app's SHIPPER-equivalent role. No direct `SHIPPER` string was found. |
-| `TECHNICIAN` | Can see courier-mode entry points in profile and is treated as staff/ops in some checks. | Kept unchanged. |
-| `STAFF` | Profile detail checks and staff application related UI. | Kept unchanged. |
-| `ADMIN` | No full admin UI flow found in Flutter. Role is used in repository/API routing checks and backend has admin endpoints. | Kept unchanged. |
-| `MODERATOR` | Not found in Flutter code. | No current Flutter flow. |
+| Role name in code/token | Current Flutter usage                                                                                                  | Notes                                                                                         |
+|-------------------------|------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `CUSTOMER` / USER       | Main app shell: Home, Lockers, QR, Orders, Profile.                                                                    | This is the default customer/user experience. The new laundry order flow was added here only. |
+| `COURIER`               | Courier mode toggle, courier dashboard widgets, courier order screens, active delivery, courier map.                   | This is the app's SHIPPER-equivalent role. No direct `SHIPPER` string was found.              |
+| `TECHNICIAN`            | Can see courier-mode entry points in profile and is treated as staff/ops in some checks.                               | Kept unchanged.                                                                               |
+| `STAFF`                 | Profile detail checks and staff application related UI.                                                                | Kept unchanged.                                                                               |
+| `ADMIN`                 | No full admin UI flow found in Flutter. Role is used in repository/API routing checks and backend has admin endpoints. | Kept unchanged.                                                                               |
+| `MODERATOR`             | Not found in Flutter code.                                                                                             | No current Flutter flow.                                                                      |
 
 ## Navigation/router
 
@@ -32,7 +36,8 @@ Main pieces:
 - OTP route: `/otp`.
 - USER shell route: `ShellRoute` with `MainNavigationWrapper`.
 - USER shell tabs: `/home`, `/lockers`, `/orders`, `/profile`; QR scan is launched from bottom navigation.
-- Courier routes are outside the USER shell, e.g. `/courier-dashboard`, `/active-delivery`, `/courier-map`, `/active-order-details`.
+- Courier routes are outside the USER shell, e.g. `/courier-dashboard`, `/active-delivery`, `/courier-map`,
+  `/active-order-details`.
 - Profile/security/subscription/transaction/maintenance/delegation routes are standalone routes.
 
 New USER-only route added:

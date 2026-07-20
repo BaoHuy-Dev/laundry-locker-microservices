@@ -1,7 +1,10 @@
 # Hướng dẫn Deploy Code lên Raspberry Pi 5
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 > Công cụ: **WinSCP** (upload file) + **PuTTY** (chạy lệnh SSH)
@@ -33,7 +36,7 @@ tìm thiết bị tên `raspberrypi` hoặc `binh`.
 2. Hộp thoại **Login** hiện ra → điền:
 
    | Trường        | Giá trị                         |
-   | ------------- | ------------------------------- |
+      | ------------- | ------------------------------- |
    | File protocol | **SFTP**                        |
    | Host name     | IP của Pi (VD: `192.168.1.105`) |
    | Port number   | `22`                            |
@@ -200,7 +203,7 @@ Mỗi lần sửa code:
 ## Các lỗi thường gặp
 
 | Lỗi                         | Nguyên nhân             | Cách sửa                                          |
-| --------------------------- | ----------------------- | ------------------------------------------------- |
+|-----------------------------|-------------------------|---------------------------------------------------|
 | `Connection refused`        | Pi chưa bật hoặc sai IP | Kiểm tra lại IP bằng `hostname -I` trên Pi        |
 | `Authentication failed`     | Sai username/password   | Kiểm tra lại `binh` / `binh123`                   |
 | `ModuleNotFoundError: cv2`  | Chưa cài opencv         | `pip install opencv-contrib-python`               |

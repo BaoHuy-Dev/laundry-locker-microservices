@@ -1,7 +1,10 @@
 # Run And Test Guide
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 Workspace: `G:\BigProject\laundry-locker-microservices`
@@ -15,7 +18,8 @@ This guide is for Windows PowerShell. Use `curl.exe` explicitly when using curl 
 - Docker Desktop
 - Ports: `8080`, `8761`, `8081-8084`, `8086-8090`, `8092`, `15432`, `5672`, `15672`
 
-Current note: `laundry-service` on `8085` and `partner-service` on `8091` do not have source folders. `docker-compose.override.yml` skips them with profile `missing-source`.
+Current note: `laundry-service` on `8085` and `partner-service` on `8091` do not have source folders.
+`docker-compose.override.yml` skips them with profile `missing-source`.
 
 Check tools:
 
@@ -391,7 +395,10 @@ Use `down -v` only when you are okay losing local test data.
 
 ## 11. Known Current Notes
 
-- `laundry-service` and `partner-service` source modules are missing and intentionally skipped by `docker-compose.override.yml`.
-- `/internal/**` endpoints are blocked through the gateway; use Feign/service-to-service calls or direct local service ports only for debugging.
+- `laundry-service` and `partner-service` source modules are missing and intentionally skipped by
+  `docker-compose.override.yml`.
+- `/internal/**` endpoints are blocked through the gateway; use Feign/service-to-service calls or direct local service
+  ports only for debugging.
 - The current locker Phase 2 demo does not require real Firebase, VNPay, MoMo, or physical sensor credentials.
-- See `docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, and `LOCKER_FLOW_PLAN.md` for the latest verified project state.
+- See `docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, and `LOCKER_FLOW_PLAN.md` for the latest verified project
+  state.

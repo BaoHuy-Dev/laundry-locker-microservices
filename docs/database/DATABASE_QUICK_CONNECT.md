@@ -1,6 +1,7 @@
 # 🔌 Kết Nối Database DigitalOcean — Hướng Dẫn Nhanh
 
-> **Mục đích:** Hướng dẫn nhanh để các thành viên trong nhóm kết nối tới PostgreSQL database đã deploy trên DigitalOcean.
+> **Mục đích:** Hướng dẫn nhanh để các thành viên trong nhóm kết nối tới PostgreSQL database đã deploy trên
+> DigitalOcean.
 >
 > **Xem thêm:** [DATABASE_CONNECTION_GUIDE.md](./DATABASE_CONNECTION_GUIDE.md) để hiểu chi tiết từng bước.
 
@@ -24,15 +25,15 @@ Trong IntelliJ/DataGrip: **View → Tool Windows → Database** → Nhấn dấu
 
 Chuyển sang tab **SSH/SSL** và điền:
 
-| Thuộc tính           | Giá trị                                          |
-|----------------------|--------------------------------------------------|
-| ☑ Use SSH tunnel     | **Bật (tích chọn)**                              |
-| Host                 | `146.190.84.136`                                 |
-| Port                 | `22`                                             |
-| Username             | `root`                                           |
-| Authentication type  | `Key pair (OpenSSH or PuTTY)`                    |
-| Private key file     | `C:\Users\<TenBan>\.ssh\id_ed25519`              |
-| Passphrase           | *(để trống nếu key không có passphrase)*         |
+| Thuộc tính          | Giá trị                                  |
+|---------------------|------------------------------------------|
+| ☑ Use SSH tunnel    | **Bật (tích chọn)**                      |
+| Host                | `146.190.84.136`                         |
+| Port                | `22`                                     |
+| Username            | `root`                                   |
+| Authentication type | `Key pair (OpenSSH or PuTTY)`            |
+| Private key file    | `C:\Users\<TenBan>\.ssh\id_ed25519`      |
+| Passphrase          | *(để trống nếu key không có passphrase)* |
 
 > Nhấn **Test Connection** trong cửa sổ SSH để kiểm tra kết nối SSH thành công.
 
@@ -40,16 +41,16 @@ Chuyển sang tab **SSH/SSL** và điền:
 
 Quay lại tab **General** và điền:
 
-| Thuộc tính     | Giá trị                                        |
-|----------------|-------------------------------------------------|
-| Driver         | `PostgreSQL`                                    |
-| Host           | `127.0.0.1`                                     |
-| Port           | `15432`                                         |
-| Authentication | `User & Password`                               |
-| User           | `postgres`                                      |
-| Password       | *(liên hệ trưởng nhóm để lấy mật khẩu)*       |
-| Database       | `postgres`                                      |
-| URL            | `jdbc:postgresql://127.0.0.1:15432/postgres`    |
+| Thuộc tính     | Giá trị                                      |
+|----------------|----------------------------------------------|
+| Driver         | `PostgreSQL`                                 |
+| Host           | `127.0.0.1`                                  |
+| Port           | `15432`                                      |
+| Authentication | `User & Password`                            |
+| User           | `postgres`                                   |
+| Password       | *(liên hệ trưởng nhóm để lấy mật khẩu)*      |
+| Database       | `postgres`                                   |
+| URL            | `jdbc:postgresql://127.0.0.1:15432/postgres` |
 
 ### Bước 4 — Test & Lưu
 
@@ -77,19 +78,20 @@ postgres@127.0.0.1
 └── user_db
 ```
 
-> **Mẹo:** Nếu không thấy đủ databases, nhấn chuột phải vào connection → **Database Tools** → **Manage Shown Schemas** → tích chọn **All databases**.
+> **Mẹo:** Nếu không thấy đủ databases, nhấn chuột phải vào connection → **Database Tools** → **Manage Shown Schemas** →
+> tích chọn **All databases**.
 
 ---
 
 ## 🚨 Xử Lý Lỗi Thường Gặp
 
-| Lỗi | Cách xử lý |
-|-----|-------------|
-| `Connection refused` trên SSH | Kiểm tra IP server `146.190.84.136` có đúng không, hoặc hỏi trưởng nhóm xem IP có thay đổi |
-| `Auth fail` trên SSH | Kiểm tra private key file đúng đường dẫn, đúng file |
-| `Connection refused` trên PostgreSQL | Kiểm tra port `15432` và host `127.0.0.1` |
-| `Password authentication failed` | Liên hệ trưởng nhóm để lấy lại mật khẩu đúng |
-| Không thấy databases | Xem mục **"Xem Tất Cả Databases"** ở trên |
+| Lỗi                                  | Cách xử lý                                                                                 |
+|--------------------------------------|--------------------------------------------------------------------------------------------|
+| `Connection refused` trên SSH        | Kiểm tra IP server `146.190.84.136` có đúng không, hoặc hỏi trưởng nhóm xem IP có thay đổi |
+| `Auth fail` trên SSH                 | Kiểm tra private key file đúng đường dẫn, đúng file                                        |
+| `Connection refused` trên PostgreSQL | Kiểm tra port `15432` và host `127.0.0.1`                                                  |
+| `Password authentication failed`     | Liên hệ trưởng nhóm để lấy lại mật khẩu đúng                                               |
+| Không thấy databases                 | Xem mục **"Xem Tất Cả Databases"** ở trên                                                  |
 
 ---
 

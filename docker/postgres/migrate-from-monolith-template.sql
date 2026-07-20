@@ -11,7 +11,8 @@
 --
 -- This template intentionally does not add cross-database FK constraints.
 
-CREATE EXTENSION IF NOT EXISTS dblink;
+CREATE
+EXTENSION IF NOT EXISTS dblink;
 
 -- ===== user_db / user_schema =====
 -- INSERT INTO user_schema.user_profiles(id, email, phone_number, first_name, last_name, birthday, image_url, status, roles, created_at, updated_at)

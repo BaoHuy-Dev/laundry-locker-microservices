@@ -6,15 +6,16 @@
 
 ## Trạng thái hiện tại
 
-| Hình thức | Code | Cần bạn bổ sung |
-|---|---|---|
-| **Ví nội bộ (Wallet)** | ✅ | Không — chạy ngay |
-| **Tiền mặt (Cash)** | ✅ | Không — chạy ngay |
-| **VNPay** | ✅ | Đang chạy **sandbox demo**. Muốn tiền thật → credential merchant + return URL công khai |
-| **MoMo** | ✅ (gated) | Cần merchant account → bật bằng ENV. Chưa cấu hình → nút MoMo báo `MOMO_NOT_CONFIGURED` |
+| Hình thức              | Code      | Cần bạn bổ sung                                                                         |
+|------------------------|-----------|-----------------------------------------------------------------------------------------|
+| **Ví nội bộ (Wallet)** | ✅         | Không — chạy ngay                                                                       |
+| **Tiền mặt (Cash)**    | ✅         | Không — chạy ngay                                                                       |
+| **VNPay**              | ✅         | Đang chạy **sandbox demo**. Muốn tiền thật → credential merchant + return URL công khai |
+| **MoMo**               | ✅ (gated) | Cần merchant account → bật bằng ENV. Chưa cấu hình → nút MoMo báo `MOMO_NOT_CONFIGURED` |
 
 Tất cả ENV đặt trong file `.env` trên droplet tại **`/opt/laundry-locker-microservices/.env`**
 (deploy script giữ nguyên `.env` qua mỗi lần deploy). Sau khi sửa `.env`:
+
 ```bash
 cd /opt/laundry-locker-microservices
 docker compose up -d --force-recreate payment-service
@@ -57,9 +58,9 @@ docker compose up -d --force-recreate payment-service
 ## 3. Deploy & rebuild sau khi đổi code
 
 - **Backend**: merge vào `develop` → workflow `Deploy to Droplet` tự chạy (build + Flyway migrate
-  + `docker compose up -d --build`). Trong lúc deploy (~10–15 phút trên droplet 4GB), gateway
-  **tạm thời down** (ERR_CONNECTION_REFUSED) — đợi workflow xanh là hết.
-  Theo dõi: GitHub repo → tab **Actions** → "Deploy to Droplet".
+    + `docker compose up -d --build`). Trong lúc deploy (~10–15 phút trên droplet 4GB), gateway
+      **tạm thời down** (ERR_CONNECTION_REFUSED) — đợi workflow xanh là hết.
+      Theo dõi: GitHub repo → tab **Actions** → "Deploy to Droplet".
 - **Mobile**: build lại APK để có tính năng mới:
   ```
   cd smart-laundry-locker-mobile && flutter build apk --debug

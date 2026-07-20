@@ -1,7 +1,10 @@
 # 📱 Hướng Dẫn Sử Dụng API — Luồng Order Đầy Đủ
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 > **Tài liệu chi tiết từng API** trong luồng đặt hàng giặt ủi, từ lúc đăng nhập cho đến khi nhận đồ và đánh giá.
@@ -65,16 +68,16 @@ INITIALIZED → WAITING → COLLECTED → PROCESSING → READY → RETURNED → 
      └──────────────────── CANCELED (có thể hủy trước khi COLLECTED)
 ```
 
-| Trạng thái | Ý nghĩa | Ai thực hiện |
-|------------|---------|--------------|
-| `INITIALIZED` | Đơn mới tạo, chờ khách bỏ đồ vào tủ | Hệ thống |
-| `WAITING` | Khách đã bỏ đồ, chờ nhân viên lấy | Khách hàng |
-| `COLLECTED` | Nhân viên đã lấy đồ từ tủ | Nhân viên |
-| `PROCESSING` | Đang giặt/xử lý | Nhân viên |
-| `READY` | Giặt xong, sẵn sàng trả | Nhân viên |
-| `RETURNED` | Đã trả vào tủ, chờ khách lấy | Nhân viên |
-| `COMPLETED` | Khách đã lấy đồ, hoàn tất | Khách hàng |
-| `CANCELED` | Đơn bị hủy | Khách/Hệ thống |
+| Trạng thái    | Ý nghĩa                             | Ai thực hiện   |
+|---------------|-------------------------------------|----------------|
+| `INITIALIZED` | Đơn mới tạo, chờ khách bỏ đồ vào tủ | Hệ thống       |
+| `WAITING`     | Khách đã bỏ đồ, chờ nhân viên lấy   | Khách hàng     |
+| `COLLECTED`   | Nhân viên đã lấy đồ từ tủ           | Nhân viên      |
+| `PROCESSING`  | Đang giặt/xử lý                     | Nhân viên      |
+| `READY`       | Giặt xong, sẵn sàng trả             | Nhân viên      |
+| `RETURNED`    | Đã trả vào tủ, chờ khách lấy        | Nhân viên      |
+| `COMPLETED`   | Khách đã lấy đồ, hoàn tất           | Khách hàng     |
+| `CANCELED`    | Đơn bị hủy                          | Khách/Hệ thống |
 
 ---
 
@@ -83,6 +86,7 @@ INITIALIZED → WAITING → COLLECTED → PROCESSING → READY → RETURNED → 
 ### 📱 Mobile App — Đăng nhập bằng SĐT
 
 #### API 1.1: Gửi OTP qua Firebase (client-side)
+
 ```
 Không gọi backend — xử lý trên client bằng Firebase SDK
 → signInWithPhoneNumber("+84912345678")
@@ -91,13 +95,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 #### API 1.2: Gửi idToken lên backend
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/phone-login` |
-| **Auth** | ❌ Public |
+|            |                         |
+|------------|-------------------------|
+| **Method** | `POST`                  |
+| **URL**    | `/api/auth/phone-login` |
+| **Auth**   | ❌ Public                |
 
 **Request:**
+
 ```json
 {
   "idToken": "eyJhbGciOiJSUzI1NiIs..."
@@ -105,6 +110,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response — User CŨ:**
+
 ```json
 {
   "success": true,
@@ -127,9 +133,11 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
   }
 }
 ```
+
 > ✅ Nhận `accessToken` → bỏ qua đăng ký → chuyển thẳng **Phase 2**
 
 **Response — User MỚI:**
+
 ```json
 {
   "success": true,
@@ -146,20 +154,22 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
   }
 }
 ```
+
 > ⚠️ `isNewUser = true` → cần đăng ký trước → **API 1.3 hoặc 1.4**
 
 ---
 
 #### API 1.3: Đăng ký đầy đủ (Mobile App)
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/complete-registration` |
-| **Auth** | ❌ Public |
+|             |                                                      |
+|-------------|------------------------------------------------------|
+| **Method**  | `POST`                                               |
+| **URL**     | `/api/auth/complete-registration`                    |
+| **Auth**    | ❌ Public                                             |
 | **Khi nào** | Chỉ khi `isNewUser = true`, dùng trên **Mobile App** |
 
 **Request:**
+
 ```json
 {
   "tempToken": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -170,6 +180,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -187,14 +198,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 #### API 1.4: Đăng ký nhanh (Kiosk) ⚡
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/kiosk/quick-register` |
-| **Auth** | ❌ Public |
+|             |                                                 |
+|-------------|-------------------------------------------------|
+| **Method**  | `POST`                                          |
+| **URL**     | `/api/auth/kiosk/quick-register`                |
+| **Auth**    | ❌ Public                                        |
 | **Khi nào** | Chỉ khi `isNewUser = true`, dùng trên **Kiosk** |
 
 **Request:**
+
 ```json
 {
   "tempToken": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
@@ -202,6 +214,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -214,6 +227,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
   }
 }
 ```
+
 > ℹ️ Backend tự tạo user: `firstName="Khách"`, không yêu cầu họ tên, ngày sinh.
 
 ---
@@ -222,13 +236,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 #### API 1.5: Gửi OTP qua email
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/email/send-otp` |
-| **Auth** | ❌ Public |
+|            |                            |
+|------------|----------------------------|
+| **Method** | `POST`                     |
+| **URL**    | `/api/auth/email/send-otp` |
+| **Auth**   | ❌ Public                   |
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com"
@@ -236,6 +251,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -248,13 +264,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 #### API 1.6: Xác thực OTP email
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/email/verify-otp` |
-| **Auth** | ❌ Public |
+|            |                              |
+|------------|------------------------------|
+| **Method** | `POST`                       |
+| **URL**    | `/api/auth/email/verify-otp` |
+| **Auth**   | ❌ Public                     |
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -263,6 +280,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response — User CŨ:**
+
 ```json
 {
   "success": true,
@@ -281,6 +299,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response — User MỚI:**
+
 ```json
 {
   "success": true,
@@ -294,6 +313,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
   }
 }
 ```
+
 > ⚠️ `isNewUser = true` → gọi **API 1.3** (Mobile) hoặc **API 1.4** (Kiosk)
 
 ---
@@ -302,13 +322,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 2.1: Xem danh sách cửa hàng
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/stores` |
-| **Auth** | ❌ Public |
+|            |               |
+|------------|---------------|
+| **Method** | `GET`         |
+| **URL**    | `/api/stores` |
+| **Auth**   | ❌ Public      |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -328,13 +349,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 2.2: Tìm cửa hàng gần đây
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/stores/nearby?latitude=10.762&longitude=106.660&radiusMeters=5000&limit=10` |
-| **Auth** | ❌ Public |
+|            |                                                                                   |
+|------------|-----------------------------------------------------------------------------------|
+| **Method** | `GET`                                                                             |
+| **URL**    | `/api/stores/nearby?latitude=10.762&longitude=106.660&radiusMeters=5000&limit=10` |
+| **Auth**   | ❌ Public                                                                          |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -354,14 +376,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 2.3: Xem dịch vụ theo danh mục
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/services?category=LAUNDRY` |
-| **Auth** | ❌ Public |
+|            |                                                      |
+|------------|------------------------------------------------------|
+| **Method** | `GET`                                                |
+| **URL**    | `/api/services?category=LAUNDRY`                     |
+| **Auth**   | ❌ Public                                             |
 | **Params** | `category`: `LAUNDRY` (giặt) hoặc `STORAGE` (gửi đồ) |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -406,21 +429,21 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 2.4: Xem dịch vụ theo cửa hàng + danh mục
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/services?storeId=1&category=LAUNDRY` |
-| **Auth** | ❌ Public |
+|            |                                            |
+|------------|--------------------------------------------|
+| **Method** | `GET`                                      |
+| **URL**    | `/api/services?storeId=1&category=LAUNDRY` |
+| **Auth**   | ❌ Public                                   |
 
 ---
 
 ### API 2.5: Xem chi tiết 1 dịch vụ
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/services/{id}` |
-| **Auth** | ❌ Public |
+|            |                      |
+|------------|----------------------|
+| **Method** | `GET`                |
+| **URL**    | `/api/services/{id}` |
+| **Auth**   | ❌ Public             |
 
 ---
 
@@ -428,13 +451,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 3.1: Xem danh sách tủ theo cửa hàng
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/lockers?storeId=1` |
-| **Auth** | ❌ Public |
+|            |                          |
+|------------|--------------------------|
+| **Method** | `GET`                    |
+| **URL**    | `/api/lockers?storeId=1` |
+| **Auth**   | ❌ Public                 |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -455,13 +479,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 3.2: Xem box trống trong tủ
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/lockers/{id}/boxes/available` |
-| **Auth** | ❌ Public |
+|            |                                     |
+|------------|-------------------------------------|
+| **Method** | `GET`                               |
+| **URL**    | `/api/lockers/{id}/boxes/available` |
+| **Auth**   | ❌ Public                            |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -488,13 +513,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 3.3: Tạo đơn hàng 🎯
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/orders` |
-| **Auth** | 🔐 JWT (`Authorization: Bearer {accessToken}`) |
+|            |                                                |
+|------------|------------------------------------------------|
+| **Method** | `POST`                                         |
+| **URL**    | `/api/orders`                                  |
+| **Auth**   | 🔐 JWT (`Authorization: Bearer {accessToken}`) |
 
 **Request:**
+
 ```json
 {
   "type": "LAUNDRY",
@@ -510,20 +536,21 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 }
 ```
 
-| Field | Bắt buộc | Mô tả |
-|-------|:--------:|-------|
-| `type` | ✅ | `LAUNDRY`, `DRY_CLEAN`, hoặc `STORAGE` |
-| `lockerId` | ✅ | ID tủ đã chọn |
-| `boxIds` | ❌ | ID box chọn (nếu để trống, hệ thống tự phân) |
-| `serviceIds` | ❌ | Danh sách ID dịch vụ |
-| `serviceCategory` | ❌ | `LAUNDRY` hoặc `STORAGE` |
-| `customerNote` | ❌ | Ghi chú của khách |
-| `receiverName` | ❌ | Tên người nhận (mặc định = người gửi) |
-| `receiverPhone` | ❌ | SĐT người nhận |
-| `estimatedWeight` | ❌ | Ước lượng cân nặng (kg) |
-| `promotionCode` | ❌ | Mã khuyến mãi |
+| Field             | Bắt buộc | Mô tả                                        |
+|-------------------|:--------:|----------------------------------------------|
+| `type`            |    ✅     | `LAUNDRY`, `DRY_CLEAN`, hoặc `STORAGE`       |
+| `lockerId`        |    ✅     | ID tủ đã chọn                                |
+| `boxIds`          |    ❌     | ID box chọn (nếu để trống, hệ thống tự phân) |
+| `serviceIds`      |    ❌     | Danh sách ID dịch vụ                         |
+| `serviceCategory` |    ❌     | `LAUNDRY` hoặc `STORAGE`                     |
+| `customerNote`    |    ❌     | Ghi chú của khách                            |
+| `receiverName`    |    ❌     | Tên người nhận (mặc định = người gửi)        |
+| `receiverPhone`   |    ❌     | SĐT người nhận                               |
+| `estimatedWeight` |    ❌     | Ước lượng cân nặng (kg)                      |
+| `promotionCode`   |    ❌     | Mã khuyến mãi                                |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -560,13 +587,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 4.1: Tạo thanh toán online (VNPay / MoMo)
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/payments/create` |
-| **Auth** | 🔐 JWT |
+|            |                        |
+|------------|------------------------|
+| **Method** | `POST`                 |
+| **URL**    | `/api/payments/create` |
+| **Auth**   | 🔐 JWT                 |
 
 **Request:**
+
 ```json
 {
   "orderId": 101,
@@ -576,14 +604,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 }
 ```
 
-| Field | Bắt buộc | Giá trị |
-|-------|:--------:|---------|
-| `orderId` | ✅ | ID đơn hàng |
-| `paymentMethod` | ✅ | `VNPAY`, `MOMO`, `ZALOPAY`, `CASH`, `BANK_TRANSFER`, `WALLET` |
-| `bankCode` | ❌ | Mã ngân hàng (chỉ cho VNPay) |
-| `language` | ❌ | `vn` hoặc `en` |
+| Field           | Bắt buộc | Giá trị                                                       |
+|-----------------|:--------:|---------------------------------------------------------------|
+| `orderId`       |    ✅     | ID đơn hàng                                                   |
+| `paymentMethod` |    ✅     | `VNPAY`, `MOMO`, `ZALOPAY`, `CASH`, `BANK_TRANSFER`, `WALLET` |
+| `bankCode`      |    ❌     | Mã ngân hàng (chỉ cho VNPay)                                  |
+| `language`      |    ❌     | `vn` hoặc `en`                                                |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -606,13 +635,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 4.2: Kiểm tra trạng thái thanh toán
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/payments/order/{orderId}` |
-| **Auth** | 🔐 JWT |
+|            |                                 |
+|------------|---------------------------------|
+| **Method** | `GET`                           |
+| **URL**    | `/api/payments/order/{orderId}` |
+| **Auth**   | 🔐 JWT                          |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -638,13 +668,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 5.1: Mở khóa tủ bằng PIN 🔓
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/iot/unlock` |
-| **Auth** | ❌ Public |
+|            |                   |
+|------------|-------------------|
+| **Method** | `POST`            |
+| **URL**    | `/api/iot/unlock` |
+| **Auth**   | ❌ Public          |
 
 **Request:**
+
 ```json
 {
   "boxId": 5,
@@ -653,6 +684,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -683,14 +715,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 6.1: Khách xác nhận đã bỏ đồ vào tủ
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/confirm` |
-| **Auth** | 🔐 JWT |
-| **Trạng thái** | `INITIALIZED` → `WAITING` |
+|                |                                 |
+|----------------|---------------------------------|
+| **Method**     | `PUT`                           |
+| **URL**        | `/api/orders/{orderId}/confirm` |
+| **Auth**       | 🔐 JWT                          |
+| **Trạng thái** | `INITIALIZED` → `WAITING`       |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -714,13 +747,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 7.1: Nhân viên mở tủ lấy đồ (bằng Staff Code)
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/iot/unlock-with-code` |
-| **Auth** | ❌ Public |
+|            |                             |
+|------------|-----------------------------|
+| **Method** | `POST`                      |
+| **URL**    | `/api/iot/unlock-with-code` |
+| **Auth**   | ❌ Public                    |
 
 **Request:**
+
 ```json
 {
   "orderId": 101,
@@ -730,6 +764,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -755,14 +790,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 7.2: Hoặc nhân viên đánh dấu "đã lấy" qua app
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/collect` |
-| **Auth** | 🔐 JWT (role: ADMIN hoặc STAFF) |
-| **Trạng thái** | `WAITING` → `COLLECTED` |
+|                |                                 |
+|----------------|---------------------------------|
+| **Method**     | `PUT`                           |
+| **URL**        | `/api/orders/{orderId}/collect` |
+| **Auth**       | 🔐 JWT (role: ADMIN hoặc STAFF) |
+| **Trạng thái** | `WAITING` → `COLLECTED`         |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -782,13 +818,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 8.1: Cập nhật cân nặng thực tế
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/weight` |
-| **Auth** | 🔐 JWT (role: ADMIN hoặc STAFF) |
+|            |                                 |
+|------------|---------------------------------|
+| **Method** | `PUT`                           |
+| **URL**    | `/api/orders/{orderId}/weight`  |
+| **Auth**   | 🔐 JWT (role: ADMIN hoặc STAFF) |
 
 **Request:**
+
 ```json
 {
   "actualWeight": 3.2,
@@ -802,6 +839,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -822,14 +860,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 9.1: Bắt đầu giặt
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/process` |
-| **Auth** | 🔐 JWT (role: ADMIN hoặc STAFF) |
-| **Trạng thái** | `COLLECTED` → `PROCESSING` |
+|                |                                 |
+|----------------|---------------------------------|
+| **Method**     | `PUT`                           |
+| **URL**        | `/api/orders/{orderId}/process` |
+| **Auth**       | 🔐 JWT (role: ADMIN hoặc STAFF) |
+| **Trạng thái** | `COLLECTED` → `PROCESSING`      |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -847,14 +886,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 10.1: Giặt xong — đánh dấu sẵn sàng
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/ready` |
-| **Auth** | 🔐 JWT (role: ADMIN hoặc STAFF) |
-| **Trạng thái** | `PROCESSING` → `READY` |
+|                |                                 |
+|----------------|---------------------------------|
+| **Method**     | `PUT`                           |
+| **URL**        | `/api/orders/{orderId}/ready`   |
+| **Auth**       | 🔐 JWT (role: ADMIN hoặc STAFF) |
+| **Trạng thái** | `PROCESSING` → `READY`          |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -872,15 +912,16 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 11.1: Nhân viên trả đồ vào box
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/return?boxId=8` |
-| **Auth** | 🔐 JWT (role: ADMIN hoặc STAFF) |
-| **Trạng thái** | `READY` → `RETURNED` |
+|                 |                                                        |
+|-----------------|--------------------------------------------------------|
+| **Method**      | `PUT`                                                  |
+| **URL**         | `/api/orders/{orderId}/return?boxId=8`                 |
+| **Auth**        | 🔐 JWT (role: ADMIN hoặc STAFF)                        |
+| **Trạng thái**  | `READY` → `RETURNED`                                   |
 | **Query param** | `boxId` — ID box nhận đồ (có thể khác box gửi ban đầu) |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -908,13 +949,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 12.1: Xác thực PIN (tùy chọn — hiển thị thông tin trước khi mở)
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/iot/verify-pin` |
-| **Auth** | ❌ Public |
+|            |                       |
+|------------|-----------------------|
+| **Method** | `POST`                |
+| **URL**    | `/api/iot/verify-pin` |
+| **Auth**   | ❌ Public              |
 
 **Request:**
+
 ```json
 {
   "boxId": 8,
@@ -923,6 +965,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -942,13 +985,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 12.2: Mở tủ lấy đồ 🔓
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/iot/unlock` |
-| **Auth** | ❌ Public |
+|            |                   |
+|------------|-------------------|
+| **Method** | `POST`            |
+| **URL**    | `/api/iot/unlock` |
+| **Auth**   | ❌ Public          |
 
 **Request:**
+
 ```json
 {
   "boxId": 8,
@@ -966,14 +1010,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 13.1: Xác nhận đã lấy đồ (qua IoT)
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/iot/pickup` |
-| **Auth** | 🔐 JWT |
+|                |                          |
+|----------------|--------------------------|
+| **Method**     | `POST`                   |
+| **URL**        | `/api/iot/pickup`        |
+| **Auth**       | 🔐 JWT                   |
 | **Trạng thái** | `RETURNED` → `COMPLETED` |
 
 **Request:**
+
 ```json
 {
   "orderId": 101,
@@ -982,6 +1027,7 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -1000,14 +1046,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 13.2: Hoặc hoàn tất qua Order API
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/complete` |
-| **Auth** | 🔐 JWT |
-| **Trạng thái** | `RETURNED` → `COMPLETED` |
+|                |                                  |
+|----------------|----------------------------------|
+| **Method**     | `PUT`                            |
+| **URL**        | `/api/orders/{orderId}/complete` |
+| **Auth**       | 🔐 JWT                           |
+| **Trạng thái** | `RETURNED` → `COMPLETED`         |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -1026,14 +1073,15 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### API 14.1: Đánh giá đơn hàng ⭐
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/orders/{orderId}/rate` |
-| **Auth** | 🔐 JWT |
+|               |                              |
+|---------------|------------------------------|
+| **Method**    | `POST`                       |
+| **URL**       | `/api/orders/{orderId}/rate` |
+| **Auth**      | 🔐 JWT                       |
 | **Điều kiện** | Chỉ khi `status = COMPLETED` |
 
 **Request:**
+
 ```json
 {
   "rating": 5,
@@ -1044,15 +1092,16 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 }
 ```
 
-| Field | Bắt buộc | Mô tả |
-|-------|:--------:|-------|
-| `rating` | ✅ | Đánh giá tổng (1-5 ⭐) |
-| `comment` | ❌ | Nhận xét (tối đa 500 ký tự) |
-| `serviceRating` | ❌ | Chất lượng dịch vụ (1-5) |
-| `speedRating` | ❌ | Tốc độ (1-5) |
-| `staffRating` | ❌ | Nhân viên (1-5) |
+| Field           | Bắt buộc | Mô tả                       |
+|-----------------|:--------:|-----------------------------|
+| `rating`        |    ✅     | Đánh giá tổng (1-5 ⭐)       |
+| `comment`       |    ❌     | Nhận xét (tối đa 500 ký tự) |
+| `serviceRating` |    ❌     | Chất lượng dịch vụ (1-5)    |
+| `speedRating`   |    ❌     | Tốc độ (1-5)                |
+| `staffRating`   |    ❌     | Nhân viên (1-5)             |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -1078,13 +1127,14 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### Xem trạng thái đơn hàng (polling/tracking)
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/orders/{orderId}/status` |
-| **Auth** | 🔐 JWT |
+|            |                                |
+|------------|--------------------------------|
+| **Method** | `GET`                          |
+| **URL**    | `/api/orders/{orderId}/status` |
+| **Auth**   | 🔐 JWT                         |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -1106,24 +1156,25 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### Xem lịch sử đơn hàng
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/orders/my-orders?status=COMPLETED&page=0&size=10` |
-| **Auth** | 🔐 JWT |
+|            |                                                                             |
+|------------|-----------------------------------------------------------------------------|
+| **Method** | `GET`                                                                       |
+| **URL**    | `/api/orders/my-orders?status=COMPLETED&page=0&size=10`                     |
+| **Auth**   | 🔐 JWT                                                                      |
 | **Params** | `status` (tùy chọn): `INITIALIZED`, `WAITING`, `PROCESSING`, `COMPLETED`... |
 
 ---
 
 ### Xem timeline đơn hàng
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/orders/{orderId}/timeline` |
-| **Auth** | 🔐 JWT |
+|            |                                  |
+|------------|----------------------------------|
+| **Method** | `GET`                            |
+| **URL**    | `/api/orders/{orderId}/timeline` |
+| **Auth**   | 🔐 JWT                           |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -1149,22 +1200,22 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ### Hủy đơn hàng
 
-| | |
-|---|---|
-| **Method** | `PUT` |
-| **URL** | `/api/orders/{orderId}/cancel?reason=1` |
-| **Auth** | 🔐 JWT |
+|               |                                           |
+|---------------|-------------------------------------------|
+| **Method**    | `PUT`                                     |
+| **URL**       | `/api/orders/{orderId}/cancel?reason=1`   |
+| **Auth**      | 🔐 JWT                                    |
 | **Điều kiện** | Chỉ hủy được trước trạng thái `COLLECTED` |
 
 ---
 
 ### Xem đánh giá của đơn hàng
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/orders/{orderId}/rating` |
-| **Auth** | 🔐 JWT |
+|            |                                |
+|------------|--------------------------------|
+| **Method** | `GET`                          |
+| **URL**    | `/api/orders/{orderId}/rating` |
+| **Auth**   | 🔐 JWT                         |
 
 ---
 
@@ -1232,35 +1283,35 @@ Không gọi backend — xử lý trên client bằng Firebase SDK
 
 ## Bảng tổng hợp toàn bộ API
 
-| # | Phase | Method | Endpoint | Auth | Ai dùng |
-|---|-------|--------|----------|:----:|---------|
-| 1 | Auth | POST | `/api/auth/phone-login` | ❌ | Mobile + Kiosk |
-| 2 | Auth | POST | `/api/auth/complete-registration` | ❌ | Mobile |
-| 3 | Auth | POST | `/api/auth/kiosk/quick-register` | ❌ | Kiosk |
-| 4 | Auth | POST | `/api/auth/email/send-otp` | ❌ | Mobile + Kiosk |
-| 5 | Auth | POST | `/api/auth/email/verify-otp` | ❌ | Mobile + Kiosk |
-| 6 | Store | GET | `/api/stores` | ❌ | Mobile |
-| 7 | Store | GET | `/api/stores/nearby` | ❌ | Mobile |
-| 8 | Service | GET | `/api/services?category=LAUNDRY` | ❌ | Mobile + Kiosk |
-| 9 | Locker | GET | `/api/lockers?storeId=1` | ❌ | Mobile + Kiosk |
-| 10 | Locker | GET | `/api/lockers/{id}/boxes/available` | ❌ | Mobile + Kiosk |
-| 11 | Order | POST | `/api/orders` | 🔐 | Mobile + Kiosk |
-| 12 | Payment | POST | `/api/payments/create` | 🔐 | Mobile + Kiosk |
-| 13 | Payment | GET | `/api/payments/order/{orderId}` | 🔐 | Mobile + Kiosk |
-| 14 | IoT | POST | `/api/iot/verify-pin` | ❌ | Mobile + Kiosk |
-| 15 | IoT | POST | `/api/iot/unlock` | ❌ | Mobile + Kiosk |
-| 16 | Order | PUT | `/api/orders/{id}/confirm` | 🔐 | Mobile + Kiosk |
-| 17 | Order | GET | `/api/orders/{id}/status` | 🔐 | Mobile |
-| 18 | Order | GET | `/api/orders/my-orders` | 🔐 | Mobile |
-| 19 | Order | GET | `/api/orders/{id}/timeline` | 🔐 | Mobile |
-| 20 | IoT | POST | `/api/iot/unlock-with-code` | ❌ | Staff |
-| 21 | Order | PUT | `/api/orders/{id}/collect` | 🔐 | Staff |
-| 22 | Order | PUT | `/api/orders/{id}/weight` | 🔐 | Staff |
-| 23 | Order | PUT | `/api/orders/{id}/process` | 🔐 | Staff |
-| 24 | Order | PUT | `/api/orders/{id}/ready` | 🔐 | Staff |
-| 25 | Order | PUT | `/api/orders/{id}/return?boxId=X` | 🔐 | Staff |
-| 26 | IoT | POST | `/api/iot/pickup` | 🔐 | Mobile + Kiosk |
-| 27 | Order | PUT | `/api/orders/{id}/complete` | 🔐 | Mobile |
-| 28 | Order | POST | `/api/orders/{id}/rate` | 🔐 | Mobile |
-| 29 | Order | PUT | `/api/orders/{id}/cancel` | 🔐 | Mobile + Kiosk |
+| #  | Phase   | Method | Endpoint                            | Auth | Ai dùng        |
+|----|---------|--------|-------------------------------------|:----:|----------------|
+| 1  | Auth    | POST   | `/api/auth/phone-login`             |  ❌   | Mobile + Kiosk |
+| 2  | Auth    | POST   | `/api/auth/complete-registration`   |  ❌   | Mobile         |
+| 3  | Auth    | POST   | `/api/auth/kiosk/quick-register`    |  ❌   | Kiosk          |
+| 4  | Auth    | POST   | `/api/auth/email/send-otp`          |  ❌   | Mobile + Kiosk |
+| 5  | Auth    | POST   | `/api/auth/email/verify-otp`        |  ❌   | Mobile + Kiosk |
+| 6  | Store   | GET    | `/api/stores`                       |  ❌   | Mobile         |
+| 7  | Store   | GET    | `/api/stores/nearby`                |  ❌   | Mobile         |
+| 8  | Service | GET    | `/api/services?category=LAUNDRY`    |  ❌   | Mobile + Kiosk |
+| 9  | Locker  | GET    | `/api/lockers?storeId=1`            |  ❌   | Mobile + Kiosk |
+| 10 | Locker  | GET    | `/api/lockers/{id}/boxes/available` |  ❌   | Mobile + Kiosk |
+| 11 | Order   | POST   | `/api/orders`                       |  🔐  | Mobile + Kiosk |
+| 12 | Payment | POST   | `/api/payments/create`              |  🔐  | Mobile + Kiosk |
+| 13 | Payment | GET    | `/api/payments/order/{orderId}`     |  🔐  | Mobile + Kiosk |
+| 14 | IoT     | POST   | `/api/iot/verify-pin`               |  ❌   | Mobile + Kiosk |
+| 15 | IoT     | POST   | `/api/iot/unlock`                   |  ❌   | Mobile + Kiosk |
+| 16 | Order   | PUT    | `/api/orders/{id}/confirm`          |  🔐  | Mobile + Kiosk |
+| 17 | Order   | GET    | `/api/orders/{id}/status`           |  🔐  | Mobile         |
+| 18 | Order   | GET    | `/api/orders/my-orders`             |  🔐  | Mobile         |
+| 19 | Order   | GET    | `/api/orders/{id}/timeline`         |  🔐  | Mobile         |
+| 20 | IoT     | POST   | `/api/iot/unlock-with-code`         |  ❌   | Staff          |
+| 21 | Order   | PUT    | `/api/orders/{id}/collect`          |  🔐  | Staff          |
+| 22 | Order   | PUT    | `/api/orders/{id}/weight`           |  🔐  | Staff          |
+| 23 | Order   | PUT    | `/api/orders/{id}/process`          |  🔐  | Staff          |
+| 24 | Order   | PUT    | `/api/orders/{id}/ready`            |  🔐  | Staff          |
+| 25 | Order   | PUT    | `/api/orders/{id}/return?boxId=X`   |  🔐  | Staff          |
+| 26 | IoT     | POST   | `/api/iot/pickup`                   |  🔐  | Mobile + Kiosk |
+| 27 | Order   | PUT    | `/api/orders/{id}/complete`         |  🔐  | Mobile         |
+| 28 | Order   | POST   | `/api/orders/{id}/rate`             |  🔐  | Mobile         |
+| 29 | Order   | PUT    | `/api/orders/{id}/cancel`           |  🔐  | Mobile + Kiosk |
 

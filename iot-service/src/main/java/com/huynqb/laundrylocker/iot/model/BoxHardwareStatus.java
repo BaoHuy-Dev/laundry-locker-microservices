@@ -1,14 +1,10 @@
 package com.huynqb.laundrylocker.iot.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import java.time.LocalDateTime;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.time.LocalDateTime;
 
 /// GAP 2: latest physical/hardware state of a box as reported by the cabinet
 /// (door open/closed sensor). Deliberately separate from locker-service's
@@ -20,34 +16,34 @@ import lombok.Setter;
 @Setter
 public class BoxHardwareStatus {
 
-  /// Natural key — one row per box (upserted on each report).
-  @Id
-  @Column(name = "box_id")
-  private Long boxId;
+    /// Natural key — one row per box (upserted on each report).
+    @Id
+    @Column(name = "box_id")
+    private Long boxId;
 
-  @Column(name = "locker_id")
-  private Long lockerId;
+    @Column(name = "locker_id")
+    private Long lockerId;
 
-  @Column(name = "hw_state", nullable = false, length = 30)
-  private String hwState = "UNKNOWN";
+    @Column(name = "hw_state", nullable = false, length = 30)
+    private String hwState = "UNKNOWN";
 
-  @Column(name = "last_reported_at", nullable = false)
-  private LocalDateTime lastReportedAt;
+    @Column(name = "last_reported_at", nullable = false)
+    private LocalDateTime lastReportedAt;
 
-  @Column(name = "updated_at", nullable = false)
-  private LocalDateTime updatedAt;
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 
-  @PrePersist
-  void onCreate() {
-    LocalDateTime now = LocalDateTime.now();
-    if (lastReportedAt == null) {
-      lastReportedAt = now;
+    @PrePersist
+    void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        if (lastReportedAt == null) {
+            lastReportedAt = now;
+        }
+        updatedAt = now;
     }
-    updatedAt = now;
-  }
 
-  @PreUpdate
-  void onUpdate() {
-    updatedAt = LocalDateTime.now();
-  }
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

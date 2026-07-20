@@ -13,16 +13,19 @@
 Kiểm theo thứ tự:
 
 **a) Nginx trỏ sai port gateway** (nguyên nhân số 1)
+
 ```bash
 docker port ll-ms-api-gateway                                    # vd: 8080/tcp -> 0.0.0.0:8080
 grep proxy_pass /etc/nginx/sites-available/api.locker-drone.tech # phải khớp port trên
 ```
+
 Lệch nhau → sửa `proxy_pass http://127.0.0.1:<port>;` rồi `sudo systemctl restart nginx`.
 
 **b) Port gateway nhảy sau recreate** → để Nginx proxy về `8080` (port auto-deploy ép); xem 02 mục A
 (xem [02 mục A](02-backend-https-cors.md)). Đây là lý do 502 "lúc được lúc không".
 
 **c) Service phía sau chết** (gateway sống nhưng route 502)
+
 ```bash
 docker compose ps                                                # service nào Exited/Restarting?
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081/actuator/health   # auth-service
@@ -48,9 +51,11 @@ Chỉ kết luận CORS sau khi chắc chắn API trả `200` (không phải 502
 ## 8.3. `Mixed Content … has been blocked` (web)
 
 Web HTTPS nhưng gọi API `http://...`. Sửa `fe/.env`:
+
 ```
 VITE_API_BASE_URL=https://api.locker-drone.tech
 ```
+
 rồi **build lại** + `npx wrangler deploy` (xem [03 mục A/C](03-frontend-web.md)).
 Biến trên dashboard Cloudflare KHÔNG áp cho `npm run build` ở máy.
 
@@ -59,6 +64,7 @@ Biến trên dashboard Cloudflare KHÔNG áp cho `npm run build` ở máy.
 ## 8.4. Sửa code web mà `admin.locker-drone.tech` không đổi
 
 Worker này **deploy tay**, không tự build khi merge GitHub:
+
 - Cloudflare Build command đang để **None**; Git nối repo
   `BaoHuy-Dev/laundry-locker-frontend-1` (khác repo code `LeThiYenVi/...`).
 - → Cứ deploy tay: `npm run build && npx wrangler deploy`.
@@ -101,6 +107,7 @@ Nếu vẫn 409 → email/SĐT đó **đã tồn tại thật**, đổi giá tr�
 ---
 
 ## Bộ lệnh chẩn đoán nhanh (chạy trên droplet)
+
 ```bash
 cd /opt/laundry-locker-microservices
 docker compose ps                                                  # service sống/chết

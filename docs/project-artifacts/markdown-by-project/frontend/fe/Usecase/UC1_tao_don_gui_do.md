@@ -1,27 +1,33 @@
 # UC1: Khách Hàng Tạo Đơn và Gửi Đồ Vào Tủ
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## Tổng quan
 
-Khách hàng (USER) mở app, chọn locker, chọn dịch vụ, tạo đơn hàng. Hệ thống tự động gán box và cấp mã PIN 6 số. Khách đến tủ, nhập PIN trên tablet (thiết bị IoT), tủ mở ra, khách bỏ đồ vào rồi xác nhận trên app.
+Khách hàng (USER) mở app, chọn locker, chọn dịch vụ, tạo đơn hàng. Hệ thống tự động gán box và cấp mã PIN 6 số. Khách
+đến tủ, nhập PIN trên tablet (thiết bị IoT), tủ mở ra, khách bỏ đồ vào rồi xác nhận trên app.
 
 **Actor chính:** USER (khách hàng)
-**Enum sử dụng:** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#317-329), [BoxStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/helper/OrderBoxHelper.java#117-121), `ServiceCategory`, `PricingType`, `OrderType`
+**Enum sử dụng:
+** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#317-329), [BoxStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/helper/OrderBoxHelper.java#117-121),
+`ServiceCategory`, `PricingType`, `OrderType`
 
 ---
 
 ## Bước 1: Tạo Đơn Hàng
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (khách hàng, đã đăng nhập) |
-| **Endpoint** | `POST /api/orders` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")` |
-| **Service** | [OrderService.createOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L97-L145) |
-| **Controller** | [OrderController.createOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/controller/OrderController.java#L48-L59) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (khách hàng, đã đăng nhập)                                                                                                                                                                         |
+| **Endpoint**      | `POST /api/orders`                                                                                                                                                                                      |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")`                                                                                                                                             |
+| **Service**       | [OrderService.createOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L97-L145)         |
+| **Controller**    | [OrderController.createOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/controller/OrderController.java#L48-L59) |
 
 ### Request Body — [CreateOrderRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/dto/request/CreateOrderRequest.java#15-77)
 
@@ -42,21 +48,21 @@ Khách hàng (USER) mở app, chọn locker, chọn dịch vụ, tạo đơn hà
 }
 ```
 
-| Field | Type | Required | Mô tả |
-|-------|------|----------|-------|
-| `type` | `OrderType` | ✅ | `LAUNDRY` / `DRY_CLEAN` / `STORAGE` |
-| `lockerId` | `Long` | ✅ | ID tủ locker |
-| `boxIds` | `Set<Long>` | ❌ | ID các ngăn tủ. `null` → hệ thống tự chọn |
-| `serviceCategory` | `ServiceCategory` | ❌ | `STORAGE` (giá cố định) / `LAUNDRY` (theo kg) |
-| `serviceIds` | `List<Long>` | ❌ | Danh sách ID dịch vụ |
-| `estimatedWeight` | `Double` | ❌ | Ước lượng cân nặng (kg), dùng tính giá ước tính |
-| `customerNote` | `String` | ❌ | Ghi chú của khách |
-| `receiverId` | `Long` | ❌ | ID người nhận (nếu khác người gửi) |
-| `receiverPhone` | `String` | ❌ | SĐT người nhận |
-| `receiverName` | `String` | ❌ | Tên người nhận |
-| `intendedReceiveAt` | `LocalDateTime` | ❌ | Thời gian dự kiến nhận |
-| `promotionCode` | `String` | ❌ | Mã khuyến mãi |
-| `promotionCodes` | `List<String>` | ❌ | Nhiều mã KM (stackable) |
+| Field               | Type              | Required | Mô tả                                           |
+|---------------------|-------------------|----------|-------------------------------------------------|
+| `type`              | `OrderType`       | ✅        | `LAUNDRY` / `DRY_CLEAN` / `STORAGE`             |
+| `lockerId`          | `Long`            | ✅        | ID tủ locker                                    |
+| `boxIds`            | `Set<Long>`       | ❌        | ID các ngăn tủ. `null` → hệ thống tự chọn       |
+| `serviceCategory`   | `ServiceCategory` | ❌        | `STORAGE` (giá cố định) / `LAUNDRY` (theo kg)   |
+| `serviceIds`        | `List<Long>`      | ❌        | Danh sách ID dịch vụ                            |
+| `estimatedWeight`   | `Double`          | ❌        | Ước lượng cân nặng (kg), dùng tính giá ước tính |
+| `customerNote`      | `String`          | ❌        | Ghi chú của khách                               |
+| `receiverId`        | `Long`            | ❌        | ID người nhận (nếu khác người gửi)              |
+| `receiverPhone`     | `String`          | ❌        | SĐT người nhận                                  |
+| `receiverName`      | `String`          | ❌        | Tên người nhận                                  |
+| `intendedReceiveAt` | `LocalDateTime`   | ❌        | Thời gian dự kiến nhận                          |
+| `promotionCode`     | `String`          | ❌        | Mã khuyến mãi                                   |
+| `promotionCodes`    | `List<String>`    | ❌        | Nhiều mã KM (stackable)                         |
 
 ### Response — `ApiResponse<OrderResponse>`
 
@@ -100,12 +106,12 @@ Khách hàng (USER) mở app, chọn locker, chọn dịch vụ, tạo đơn hà
 1. **Tìm User** từ JWT token → lấy `senderId`
 2. **Tìm Locker** theo `lockerId` → validate tồn tại
 3. **Xử lý Box:**
-   - Nếu `boxIds` có giá trị → validate từng box `AVAILABLE` → set `BoxStatus.OCCUPIED`
-   - Nếu `boxIds` rỗng → auto-assign box `AVAILABLE` đầu tiên trong locker → set `BoxStatus.OCCUPIED`
+    - Nếu `boxIds` có giá trị → validate từng box `AVAILABLE` → set `BoxStatus.OCCUPIED`
+    - Nếu `boxIds` rỗng → auto-assign box `AVAILABLE` đầu tiên trong locker → set `BoxStatus.OCCUPIED`
 4. **Build Order** với `OrderStatus.INITIALIZED`, sinh `pinCode` 6 số, sinh `orderCode` format `ORD-YYYYMMDD-XXXXXX`
 5. **Tính giá:**
-   - Nếu dịch vụ đơn vị `kg` + có `estimatedWeight` → `price × estimatedWeight`
-   - Nếu dịch vụ giá cố định → `price × 1`
+    - Nếu dịch vụ đơn vị `kg` + có `estimatedWeight` → `price × estimatedWeight`
+    - Nếu dịch vụ giá cố định → `price × 1`
 6. **Áp dụng Promotion** nếu có → tính discount, cập nhật `totalPrice`
 7. **Lưu Order** vào database
 
@@ -117,7 +123,9 @@ BoxStatus:    AVAILABLE → OCCUPIED  (1 hoặc nhiều box)
 ```
 
 > [!WARNING]
-> Nếu khách **không xác nhận** bỏ đồ (bước 4) trong **30 phút**, scheduler [autoCancelUnconfirmedOrders()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/core/scheduler/OrderSchedulerService.java#51-92) tự động:
+> Nếu khách **không xác nhận** bỏ đồ (bước 4) trong **30 phút**,
+> scheduler [autoCancelUnconfirmedOrders()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/core/scheduler/OrderSchedulerService.java#51-92)
+> tự động:
 > - `OrderStatus: INITIALIZED → CANCELED` (cancelReason = 99)
 > - `BoxStatus: OCCUPIED → AVAILABLE`
 > - Gửi notification `AUTO_CANCEL` cho khách
@@ -126,12 +134,12 @@ BoxStatus:    AVAILABLE → OCCUPIED  (1 hoặc nhiều box)
 
 ## Bước 2: Xác Thực PIN Tại Tủ (Tablet IoT)
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (tại tablet trên tủ locker) |
-| **Endpoint** | `POST /api/iot/verify-pin` |
-| **Authorization** | Không yêu cầu (public API cho tablet IoT) |
-| **Service** | [IoTService.verifyPin()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L42-L68) |
+| Thông tin         | Chi tiết                                                                                                                                                                               |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (tại tablet trên tủ locker)                                                                                                                                                       |
+| **Endpoint**      | `POST /api/iot/verify-pin`                                                                                                                                                             |
+| **Authorization** | Không yêu cầu (public API cho tablet IoT)                                                                                                                                              |
+| **Service**       | [IoTService.verifyPin()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L42-L68) |
 
 ### Request Body — [VerifyPinRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/dto/request/VerifyPinRequest.java#12-25)
 
@@ -142,14 +150,15 @@ BoxStatus:    AVAILABLE → OCCUPIED  (1 hoặc nhiều box)
 }
 ```
 
-| Field | Type | Required | Validation |
-|-------|------|----------|-----------|
-| `boxId` | `Long` | ✅ | Box phải tồn tại |
-| `pinCode` | `String` | ✅ | Regex: `^\d{6}$` — đúng 6 chữ số |
+| Field     | Type     | Required | Validation                       |
+|-----------|----------|----------|----------------------------------|
+| `boxId`   | `Long`   | ✅        | Box phải tồn tại                 |
+| `pinCode` | `String` | ✅        | Regex: `^\d{6}$` — đúng 6 chữ số |
 
 ### Response — `ApiResponse<VerifyPinResponse>`
 
 **Thành công:**
+
 ```json
 {
   "code": "PIN_VALID",
@@ -166,6 +175,7 @@ BoxStatus:    AVAILABLE → OCCUPIED  (1 hoặc nhiều box)
 ```
 
 **Thất bại:**
+
 ```json
 {
   "code": "PIN_INVALID",
@@ -182,9 +192,9 @@ BoxStatus:    AVAILABLE → OCCUPIED  (1 hoặc nhiều box)
 1. Tìm Box theo `boxId` → nếu không tìm thấy → trả lỗi
 2. Tìm Order theo `pinCode` → nếu không tìm thấy → "Invalid PIN code"
 3. Kiểm tra PIN khớp box:
-   - `OrderStatus == INITIALIZED` → kiểm tra `sendBox` (khách bỏ đồ vào)
-   - `OrderStatus == RETURNED` → kiểm tra `receiveBox` (khách lấy đồ)
-   - Trạng thái khác → kiểm tra cả hai
+    - `OrderStatus == INITIALIZED` → kiểm tra `sendBox` (khách bỏ đồ vào)
+    - `OrderStatus == RETURNED` → kiểm tra `receiveBox` (khách lấy đồ)
+    - Trạng thái khác → kiểm tra cả hai
 4. Nếu khớp → trả `valid: true` + thông tin order
 
 ### State Transitions
@@ -197,12 +207,12 @@ Không thay đổi trạng thái (read-only)
 
 ## Bước 3: Mở Tủ Bằng PIN
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (tại tablet trên tủ locker) |
-| **Endpoint** | `POST /api/iot/unlock` |
-| **Authorization** | Không yêu cầu (public API cho tablet IoT) |
-| **Service** | [IoTService.unlockBox()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L71-L109) |
+| Thông tin         | Chi tiết                                                                                                                                                                                |
+|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (tại tablet trên tủ locker)                                                                                                                                                        |
+| **Endpoint**      | `POST /api/iot/unlock`                                                                                                                                                                  |
+| **Authorization** | Không yêu cầu (public API cho tablet IoT)                                                                                                                                               |
+| **Service**       | [IoTService.unlockBox()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L71-L109) |
 
 ### Request Body — [UnlockBoxRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/dto/request/UnlockBoxRequest.java#12-28)
 
@@ -214,11 +224,11 @@ Không thay đổi trạng thái (read-only)
 }
 ```
 
-| Field | Type | Required | Validation |
-|-------|------|----------|-----------|
-| `boxId` | `Long` | ✅ | Box phải tồn tại |
-| `pinCode` | `String` | ✅ | Regex: `^\d{6}$` |
-| `actionType` | `String` | ❌ | `DROP_OFF` hoặc `PICKUP` |
+| Field        | Type     | Required | Validation               |
+|--------------|----------|----------|--------------------------|
+| `boxId`      | `Long`   | ✅        | Box phải tồn tại         |
+| `pinCode`    | `String` | ✅        | Regex: `^\d{6}$`         |
+| `actionType` | `String` | ❌        | `DROP_OFF` hoặc `PICKUP` |
 
 ### Response — `ApiResponse<UnlockBoxResponse>`
 
@@ -260,18 +270,19 @@ Không thay đổi trạng thái database
 ```
 
 > [!NOTE]
-> **MQTT Flow:** Backend → Broker (HiveMQ) → ESP8266 subscriber mở khóa vật lý. Nếu MQTT fail, API vẫn trả success — tủ không mở nhưng đơn hàng vẫn ở đúng trạng thái.
+> **MQTT Flow:** Backend → Broker (HiveMQ) → ESP8266 subscriber mở khóa vật lý. Nếu MQTT fail, API vẫn trả success — tủ
+> không mở nhưng đơn hàng vẫn ở đúng trạng thái.
 
 ---
 
 ## Bước 4: Xác Nhận Đã Bỏ Đồ Vào Tủ
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (trên mobile app) |
-| **Endpoint** | `PUT /api/orders/{orderId}/confirm` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")` |
-| **Service** | [OrderService.confirmOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L530-L547) |
+| Thông tin         | Chi tiết                                                                                                                                                                                          |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (trên mobile app)                                                                                                                                                                            |
+| **Endpoint**      | `PUT /api/orders/{orderId}/confirm`                                                                                                                                                               |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")`                                                                                                                                       |
+| **Service**       | [OrderService.confirmOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L530-L547) |
 
 ### Request
 
@@ -300,7 +311,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 ### Logic xử lý
 
 1. Tìm Order theo `orderId` → validate tồn tại
-2. **Validate:** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#317-329) phải là `INITIALIZED` → nếu không → throw `E_ORDER006`
+2. **Validate:
+   ** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#317-329)
+   phải là `INITIALIZED` → nếu không → throw `E_ORDER006`
 3. Set `OrderStatus = WAITING`
 4. Gửi notification cho khách: *"Đã bỏ đồ, chờ nhân viên thu gom"*
 
@@ -316,12 +329,12 @@ BoxStatus:    giữ nguyên OCCUPIED
 
 ## Luồng Phụ: Hủy Đơn Hàng
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER hoặc ADMIN |
-| **Endpoint** | `PUT /api/orders/{orderId}/cancel?reason=1` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")` |
-| **Service** | [OrderService.cancelOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L282-L303) |
+| Thông tin         | Chi tiết                                                                                                                                                                                         |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER hoặc ADMIN                                                                                                                                                                                  |
+| **Endpoint**      | `PUT /api/orders/{orderId}/cancel?reason=1`                                                                                                                                                      |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")`                                                                                                                                      |
+| **Service**       | [OrderService.cancelOrder()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L282-L303) |
 
 ### Request
 
@@ -329,13 +342,15 @@ BoxStatus:    giữ nguyên OCCUPIED
 PUT /api/orders/42/cancel?reason=1
 ```
 
-| Param | Type | Required | Mô tả |
-|-------|------|----------|-------|
-| `reason` | `Integer` | ❌ | Mã lý do hủy (99 = system auto-cancel) |
+| Param    | Type      | Required | Mô tả                                  |
+|----------|-----------|----------|----------------------------------------|
+| `reason` | `Integer` | ❌        | Mã lý do hủy (99 = system auto-cancel) |
 
 ### Điều kiện hủy
 
-Chỉ hủy được khi [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#317-329) ∈ `{INITIALIZED, RESERVED, WAITING}`
+Chỉ hủy được
+khi [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#317-329) ∈
+`{INITIALIZED, RESERVED, WAITING}`
 
 ### State Transitions
 

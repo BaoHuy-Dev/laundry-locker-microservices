@@ -1,26 +1,32 @@
 # UC3: Partner Xử Lý Giặt Đồ
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## Tổng quan
 
-Sau khi Staff thu gom đồ (`COLLECTED`), Partner cập nhật trạng thái sang `PROCESSING`, cân đồ thực tế (cập nhật giá chính xác cho dịch vụ PER_WEIGHT), và khi giặt xong đánh dấu `READY` + tự động tạo mã AccessCode RETURN cho Staff.
+Sau khi Staff thu gom đồ (`COLLECTED`), Partner cập nhật trạng thái sang `PROCESSING`, cân đồ thực tế (cập nhật giá
+chính xác cho dịch vụ PER_WEIGHT), và khi giặt xong đánh dấu `READY` + tự động tạo mã AccessCode RETURN cho Staff.
 
 **Actor chính:** PARTNER
-**Enum sử dụng:** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/controller/OrderController.java#81-93), `PricingType`, `AccessCodeAction`
+**Enum sử dụng:
+** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/controller/OrderController.java#81-93),
+`PricingType`, `AccessCodeAction`
 
 ---
 
 ## Bước 1: Cập Nhật Trạng Thái → PROCESSING
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | PARTNER |
-| **Endpoint** | `PUT /api/partner/orders/{orderId}/process` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('PARTNER')")` |
-| **Service** | [PartnerService.updateOrderToProcessing()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L261-L274) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                           |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | PARTNER                                                                                                                                                                                                            |
+| **Endpoint**      | `PUT /api/partner/orders/{orderId}/process`                                                                                                                                                                        |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('PARTNER')")`                                                                                                                                                       |
+| **Service**       | [PartnerService.updateOrderToProcessing()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L261-L274) |
 
 ### Request
 
@@ -63,12 +69,12 @@ OrderStatus: COLLECTED → PROCESSING
 
 ## Bước 2: Cập Nhật Cân Nặng Thực Tế
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | PARTNER |
-| **Endpoint** | `PUT /api/partner/orders/{orderId}/weight` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('PARTNER')")` |
-| **Service** | [PartnerService.updateOrderWeight()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L305-L335) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                     |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | PARTNER                                                                                                                                                                                                      |
+| **Endpoint**      | `PUT /api/partner/orders/{orderId}/weight`                                                                                                                                                                   |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('PARTNER')")`                                                                                                                                                 |
+| **Service**       | [PartnerService.updateOrderWeight()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L305-L335) |
 
 ### Request Body — `UpdateOrderWeightRequest`
 
@@ -87,12 +93,12 @@ OrderStatus: COLLECTED → PROCESSING
 }
 ```
 
-| Field | Type | Required | Mô tả |
-|-------|------|----------|-------|
-| `actualWeight` | `BigDecimal` | ✅ | Cân nặng thực tế (kg) |
-| `weightUnit` | `String` | ❌ | Đơn vị (mặc định: "kg") |
-| `staffNote` | `String` | ❌ | Ghi chú của staff |
-| `items` | `List<OrderItemRequest>` | ❌ | Cập nhật danh sách dịch vụ/số lượng |
+| Field          | Type                     | Required | Mô tả                               |
+|----------------|--------------------------|----------|-------------------------------------|
+| `actualWeight` | `BigDecimal`             | ✅        | Cân nặng thực tế (kg)               |
+| `weightUnit`   | `String`                 | ❌        | Đơn vị (mặc định: "kg")             |
+| `staffNote`    | `String`                 | ❌        | Ghi chú của staff                   |
+| `items`        | `List<OrderItemRequest>` | ❌        | Cập nhật danh sách dịch vụ/số lượng |
 
 ### Response — `ApiResponse<OrderResponse>`
 
@@ -134,18 +140,19 @@ OrderStatus: giữ nguyên (COLLECTED hoặc PROCESSING)
 ```
 
 > [!NOTE]
-> Đây là bước quan trọng cho dịch vụ `LAUNDRY` (PER_WEIGHT). Giá ước tính ban đầu (từ `estimatedWeight`) được thay bằng giá chính xác từ `actualWeight`.
+> Đây là bước quan trọng cho dịch vụ `LAUNDRY` (PER_WEIGHT). Giá ước tính ban đầu (từ `estimatedWeight`) được thay bằng
+> giá chính xác từ `actualWeight`.
 
 ---
 
 ## Bước 3: Đánh Dấu Hoàn Thành + Tạo Mã RETURN
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | PARTNER |
-| **Endpoint** | `PUT /api/partner/orders/{orderId}/ready` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('PARTNER')")` |
-| **Service** | [PartnerService.markOrderReadyAndGenerateCode()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L276-L291) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                                 |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | PARTNER                                                                                                                                                                                                                  |
+| **Endpoint**      | `PUT /api/partner/orders/{orderId}/ready`                                                                                                                                                                                |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('PARTNER')")`                                                                                                                                                             |
+| **Service**       | [PartnerService.markOrderReadyAndGenerateCode()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L276-L291) |
 
 ### Request
 
@@ -154,10 +161,10 @@ PUT /api/partner/orders/42/ready?expirationHours=24&notes=Trả tủ ô số 12
 Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 ```
 
-| Param | Type | Required | Mô tả |
-|-------|------|----------|-------|
-| `expirationHours` | `Integer` | ❌ | Hiệu lực mã (mặc định: 24h) |
-| `notes` | `String` | ❌ | Ghi chú cho staff |
+| Param             | Type      | Required | Mô tả                       |
+|-------------------|-----------|----------|-----------------------------|
+| `expirationHours` | `Integer` | ❌        | Hiệu lực mã (mặc định: 24h) |
+| `notes`           | `String`  | ❌        | Ghi chú cho staff           |
 
 ### Response — `ApiResponse<StaffAccessCodeResponse>`
 

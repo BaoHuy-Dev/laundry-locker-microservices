@@ -1,10 +1,14 @@
 # Microservices Learning Guide
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
-Tài liệu này giải thích microservices từ cơ bản đến nâng cao, dùng chính dự án `laundry-locker-microservices` làm ví dụ thực tế.
+Tài liệu này giải thích microservices từ cơ bản đến nâng cao, dùng chính dự án `laundry-locker-microservices` làm ví dụ
+thực tế.
 
 Workspace ví dụ:
 
@@ -34,26 +38,28 @@ loyalty-service
 
 ## 1. Microservices Là Gì?
 
-Microservices là cách chia một hệ thống lớn thành nhiều service nhỏ, mỗi service sở hữu một miền nghiệp vụ rõ ràng, có code riêng, database/schema riêng, API riêng và có thể deploy độc lập.
+Microservices là cách chia một hệ thống lớn thành nhiều service nhỏ, mỗi service sở hữu một miền nghiệp vụ rõ ràng, có
+code riêng, database/schema riêng, API riêng và có thể deploy độc lập.
 
 Trong dự án này:
 
-| Service | Trách nhiệm |
-|---|---|
-| `auth-service` | Đăng ký, đăng nhập, JWT, OTP, admin auth |
-| `user-service` | Hồ sơ người dùng, role, permission, FCM token facade |
-| `order-service` | Đơn hàng, trạng thái, rating, complaint, promotion |
-| `payment-service` | Thanh toán, refund, VNPay/MoMo parity |
-| `notification-service` | Notification, FCM token, WebSocket |
-| `locker-service` | Locker, box, report, open/reserve/release box |
-| `laundry-service` | Danh mục dịch vụ giặt |
-| `store-service` | Cửa hàng |
-| `iot-service` | Sự kiện thiết bị, unlock, MQTT facade |
-| `partner-service` | Đối tác, access code |
-| `staff-service` | Luồng nhân viên |
-| `loyalty-service` | Điểm, stamp, reward |
+| Service                | Trách nhiệm                                          |
+|------------------------|------------------------------------------------------|
+| `auth-service`         | Đăng ký, đăng nhập, JWT, OTP, admin auth             |
+| `user-service`         | Hồ sơ người dùng, role, permission, FCM token facade |
+| `order-service`        | Đơn hàng, trạng thái, rating, complaint, promotion   |
+| `payment-service`      | Thanh toán, refund, VNPay/MoMo parity                |
+| `notification-service` | Notification, FCM token, WebSocket                   |
+| `locker-service`       | Locker, box, report, open/reserve/release box        |
+| `laundry-service`      | Danh mục dịch vụ giặt                                |
+| `store-service`        | Cửa hàng                                             |
+| `iot-service`          | Sự kiện thiết bị, unlock, MQTT facade                |
+| `partner-service`      | Đối tác, access code                                 |
+| `staff-service`        | Luồng nhân viên                                      |
+| `loyalty-service`      | Điểm, stamp, reward                                  |
 
-Thay vì một app duy nhất xử lý tất cả, mỗi service xử lý một phần nhỏ và giao tiếp với service khác qua REST hoặc message queue.
+Thay vì một app duy nhất xử lý tất cả, mỗi service xử lý một phần nhỏ và giao tiếp với service khác qua REST hoặc
+message queue.
 
 ## 2. Vì Sao Không Dùng Một Monolith?
 
@@ -83,7 +89,8 @@ module/locker
 ...
 ```
 
-Đó là modular monolith: code đã chia module, nhưng vẫn chạy chung một process và thường dùng chung database/domain model.
+Đó là modular monolith: code đã chia module, nhưng vẫn chạy chung một process và thường dùng chung database/domain
+model.
 
 Microservices mới tách thành các app riêng:
 
@@ -98,15 +105,15 @@ notification-service
 
 ## 3. Modular Monolith Vs Microservices
 
-| Tiêu chí | Modular Monolith | Microservices |
-|---|---|---|
-| Deploy | Một app | Nhiều app |
-| Database | Thường dùng chung | Mỗi service sở hữu DB/schema riêng |
-| Giao tiếp | Gọi method/class nội bộ | REST, OpenFeign, RabbitMQ |
-| Entity | Có thể share trực tiếp | Không share entity |
-| Transaction | Dễ dùng local DB transaction | Cần Saga/eventual consistency |
-| Debug | Dễ hơn | Khó hơn, cần logs/tracing |
-| Scale | Scale cả app | Scale từng service |
+| Tiêu chí    | Modular Monolith             | Microservices                      |
+|-------------|------------------------------|------------------------------------|
+| Deploy      | Một app                      | Nhiều app                          |
+| Database    | Thường dùng chung            | Mỗi service sở hữu DB/schema riêng |
+| Giao tiếp   | Gọi method/class nội bộ      | REST, OpenFeign, RabbitMQ          |
+| Entity      | Có thể share trực tiếp       | Không share entity                 |
+| Transaction | Dễ dùng local DB transaction | Cần Saga/eventual consistency      |
+| Debug       | Dễ hơn                       | Khó hơn, cần logs/tracing          |
+| Scale       | Scale cả app                 | Scale từng service                 |
 
 Trong dự án này, rule quan trọng là:
 
@@ -197,14 +204,14 @@ Lợi ích:
 
 Ví dụ route:
 
-| Gateway path | Service nhận |
-|---|---|
-| `/api/auth/**` | `auth-service` |
-| `/api/user/**` | `user-service` |
-| `/api/orders/**` | `order-service` |
-| `/api/payments/**` | `payment-service` |
+| Gateway path            | Service nhận           |
+|-------------------------|------------------------|
+| `/api/auth/**`          | `auth-service`         |
+| `/api/user/**`          | `user-service`         |
+| `/api/orders/**`        | `order-service`        |
+| `/api/payments/**`      | `payment-service`      |
 | `/api/notifications/**` | `notification-service` |
-| `/ws` | `notification-service` |
+| `/ws`                   | `notification-service` |
 
 ## 6. discovery-server Là Gì?
 
@@ -285,12 +292,12 @@ Mỗi service có database riêng.
 
 Ví dụ:
 
-| Service | Database | Schema |
-|---|---|---|
-| `auth-service` | `auth_db` | `auth_schema` |
-| `user-service` | `user_db` | `user_schema` |
-| `order-service` | `order_db` | `order_schema` |
-| `payment-service` | `payment_db` | `payment_schema` |
+| Service                | Database          | Schema                |
+|------------------------|-------------------|-----------------------|
+| `auth-service`         | `auth_db`         | `auth_schema`         |
+| `user-service`         | `user_db`         | `user_schema`         |
+| `order-service`        | `order_db`        | `order_schema`        |
+| `payment-service`      | `payment_db`      | `payment_schema`      |
 | `notification-service` | `notification_db` | `notification_schema` |
 
 Trong local Docker, tất cả database nằm trong một PostgreSQL container, nhưng vẫn là database/schema riêng.
@@ -375,12 +382,12 @@ Khi nào dùng REST/OpenFeign?
 
 Ví dụ:
 
-| Use case | Giao tiếp |
-|---|---|
-| `auth-service` cần tạo user profile | Feign tới `user-service` |
+| Use case                                      | Giao tiếp                   |
+|-----------------------------------------------|-----------------------------|
+| `auth-service` cần tạo user profile           | Feign tới `user-service`    |
 | `order-service` cần lấy laundry service price | Feign tới `laundry-service` |
-| `partner-service` cần lấy locker box trống | Feign tới `locker-service` |
-| `store-service` cần lấy rating | Feign tới `order-service` |
+| `partner-service` cần lấy locker box trống    | Feign tới `locker-service`  |
+| `store-service` cần lấy rating                | Feign tới `order-service`   |
 
 ## 11. RabbitMQ Và Event-Driven
 
@@ -420,12 +427,12 @@ iot.device.status.changed
 
 REST vs Event:
 
-| Câu hỏi | REST/OpenFeign | RabbitMQ event |
-|---|---|---|
-| Có cần response ngay không? | Có | Không |
-| Có muốn xử lý nền không? | Không | Có |
-| Có nhiều service cùng nghe không? | Không phù hợp | Phù hợp |
-| Có cần transaction tức thì không? | Dễ hơn | Cần eventual consistency |
+| Câu hỏi                           | REST/OpenFeign | RabbitMQ event           |
+|-----------------------------------|----------------|--------------------------|
+| Có cần response ngay không?       | Có             | Không                    |
+| Có muốn xử lý nền không?          | Không          | Có                       |
+| Có nhiều service cùng nghe không? | Không phù hợp  | Phù hợp                  |
+| Có cần transaction tức thì không? | Dễ hơn         | Cần eventual consistency |
 
 ## 12. Transaction Trong Microservices
 
@@ -483,10 +490,10 @@ payment fail -> order-service mark PAYMENT_FAILED -> locker-service release box
 
 Có 2 kiểu Saga:
 
-| Kiểu | Mô tả |
-|---|---|
-| Choreography | Service publish/listen event, không có coordinator trung tâm |
-| Orchestration | Có một service điều phối workflow |
+| Kiểu          | Mô tả                                                        |
+|---------------|--------------------------------------------------------------|
+| Choreography  | Service publish/listen event, không có coordinator trung tâm |
+| Orchestration | Có một service điều phối workflow                            |
 
 Với dự án này, hướng tự nhiên là choreography qua RabbitMQ.
 
@@ -615,11 +622,11 @@ Internal API:
 
 Ý nghĩa:
 
-| Nhóm | Ai gọi |
-|---|---|
+| Nhóm        | Ai gọi          |
+|-------------|-----------------|
 | Public/user | Frontend/mobile |
-| Admin | Admin frontend |
-| Internal | Service khác |
+| Admin       | Admin frontend  |
+| Internal    | Service khác    |
 
 Ví dụ:
 
@@ -757,14 +764,14 @@ Các lỗi thường gặp:
 
 Pattern cần học:
 
-| Pattern | Mục đích |
-|---|---|
-| Timeout | Không chờ vô hạn |
-| Retry | Thử lại lỗi tạm thời |
+| Pattern         | Mục đích                       |
+|-----------------|--------------------------------|
+| Timeout         | Không chờ vô hạn               |
+| Retry           | Thử lại lỗi tạm thời           |
 | Circuit Breaker | Ngắt call tới service đang lỗi |
-| Bulkhead | Cô lập resource |
-| Rate Limit | Chặn request quá nhiều |
-| Fallback | Trả response thay thế |
+| Bulkhead        | Cô lập resource                |
+| Rate Limit      | Chặn request quá nhiều         |
+| Fallback        | Trả response thay thế          |
 
 Ví dụ:
 
@@ -796,14 +803,14 @@ Dự án hiện tại giữ endpoint cũ để backward compatibility với mono
 
 Các tầng test:
 
-| Loại test | Mục đích |
-|---|---|
-| Unit test | Test logic trong một class |
-| Repository test | Test query/Flyway/schema |
-| Controller test | Test API contract |
-| Contract test | Đảm bảo service gọi nhau đúng contract |
-| Integration test | Test với DB/RabbitMQ |
-| E2E test | Test luồng qua api-gateway |
+| Loại test        | Mục đích                               |
+|------------------|----------------------------------------|
+| Unit test        | Test logic trong một class             |
+| Repository test  | Test query/Flyway/schema               |
+| Controller test  | Test API contract                      |
+| Contract test    | Đảm bảo service gọi nhau đúng contract |
+| Integration test | Test với DB/RabbitMQ                   |
+| E2E test         | Test luồng qua api-gateway             |
 
 Ví dụ E2E trong dự án:
 
@@ -973,9 +980,9 @@ Tuần 2: Hiểu gateway và auth
 Tuần 3: Hiểu service-to-service
 
 - Đọc Feign client:
-  - `order-service/client`
-  - `partner-service/client`
-  - `store-service/client`
+    - `order-service/client`
+    - `partner-service/client`
+    - `store-service/client`
 - Trace một request qua nhiều service.
 
 Tuần 4: Hiểu event

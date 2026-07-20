@@ -5,12 +5,12 @@ Bộ test này chạy các luồng nghiệp vụ thật qua API gateway, với t
 
 ## Vai trò hệ thống (sau đợt gộp role 2026-07-06)
 
-| Role | Kênh | Phạm vi |
-|---|---|---|
-| `CUSTOMER` | mobile | đặt tủ, thanh toán, mở tủ, báo hỏng, yêu cầu giao drone |
-| `ADMIN` | web | dashboard/thống kê, quản lý user/tủ/drone, scheduler |
-| `TECHNICIAN` | mobile | bảo trì vật lý tủ (sự cố, ô, định kỳ, bãi đáp) + thiết bị IoT |
-| `MAINTENANCE` | mobile | đội bay drone (hàng đợi giao hàng, fleet, pin, nhật ký) |
+| Role          | Kênh   | Phạm vi                                                       |
+|---------------|--------|---------------------------------------------------------------|
+| `CUSTOMER`    | mobile | đặt tủ, thanh toán, mở tủ, báo hỏng, yêu cầu giao drone       |
+| `ADMIN`       | web    | dashboard/thống kê, quản lý user/tủ/drone, scheduler          |
+| `TECHNICIAN`  | mobile | bảo trì vật lý tủ (sự cố, ô, định kỳ, bãi đáp) + thiết bị IoT |
+| `MAINTENANCE` | mobile | đội bay drone (hàng đợi giao hàng, fleet, pin, nhật ký)       |
 
 `MANAGER`/`STAFF` đã bỏ — `/api/manage/**`, `/api/staff/**` không còn tồn tại.
 

@@ -1,7 +1,10 @@
 # MQTT Integration & Tablet Kiosk — Backend Guide
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 Hướng dẫn tích hợp MQTT và API endpoints cho hệ thống tủ giặt IoT.
@@ -54,40 +57,41 @@ User có thể chọn đăng nhập bằng **Số điện thoại** (Firebase OT
 
 #### 1a. Đăng nhập bằng SĐT (Firebase Phone Auth)
 
-| Bước | Method | Endpoint | Auth | Request / Response |
-|------|--------|----------|------|-------------------|
-| 1 | — | Firebase `signInWithPhoneNumber()` | — | Client-side: gửi OTP qua Firebase SDK |
-| 2 | — | Firebase `confirmationResult.confirm(otp)` | — | Client-side: verify OTP → lấy `idToken` |
-| 3 | POST | `/api/auth/phone-login` | Public | `{ idToken }` → `{ accessToken, isNewUser, tempToken, phoneNumber }` |
-| 3b | POST | `/api/auth/complete-registration` | Public | `{ tempToken, firstName, lastName, birthday }` (nếu `isNewUser=true`) |
+| Bước | Method | Endpoint                                   | Auth   | Request / Response                                                    |
+|------|--------|--------------------------------------------|--------|-----------------------------------------------------------------------|
+| 1    | —      | Firebase `signInWithPhoneNumber()`         | —      | Client-side: gửi OTP qua Firebase SDK                                 |
+| 2    | —      | Firebase `confirmationResult.confirm(otp)` | —      | Client-side: verify OTP → lấy `idToken`                               |
+| 3    | POST   | `/api/auth/phone-login`                    | Public | `{ idToken }` → `{ accessToken, isNewUser, tempToken, phoneNumber }`  |
+| 3b   | POST   | `/api/auth/complete-registration`          | Public | `{ tempToken, firstName, lastName, birthday }` (nếu `isNewUser=true`) |
 
 #### 1b. Đăng nhập bằng Email (Backend OTP)
 
-| Bước | Method | Endpoint | Auth | Request / Response |
-|------|--------|----------|------|-------------------|
-| 1 | POST | `/api/auth/email/send-otp` | Public | `{ email }` |
-| 2 | POST | `/api/auth/email/verify-otp` | Public | `{ email, otp }` → `{ accessToken, isNewUser, tempToken }` |
-| 2b | POST | `/api/auth/email/complete-registration` | Public | `{ tempToken, firstName, lastName, birthday }` (nếu `isNewUser=true`) |
+| Bước | Method | Endpoint                                | Auth   | Request / Response                                                    |
+|------|--------|-----------------------------------------|--------|-----------------------------------------------------------------------|
+| 1    | POST   | `/api/auth/email/send-otp`              | Public | `{ email }`                                                           |
+| 2    | POST   | `/api/auth/email/verify-otp`            | Public | `{ email, otp }` → `{ accessToken, isNewUser, tempToken }`            |
+| 2b   | POST   | `/api/auth/email/complete-registration` | Public | `{ tempToken, firstName, lastName, birthday }` (nếu `isNewUser=true`) |
 
 #### Các bước sau khi đăng nhập (chung cho cả SĐT và Email)
 
-| Bước | Method | Endpoint | Auth | Request / Response |
-|------|--------|----------|------|-------------------|
-| 4 | GET | `/api/services?category=LAUNDRY` | JWT | — |
-| 5 | POST | `/api/orders` | JWT | `{ type, lockerId, boxId, serviceIds, customerNote, receiverName, receiverPhone }` |
-| 6 | POST | `/api/payments/create` | JWT | `{ orderId, paymentMethod }` → `paymentUrl` |
-| 7 | POST | `/api/iot/unlock` | Public | `{ pinCode, boxId, lockerCode }` |
+| Bước | Method | Endpoint                         | Auth   | Request / Response                                                                 |
+|------|--------|----------------------------------|--------|------------------------------------------------------------------------------------|
+| 4    | GET    | `/api/services?category=LAUNDRY` | JWT    | —                                                                                  |
+| 5    | POST   | `/api/orders`                    | JWT    | `{ type, lockerId, boxId, serviceIds, customerNote, receiverName, receiverPhone }` |
+| 6    | POST   | `/api/payments/create`           | JWT    | `{ orderId, paymentMethod }` → `paymentUrl`                                        |
+| 7    | POST   | `/api/iot/unlock`                | Public | `{ pinCode, boxId, lockerCode }`                                                   |
 
 ### Luồng 2: Mở bằng mã (không cần đăng nhập)
 
-| Bước | Method | Endpoint | Auth | Request Body |
-|------|--------|----------|------|-------------|
-| PIN | POST | `/api/iot/verify-pin` | Public | `{ pinCode, boxId, lockerCode }` |
-| PIN | POST | `/api/iot/unlock` | Public | `{ pinCode, boxId, lockerCode }` |
-| Staff | POST | `/api/iot/unlock-with-code` | Public | `{ orderId, accessCode, staffName }` |
+| Bước  | Method | Endpoint                    | Auth   | Request Body                         |
+|-------|--------|-----------------------------|--------|--------------------------------------|
+| PIN   | POST   | `/api/iot/verify-pin`       | Public | `{ pinCode, boxId, lockerCode }`     |
+| PIN   | POST   | `/api/iot/unlock`           | Public | `{ pinCode, boxId, lockerCode }`     |
+| Staff | POST   | `/api/iot/unlock-with-code` | Public | `{ orderId, accessCode, staffName }` |
 
 > [!IMPORTANT]
-> Sau khi xử lý unlock thành công (ở bất kỳ endpoint unlock nào), backend cần **publish MQTT message** để ESP8266 thực hiện mở relay. Xem phần MQTT bên dưới.
+> Sau khi xử lý unlock thành công (ở bất kỳ endpoint unlock nào), backend cần **publish MQTT message** để ESP8266 thực
+> hiện mở relay. Xem phần MQTT bên dưới.
 
 ---
 
@@ -95,9 +99,12 @@ User có thể chọn đăng nhập bằng **Số điện thoại** (Firebase OT
 
 ### Vấn đề
 
-Trên **kiosk tại cửa hàng**, user chỉ cần nhập **số điện thoại** → xác thực OTP → chọn dịch vụ → bỏ đồ. Phải nhanh nhất có thể.
+Trên **kiosk tại cửa hàng**, user chỉ cần nhập **số điện thoại** → xác thực OTP → chọn dịch vụ → bỏ đồ. Phải nhanh nhất
+có thể.
 
-Hiện tại nếu user mới, backend bắt buộc gọi `complete-registration` với `firstName`, `lastName`, `birthday` (`@NotBlank`/`@NotNull`). Trên kiosk, user **không muốn và không cần** nhập các thông tin này. Họ có thể cập nhật thông tin sau trên mobile app.
+Hiện tại nếu user mới, backend bắt buộc gọi `complete-registration` với `firstName`, `lastName`, `birthday` (
+`@NotBlank`/`@NotNull`). Trên kiosk, user **không muốn và không cần** nhập các thông tin này. Họ có thể cập nhật thông
+tin sau trên mobile app.
 
 ### Yêu cầu: Tạo endpoint đăng ký nhanh
 
@@ -105,9 +112,11 @@ Hiện tại nếu user mới, backend bắt buộc gọi `complete-registration
 POST /api/auth/kiosk/quick-register
 ```
 
-**Mục đích:** Khi user mới xác thực SĐT/Email trên kiosk (`isNewUser=true`), frontend gọi endpoint này **thay vì** `complete-registration`. Backend tự tạo user với thông tin mặc định, trả về JWT để user tiếp tục đặt dịch vụ ngay.
+**Mục đích:** Khi user mới xác thực SĐT/Email trên kiosk (`isNewUser=true`), frontend gọi endpoint này **thay vì**
+`complete-registration`. Backend tự tạo user với thông tin mặc định, trả về JWT để user tiếp tục đặt dịch vụ ngay.
 
 #### Request
+
 ```json
 {
   "tempToken": "uuid-token-from-phone-login-or-verify-otp"
@@ -115,6 +124,7 @@ POST /api/auth/kiosk/quick-register
 ```
 
 #### Response (thành công)
+
 ```json
 {
   "success": true,
@@ -129,16 +139,17 @@ POST /api/auth/kiosk/quick-register
 
 ### Files backend cần thay đổi
 
-| # | File | Thay đổi |
-|---|------|----------|
-| 1 | `UriParamConstants.java` | Thêm `KIOSK_QUICK_REGISTER = "/kiosk/quick-register"` |
-| 2 | `KioskQuickRegisterRequest.java` | **[NEW]** DTO chỉ có 1 field `tempToken` |
-| 3 | `AuthController.java` | Thêm endpoint `@PostMapping(KIOSK_QUICK_REGISTER)` |
-| 4 | `AuthService.java` | Thêm method `kioskQuickRegister()` |
+| # | File                             | Thay đổi                                              |
+|---|----------------------------------|-------------------------------------------------------|
+| 1 | `UriParamConstants.java`         | Thêm `KIOSK_QUICK_REGISTER = "/kiosk/quick-register"` |
+| 2 | `KioskQuickRegisterRequest.java` | **[NEW]** DTO chỉ có 1 field `tempToken`              |
+| 3 | `AuthController.java`            | Thêm endpoint `@PostMapping(KIOSK_QUICK_REGISTER)`    |
+| 4 | `AuthService.java`               | Thêm method `kioskQuickRegister()`                    |
 
 ### Code mẫu
 
 #### `KioskQuickRegisterRequest.java` (NEW)
+
 ```java
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class KioskQuickRegisterRequest {
@@ -148,6 +159,7 @@ public class KioskQuickRegisterRequest {
 ```
 
 #### `AuthController.java` (thêm endpoint)
+
 ```java
 /** Kiosk quick register - tạo user nhanh không cần nhập thông tin */
 @Operation(summary = "Kiosk Quick Register",
@@ -162,6 +174,7 @@ public ResponseEntity<ApiResponse<AuthResponse>> kioskQuickRegister(
 ```
 
 #### `AuthService.java` (thêm method)
+
 ```java
 /**
  * Đăng ký nhanh từ kiosk. Tự tạo user với thông tin mặc định.
@@ -229,34 +242,34 @@ User nhập SĐT → Firebase gửi OTP → Verify OTP → Backend phone-login
                 → trả JWT → chọn dịch vụ ngay (KHÔNG CẦN NHẬP GÌ THÊM)
 ```
 
-
 ---
 
 ## MQTT Broker
 
 Sử dụng một trong các broker sau:
 
-| Broker | Loại | Phù hợp |
-|--------|------|---------|
-| [HiveMQ Cloud](https://www.hivemq.com/mqtt-cloud-broker/) | Cloud (free tier) | Production |
-| [Mosquitto](https://mosquitto.org/) | Self-hosted | Production |
-| `broker.hivemq.com:1883` | Public (không cần auth) | **Testing only** |
+| Broker                                                    | Loại                    | Phù hợp          |
+|-----------------------------------------------------------|-------------------------|------------------|
+| [HiveMQ Cloud](https://www.hivemq.com/mqtt-cloud-broker/) | Cloud (free tier)       | Production       |
+| [Mosquitto](https://mosquitto.org/)                       | Self-hosted             | Production       |
+| `broker.hivemq.com:1883`                                  | Public (không cần auth) | **Testing only** |
 
 > [!WARNING]
 > Broker public (`broker.hivemq.com`) **KHÔNG an toàn** cho production. Chỉ dùng để test.
 
 ## Topics
 
-| Topic | Direction | Mô tả |
-|-------|-----------|-------|
-| `locker/commands/{DEVICE_ID}` | Backend → ESP | Gửi lệnh mở/khóa tủ |
-| `locker/status/{DEVICE_ID}` | ESP → Backend | Trạng thái tủ (ONLINE, UNLOCKED, LOCKED) |
+| Topic                         | Direction     | Mô tả                                    |
+|-------------------------------|---------------|------------------------------------------|
+| `locker/commands/{DEVICE_ID}` | Backend → ESP | Gửi lệnh mở/khóa tủ                      |
+| `locker/status/{DEVICE_ID}`   | ESP → Backend | Trạng thái tủ (ONLINE, UNLOCKED, LOCKED) |
 
 `DEVICE_ID` mặc định: `ESP8266_LOCKER_01`
 
 ## Command JSON Format
 
 ### Mở khóa box
+
 ```json
 {
   "box_id": 1,
@@ -265,6 +278,7 @@ Sử dụng một trong các broker sau:
 ```
 
 ### Khóa box
+
 ```json
 {
   "box_id": 1,
@@ -291,6 +305,7 @@ Giá trị `status`: `ONLINE` | `UNLOCKED` | `LOCKED`
 ### 1. Thêm dependency
 
 **Maven** (`pom.xml`):
+
 ```xml
 <dependency>
     <groupId>org.eclipse.paho</groupId>
@@ -300,6 +315,7 @@ Giá trị `status`: `ONLINE` | `UNLOCKED` | `LOCKED`
 ```
 
 Hoặc dùng **Spring Integration MQTT**:
+
 ```xml
 <dependency>
     <groupId>org.springframework.integration</groupId>

@@ -7,15 +7,15 @@ cách xử lý**. Domain thật: **`locker-drone.tech`**.
 
 ## 📑 Mục lục
 
-| File | Nội dung |
-|---|---|
-| [01-domain-dns.md](01-domain-dns.md) | Lấy domain `.tech` (GitHub Student) + đưa về Cloudflare quản lý DNS |
-| [02-backend-https-cors.md](02-backend-https-cors.md) | **Nginx + Let's Encrypt + port gateway 8080 (auto-deploy ép) + CORS** (phần hay lỗi nhất) |
-| [03-frontend-web.md](03-frontend-web.md) | Web admin — Cloudflare Worker, `fe/.env`, deploy bằng `wrangler` |
-| [04-mobile.md](04-mobile.md) | App mobile — `.env` + regenerate envied |
-| [05-oauth-firebase.md](05-oauth-firebase.md) | Firebase / Facebook authorized domains |
-| [06-troubleshooting.md](06-troubleshooting.md) | **Tất cả lỗi đã gặp: 502, CORS giả, Mixed Content, certbot timeout…** |
-| [07-redeploy-cheatsheet.md](07-redeploy-cheatsheet.md) | Cheat-sheet deploy lại + checklist nghiệm thu |
+| File                                                   | Nội dung                                                                                  |
+|--------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| [01-domain-dns.md](01-domain-dns.md)                   | Lấy domain `.tech` (GitHub Student) + đưa về Cloudflare quản lý DNS                       |
+| [02-backend-https-cors.md](02-backend-https-cors.md)   | **Nginx + Let's Encrypt + port gateway 8080 (auto-deploy ép) + CORS** (phần hay lỗi nhất) |
+| [03-frontend-web.md](03-frontend-web.md)               | Web admin — Cloudflare Worker, `fe/.env`, deploy bằng `wrangler`                          |
+| [04-mobile.md](04-mobile.md)                           | App mobile — `.env` + regenerate envied                                                   |
+| [05-oauth-firebase.md](05-oauth-firebase.md)           | Firebase / Facebook authorized domains                                                    |
+| [06-troubleshooting.md](06-troubleshooting.md)         | **Tất cả lỗi đã gặp: 502, CORS giả, Mixed Content, certbot timeout…**                     |
+| [07-redeploy-cheatsheet.md](07-redeploy-cheatsheet.md) | Cheat-sheet deploy lại + checklist nghiệm thu                                             |
 
 ## 🗺️ Sơ đồ hệ thống
 
@@ -36,18 +36,18 @@ Mobile app        ────────────────────�
 
 ## ℹ️ Bảng thông tin hệ thống
 
-| Hạng mục | Giá trị |
-|---|---|
-| Domain | `locker-drone.tech` (DNS ở Cloudflare) |
-| Web admin | `https://admin.locker-drone.tech` (Cloudflare **Worker** static assets) |
-| **API** | **`https://api.locker-drone.tech`** |
-| Droplet | `146.190.84.136` (DigitalOcean) — **dùng chung** với project `aisl.io.vn` |
-| Code backend (droplet) | `/opt/laundry-locker-microservices` (có `…​.previous` backup — đừng đụng) |
-| Gateway container | `ll-ms-api-gateway` · port nội bộ `8080` → **host `8080` (auto-deploy ép)** |
-| Repo FE (code) | `LeThiYenVi/laundry-locker-frontend` (code trong `fe/`) |
-| Repo BE (code) | `BaoHuy-Dev/laundry-locker-microservices` (merge `develop` → auto-deploy) |
-| Worker FE | `laundry-locker-frontend-1` (account `nqbhuy2004nt@gmail.com`) |
-| Cert | `/etc/letsencrypt/live/api.locker-drone.tech/` — hết hạn 2026-09-20 (auto-renew) |
+| Hạng mục               | Giá trị                                                                          |
+|------------------------|----------------------------------------------------------------------------------|
+| Domain                 | `locker-drone.tech` (DNS ở Cloudflare)                                           |
+| Web admin              | `https://admin.locker-drone.tech` (Cloudflare **Worker** static assets)          |
+| **API**                | **`https://api.locker-drone.tech`**                                              |
+| Droplet                | `146.190.84.136` (DigitalOcean) — **dùng chung** với project `aisl.io.vn`        |
+| Code backend (droplet) | `/opt/laundry-locker-microservices` (có `…​.previous` backup — đừng đụng)        |
+| Gateway container      | `ll-ms-api-gateway` · port nội bộ `8080` → **host `8080` (auto-deploy ép)**      |
+| Repo FE (code)         | `LeThiYenVi/laundry-locker-frontend` (code trong `fe/`)                          |
+| Repo BE (code)         | `BaoHuy-Dev/laundry-locker-microservices` (merge `develop` → auto-deploy)        |
+| Worker FE              | `laundry-locker-frontend-1` (account `nqbhuy2004nt@gmail.com`)                   |
+| Cert                   | `/etc/letsencrypt/live/api.locker-drone.tech/` — hết hạn 2026-09-20 (auto-renew) |
 
 ## 🔑 Giá trị cấu hình chuẩn (copy nhanh)
 
@@ -70,10 +70,12 @@ API_URL=https://api.locker-drone.tech/api
 ```
 
 ## 👤 Tài khoản test (mật khẩu `12345678`)
+
 ADMIN `baohuy2k12k4@gmail.com` · CUSTOMER `nqbhuy2004nt@gmail.com` · MAINTENANCE
 `se180211nguyenquocbaohuy@gmail.com` · MANAGER `huynqbse180211@fpt.edu.vn`.
 
 ## ⚠️ 3 điều dễ sai nhất (đọc trước)
+
 1. **Port gateway phải khớp Nginx.** Gateway luôn ở host `8080` (auto-deploy ép),
    Nginx `proxy_pass …:8080`. Sai port → **502** (mà trình duyệt báo nhầm thành CORS).
 2. **`fe/.env` phải là HTTPS domain.** Để `http://IP` → web HTTPS bị chặn **Mixed Content**.

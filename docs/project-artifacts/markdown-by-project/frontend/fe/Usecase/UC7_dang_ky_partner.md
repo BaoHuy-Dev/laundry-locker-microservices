@@ -1,12 +1,16 @@
 # UC7: Đăng Ký & Duyệt Partner
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## Tổng quan
 
-User đăng ký trở thành Partner (chủ cửa hàng giặt). Admin xem danh sách chờ duyệt, duyệt/từ chối/đình chỉ. Sau khi duyệt, Partner được gán role `PARTNER` và có thể quản lý đơn hàng, nhân viên, cửa hàng.
+User đăng ký trở thành Partner (chủ cửa hàng giặt). Admin xem danh sách chờ duyệt, duyệt/từ chối/đình chỉ. Sau khi
+duyệt, Partner được gán role `PARTNER` và có thể quản lý đơn hàng, nhân viên, cửa hàng.
 
 **Actor chính:** USER → PARTNER, ADMIN
 **Enum sử dụng:** `PartnerStatus`, `RoleName`
@@ -15,12 +19,12 @@ User đăng ký trở thành Partner (chủ cửa hàng giặt). Admin xem danh 
 
 ## Bước 1: User Đăng Ký Partner
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (đã đăng nhập) |
-| **Endpoint** | `POST /api/partner` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")` |
-| **Service** | [PartnerService.registerPartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L75-L93) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                 |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (đã đăng nhập)                                                                                                                                                                                      |
+| **Endpoint**      | `POST /api/partner`                                                                                                                                                                                      |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")`                                                                                                                                              |
+| **Service**       | [PartnerService.registerPartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L75-L93) |
 
 ### Request Body — [PartnerRegistrationRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/dto/request/PartnerRegistrationRequest.java#12-37)
 
@@ -36,15 +40,15 @@ User đăng ký trở thành Partner (chủ cửa hàng giặt). Admin xem danh 
 }
 ```
 
-| Field | Type | Required | Validation |
-|-------|------|----------|-----------|
-| `businessName` | `String` | ✅ | 3–200 ký tự |
-| `businessRegistrationNumber` | `String` | ❌ | Số đăng ký kinh doanh |
-| `taxId` | `String` | ❌ | Mã số thuế |
-| `businessAddress` | `String` | ✅ | Địa chỉ |
-| `contactPhone` | `String` | ✅ | SĐT liên hệ |
-| `contactEmail` | `String` | ❌ | Email (validate format) |
-| `notes` | `String` | ❌ | Ghi chú |
+| Field                        | Type     | Required | Validation              |
+|------------------------------|----------|----------|-------------------------|
+| `businessName`               | `String` | ✅        | 3–200 ký tự             |
+| `businessRegistrationNumber` | `String` | ❌        | Số đăng ký kinh doanh   |
+| `taxId`                      | `String` | ❌        | Mã số thuế              |
+| `businessAddress`            | `String` | ✅        | Địa chỉ                 |
+| `contactPhone`               | `String` | ✅        | SĐT liên hệ             |
+| `contactEmail`               | `String` | ❌        | Email (validate format) |
+| `notes`                      | `String` | ❌        | Ghi chú                 |
 
 ### Response — `ApiResponse<PartnerResponse>`
 
@@ -91,12 +95,12 @@ Role:          giữ nguyên USER (chưa gán PARTNER)
 
 ## Bước 2: Admin Xem Danh Sách Chờ Duyệt
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | ADMIN |
-| **Endpoint** | `GET /api/admin/partners?status=PENDING` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('ADMIN')")` |
-| **Service** | [PartnerService.getAllPartners()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L170-L177) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                  |
+|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | ADMIN                                                                                                                                                                                                     |
+| **Endpoint**      | `GET /api/admin/partners?status=PENDING`                                                                                                                                                                  |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('ADMIN')")`                                                                                                                                                |
+| **Service**       | [PartnerService.getAllPartners()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L170-L177) |
 
 ### Request
 
@@ -129,12 +133,12 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 
 ## Bước 3a: Admin Duyệt Partner
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | ADMIN |
-| **Endpoint** | `PUT /api/admin/partners/{partnerId}/approve` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('ADMIN')")` |
-| **Service** | [PartnerService.approvePartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L179-L192) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                  |
+|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | ADMIN                                                                                                                                                                                                     |
+| **Endpoint**      | `PUT /api/admin/partners/{partnerId}/approve`                                                                                                                                                             |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("hasRole('ADMIN')")`                                                                                                                                                |
+| **Service**       | [PartnerService.approvePartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L179-L192) |
 
 ### Request
 
@@ -176,10 +180,10 @@ Role:          USER → USER + PARTNER  (thêm role)
 
 ## Bước 3b: Admin Từ Chối Partner
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Endpoint** | `PUT /api/admin/partners/{partnerId}/reject` |
-| **Service** | [PartnerService.rejectPartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L194-L205) |
+| Thông tin    | Chi tiết                                                                                                                                                                                                 |
+|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Endpoint** | `PUT /api/admin/partners/{partnerId}/reject`                                                                                                                                                             |
+| **Service**  | [PartnerService.rejectPartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L194-L205) |
 
 ### Request
 
@@ -209,10 +213,10 @@ PartnerStatus: PENDING → REJECTED
 
 ## Bước 3c: Admin Đình Chỉ Partner
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Endpoint** | `PUT /api/admin/partners/{partnerId}/suspend` (custom admin endpoint) |
-| **Service** | [PartnerService.suspendPartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L207-L215) |
+| Thông tin    | Chi tiết                                                                                                                                                                                                  |
+|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Endpoint** | `PUT /api/admin/partners/{partnerId}/suspend` (custom admin endpoint)                                                                                                                                     |
+| **Service**  | [PartnerService.suspendPartner()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/partner/service/PartnerService.java#L207-L215) |
 
 ### State Transitions
 
@@ -234,12 +238,12 @@ stateDiagram-v2
     APPROVED --> SUSPENDED: Admin đình chỉ
 ```
 
-| Trạng thái | Quyền truy cập |
-|-----------|---------------|
-| `PENDING` | Chỉ xem thông tin partner, không quản lý đơn hàng |
-| `APPROVED` | Full access: quản lý đơn, staff, cửa hàng, tạo AccessCode |
-| `REJECTED` | Không thể hoạt động |
-| `SUSPENDED` | Bị chặn toàn bộ API partner |
+| Trạng thái  | Quyền truy cập                                            |
+|-------------|-----------------------------------------------------------|
+| `PENDING`   | Chỉ xem thông tin partner, không quản lý đơn hàng         |
+| `APPROVED`  | Full access: quản lý đơn, staff, cửa hàng, tạo AccessCode |
+| `REJECTED`  | Không thể hoạt động                                       |
+| `SUSPENDED` | Bị chặn toàn bộ API partner                               |
 
 ---
 
@@ -252,7 +256,8 @@ POST /api/partner/staff
 Body: { "staffUserId": 15 }
 ```
 
-**Logic:** Partner thêm user vào danh sách `staff` của mình. Staff **không** được gán role riêng — chỉ là user thường thuộc nhóm `partner.staff`.
+**Logic:** Partner thêm user vào danh sách `staff` của mình. Staff **không** được gán role riêng — chỉ là user thường
+thuộc nhóm `partner.staff`.
 
 ### Xóa Staff
 
@@ -261,4 +266,5 @@ DELETE /api/partner/staff/{staffId}
 ```
 
 > [!NOTE]
-> Staff trong hệ thống là **user accounts** được Partner quản lý nội bộ. Khi tương tác với tủ locker ngoài thực địa, nhân viên (có thể khác với staff accounts) sử dụng **AccessCode** do Partner tạo — không cần đăng nhập.
+> Staff trong hệ thống là **user accounts** được Partner quản lý nội bộ. Khi tương tác với tủ locker ngoài thực địa,
+> nhân viên (có thể khác với staff accounts) sử dụng **AccessCode** do Partner tạo — không cần đăng nhập.

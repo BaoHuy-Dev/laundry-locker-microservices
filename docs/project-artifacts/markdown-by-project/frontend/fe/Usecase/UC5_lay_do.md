@@ -1,26 +1,32 @@
 # UC5: Khách Hàng Lấy Đồ (Pickup)
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## Tổng quan
 
-Sau khi nhận notification "Đồ sẵn sàng", khách đến tủ locker, nhập PIN mới trên tablet IoT, mở tủ, lấy đồ. Có **2 cách** hoàn thành đơn: (a) xác nhận qua IoT tablet, (b) xác nhận qua mobile app.
+Sau khi nhận notification "Đồ sẵn sàng", khách đến tủ locker, nhập PIN mới trên tablet IoT, mở tủ, lấy đồ. Có **2 cách**
+hoàn thành đơn: (a) xác nhận qua IoT tablet, (b) xác nhận qua mobile app.
 
 **Actor chính:** USER (khách hàng)
-**Enum sử dụng:** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/controller/OrderController.java#81-93), [BoxStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#167-187), `PaymentStatus`
+**Enum sử dụng:
+** [OrderStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/controller/OrderController.java#81-93), [BoxStatus](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#167-187),
+`PaymentStatus`
 
 ---
 
 ## Bước 1: Xác Thực PIN Tại Tủ
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (tại tablet trên tủ locker) |
-| **Endpoint** | `POST /api/iot/verify-pin` |
-| **Authorization** | Không yêu cầu |
-| **Service** | [IoTService.verifyPin()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L42-L68) |
+| Thông tin         | Chi tiết                                                                                                                                                                               |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (tại tablet trên tủ locker)                                                                                                                                                       |
+| **Endpoint**      | `POST /api/iot/verify-pin`                                                                                                                                                             |
+| **Authorization** | Không yêu cầu                                                                                                                                                                          |
+| **Service**       | [IoTService.verifyPin()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L42-L68) |
 
 ### Request Body — [VerifyPinRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/dto/request/VerifyPinRequest.java#12-25)
 
@@ -63,12 +69,12 @@ Không thay đổi (read-only)
 
 ## Bước 2: Mở Tủ Lấy Đồ
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Ai thực hiện** | USER (tại tablet) |
-| **Endpoint** | `POST /api/iot/unlock` |
-| **Authorization** | Không yêu cầu |
-| **Service** | [IoTService.unlockBox()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L71-L109) |
+| Thông tin         | Chi tiết                                                                                                                                                                                |
+|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ai thực hiện**  | USER (tại tablet)                                                                                                                                                                       |
+| **Endpoint**      | `POST /api/iot/unlock`                                                                                                                                                                  |
+| **Authorization** | Không yêu cầu                                                                                                                                                                           |
+| **Service**       | [IoTService.unlockBox()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L71-L109) |
 
 ### Request Body — [UnlockBoxRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/dto/request/UnlockBoxRequest.java#12-28)
 
@@ -123,11 +129,11 @@ Có **2 cách** xác nhận pickup:
 
 ### Cách A: Qua IoT Tablet
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Endpoint** | `POST /api/iot/pickup` |
-| **Authorization** | Không yêu cầu |
-| **Service** | [IoTService.confirmPickup()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L112-L149) |
+| Thông tin         | Chi tiết                                                                                                                                                                                     |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Endpoint**      | `POST /api/iot/pickup`                                                                                                                                                                       |
+| **Authorization** | Không yêu cầu                                                                                                                                                                                |
+| **Service**       | [IoTService.confirmPickup()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/service/IoTService.java#L112-L149) |
 
 #### Request Body — [PickupRequest](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/iot/dto/request/PickupRequest.java#10-22)
 
@@ -138,10 +144,10 @@ Có **2 cách** xác nhận pickup:
 }
 ```
 
-| Field | Type | Required |
-|-------|------|----------|
-| `orderId` | `Long` | ✅ |
-| `boxId` | `Long` | ✅ |
+| Field     | Type   | Required |
+|-----------|--------|----------|
+| `orderId` | `Long` | ✅        |
+| `boxId`   | `Long` | ✅        |
 
 #### Response — `ApiResponse<PickupResponse>`
 
@@ -162,11 +168,11 @@ Có **2 cách** xác nhận pickup:
 
 ### Cách B: Qua Mobile App
 
-| Thông tin | Chi tiết |
-|-----------|----------|
-| **Endpoint** | `PUT /api/orders/{orderId}/complete` |
-| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")` |
-| **Service** | [OrderService.completeOrderByCustomer()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L242-L280) |
+| Thông tin         | Chi tiết                                                                                                                                                                                                     |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Endpoint**      | `PUT /api/orders/{orderId}/complete`                                                                                                                                                                         |
+| **Authorization** | `Bearer {JWT token}` — `@PreAuthorize("isAuthenticated()")`                                                                                                                                                  |
+| **Service**       | [OrderService.completeOrderByCustomer()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/module/order/service/OrderService.java#L242-L280) |
 
 #### Request
 
@@ -234,7 +240,7 @@ PIN Code:     xóa (null)
 
 ## Scheduler liên quan
 
-| Scheduler | Tần suất | Tác động vào UC5 |
-|-----------|----------|------------------|
-| [sendPickupReminders()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/core/scheduler/OrderSchedulerService.java#199-238) | Mỗi 1 giờ | Nếu đơn `RETURNED` > 24h → gửi notification nhắc nhở |
+| Scheduler                                                                                                                                                                                                | Tần suất   | Tác động vào UC5                                     |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------|------------------------------------------------------|
+| [sendPickupReminders()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/core/scheduler/OrderSchedulerService.java#199-238)             | Mỗi 1 giờ  | Nếu đơn `RETURNED` > 24h → gửi notification nhắc nhở |
 | [autoReleaseBoxesAfterCompletion()](file:///d:/BigProject/laundry-locker-backend/laundry-locker-backend/src/main/java/com/huynqb/laundrylockerbackend/core/scheduler/OrderSchedulerService.java#126-162) | Mỗi 2 phút | Sau khi `COMPLETED` 5 phút → giải phóng box, xóa PIN |

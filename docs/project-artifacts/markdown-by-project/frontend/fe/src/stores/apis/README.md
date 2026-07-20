@@ -1,7 +1,10 @@
 # Admin API Implementation with Zod & RTK Query
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 This directory contains the complete Admin API implementation using RTK Query with Zod validation.
@@ -26,6 +29,7 @@ admin/
 ## Features
 
 ### 1. Zod Schema Validation
+
 All request bodies are validated using Zod schemas before sending to the API:
 
 - **CreateUserRequest** - Validates email, password, names, phone, roles
@@ -38,6 +42,7 @@ All request bodies are validated using Zod schemas before sending to the API:
 - **RejectPartnerRequest** - Validates rejection reason
 
 ### 2. RTK Query Implementation
+
 All APIs follow RTK Query best practices:
 
 - **Tags** for cache invalidation
@@ -48,6 +53,7 @@ All APIs follow RTK Query best practices:
 ### 3. API Modules
 
 #### User Management (`users.ts`)
+
 - `useGetAllUsersQuery` - Get paginated users
 - `useGetUserByIdQuery` - Get user by ID
 - `useCreateUserMutation` - Create new user (with Zod validation)
@@ -57,6 +63,7 @@ All APIs follow RTK Query best practices:
 - `useDeleteUserMutation` - Delete user
 
 #### Store Management (`stores.ts`)
+
 - `useGetAllStoresQuery` - Get paginated stores
 - `useGetStoreByIdQuery` - Get store by ID
 - `useCreateStoreMutation` - Create new store (with Zod validation)
@@ -65,6 +72,7 @@ All APIs follow RTK Query best practices:
 - `useDeleteStoreMutation` - Delete store
 
 #### Service Management (`services.ts`)
+
 - `useGetAllServicesQuery` - Get paginated services
 - `useGetServiceByIdQuery` - Get service by ID
 - `useCreateServiceMutation` - Create new service (with Zod validation)
@@ -74,6 +82,7 @@ All APIs follow RTK Query best practices:
 - `useDeleteServiceMutation` - Delete service
 
 #### Locker & Box Management (`lockers.ts`)
+
 - `useGetAllLockersQuery` - Get paginated lockers
 - `useGetLockersByStoreQuery` - Get lockers by store
 - `useGetLockerByIdQuery` - Get locker by ID
@@ -85,6 +94,7 @@ All APIs follow RTK Query best practices:
 - `useDeleteLockerMutation` - Delete locker
 
 #### Order Management (`orders.ts`)
+
 - `useGetAllOrdersQuery` - Get paginated orders with status filter
 - `useGetOrderByIdQuery` - Get order by ID
 - `useUpdateOrderStatusMutation` - Update order status (with Zod validation)
@@ -92,23 +102,27 @@ All APIs follow RTK Query best practices:
 - `useGetRevenueReportQuery` - Get revenue report
 
 #### Payment Management (`payments.ts`)
+
 - `useGetAllPaymentsQuery` - Get paginated payments with status filter
 - `useGetPaymentByIdQuery` - Get payment by ID
 - `useUpdatePaymentStatusMutation` - Update payment status (with Zod validation)
 
 #### Scheduler Management (`scheduler.ts`)
+
 - `useTriggerAutoCancelMutation` - Trigger auto-cancel job
 - `useTriggerBoxReleaseMutation` - Trigger box release job
 - `useTriggerPickupRemindersMutation` - Trigger pickup reminders
 - `useGetSchedulerStatusQuery` - Get scheduler status
 
 #### Loyalty Management (`loyalty.ts`) - NEW!
+
 - `useGetUserLoyaltySummaryQuery` - Get user loyalty summary
 - `useAdjustUserPointsMutation` - Adjust user points (with Zod validation)
 - `useGetUserPointsHistoryQuery` - Get user points history
 - `useGetLoyaltyStatisticsQuery` - Get loyalty statistics
 
 #### Partner Management (`partners.ts`) - NEW!
+
 - `useGetAllPartnersQuery` - Get paginated partners with status filter
 - `useGetPartnerByIdQuery` - Get partner by ID
 - `useApprovePartnerMutation` - Approve partner
@@ -116,6 +130,7 @@ All APIs follow RTK Query best practices:
 - `useSuspendPartnerMutation` - Suspend partner
 
 #### Dashboard (`dashboard.ts`)
+
 - `useGetDashboardOverviewQuery` - Get dashboard overview metrics
 
 ## Usage Example

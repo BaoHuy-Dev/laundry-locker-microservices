@@ -8,7 +8,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication(scanBasePackages = {"com.huynqb.laundrylocker.store", "com.huynqb.laundrylocker.common"})
 public class StoreServiceApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(StoreServiceApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(StoreServiceApplication.class, args);
+    }
 }

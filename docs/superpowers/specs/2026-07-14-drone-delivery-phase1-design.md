@@ -2,7 +2,8 @@
 
 ## Goal
 
-Ship the first production-style slice of drone delivery using one real backend `orderId` end-to-end, replacing the current fake mobile-only booking flow.
+Ship the first production-style slice of drone delivery using one real backend `orderId` end-to-end, replacing the
+current fake mobile-only booking flow.
 
 ## Scope
 
@@ -28,7 +29,8 @@ Out of scope for this phase:
 - `LockerOrder` becomes the public business aggregate for drone delivery.
 - `order-service` owns create/query/cancel APIs for customer-facing drone delivery.
 - `locker-service` still owns DRONE cell reservation and cell lifecycle.
-- Existing `DroneDeliveryRequest` remains temporarily for backward compatibility, but new customer mobile flow must stop calling it.
+- Existing `DroneDeliveryRequest` remains temporarily for backward compatibility, but new customer mobile flow must stop
+  calling it.
 - Mobile uses only the backend `orderId` from the new API.
 
 ## Phase 1 Backend Contract
@@ -107,7 +109,8 @@ Initial order values:
 - `status = INITIALIZED`
 - `delivery_stage = PENDING_PAYMENT`
 
-For Phase 1, reuse existing rating and completion mechanisms later, but do not force READY_FOR_PICKUP or pickup automation yet.
+For Phase 1, reuse existing rating and completion mechanisms later, but do not force READY_FOR_PICKUP or pickup
+automation yet.
 
 ## Mobile Changes
 

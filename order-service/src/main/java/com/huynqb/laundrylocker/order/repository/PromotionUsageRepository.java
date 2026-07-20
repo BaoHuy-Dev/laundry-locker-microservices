@@ -1,14 +1,15 @@
 package com.huynqb.laundrylocker.order.repository;
 
 import com.huynqb.laundrylocker.order.model.PromotionUsage;
-import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
 
 public interface PromotionUsageRepository extends JpaRepository<PromotionUsage, Long> {
 
-  long countByPromotionIdAndUserId(Long promotionId, Long userId);
+    long countByPromotionIdAndUserId(Long promotionId, Long userId);
 
-  List<PromotionUsage> findByOrderId(Long orderId);
+    List<PromotionUsage> findByOrderId(Long orderId);
 
-  boolean existsByPromotionId(Long promotionId);
+    boolean existsByPromotionId(Long promotionId);
 }

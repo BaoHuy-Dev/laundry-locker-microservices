@@ -29,11 +29,11 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "app.flyway.repair-on-migrate", havingValue = "true", matchIfMissing = true)
 public class FlywayRepairConfig {
 
-  @Bean
-  public FlywayMigrationStrategy repairBeforeMigrateStrategy() {
-    return flyway -> {
-      flyway.repair();
-      flyway.migrate();
-    };
-  }
+    @Bean
+    public FlywayMigrationStrategy repairBeforeMigrateStrategy() {
+        return flyway -> {
+            flyway.repair();
+            flyway.migrate();
+        };
+    }
 }

@@ -11,4 +11,4 @@ ALTER TABLE locker_schema.lockers
     ADD COLUMN landing_pad BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN landing_marker_id VARCHAR(50);
 
-CREATE INDEX idx_locker_boxes_cell_type ON locker_schema.locker_boxes(locker_id, cell_type, status);
+CREATE INDEX idx_locker_boxes_cell_type ON locker_schema.locker_boxes (locker_id, cell_type, status);

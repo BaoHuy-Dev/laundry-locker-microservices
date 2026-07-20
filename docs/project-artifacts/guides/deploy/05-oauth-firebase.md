@@ -5,16 +5,20 @@
 Cần khi dùng đăng nhập Google/Facebook trên **web**, và để OAuth chạy chuẩn.
 
 ## Firebase
+
 **Firebase Console → Authentication → Settings → Authorized domains** → thêm:
+
 - `locker-drone.tech`
 - `admin.locker-drone.tech`
 
 ## Facebook
+
 **Facebook app → Settings → Basic → App Domains** → thêm `locker-drone.tech`.
 Nếu dùng web login: **Facebook Login → Settings → Valid OAuth Redirect URIs** thêm
 domain tương ứng.
 
 ## Lưu ý
+
 - Login Google/Facebook/SĐT trên **mobile** đi qua Firebase SDK native → **không**
   phụ thuộc domain API, nên không cần đổi gì cho mobile ở bước này.
 - SHA-1 (Firebase) + Facebook **key hash** cho Android: xem

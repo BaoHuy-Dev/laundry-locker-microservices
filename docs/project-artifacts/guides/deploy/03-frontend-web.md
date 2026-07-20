@@ -49,6 +49,7 @@ npm run build                # tạo fe/dist (đã nướng URL HTTPS)
 npx wrangler login           # lần đầu — mở browser đăng nhập Cloudflare
 npx wrangler deploy          # đẩy lên Worker laundry-locker-frontend-1
 ```
+
 Thành công sẽ in: `Deployed laundry-locker-frontend-1 … Current Version ID: …`.
 
 > **Mỗi lần sửa code web về sau** chỉ cần 2 lệnh:
@@ -68,6 +69,7 @@ Cloudflare → Workers & Pages → `laundry-locker-frontend-1` → tab **Domains
 ## E. (Tùy chọn) Auto-deploy khi push Git
 
 Hiện đang TẮT (Build command = None, và Git nối nhầm repo). Muốn bật:
+
 1. Settings → **Build** → Build command = `npm run build`, Root directory = `fe`.
 2. **Disconnect** rồi **Connect to Git** chọn đúng repo code
    `LeThiYenVi/laundry-locker-frontend`, branch `main`.

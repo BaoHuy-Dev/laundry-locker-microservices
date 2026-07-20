@@ -26,11 +26,12 @@ import com.huynqb.laundrylocker.locker.model.CellType;
  * </ul>
  */
 public record CellResponse(
-    Long id,
-    Integer boxNumber,
-    String size,
-    String cellType,
-    Integer rowIndex,
-    Integer colIndex,
-    String status,
-    String faultReason) {}
+        Long id,
+        Integer boxNumber,
+        String size,
+        String cellType,
+        Integer rowIndex,
+        Integer colIndex,
+        String status,
+        String faultReason) {
+}

@@ -1,6 +1,7 @@
 # Điều Khoản Dịch Vụ
 
-Khi sử dụng Smart Laundry Locker, người dùng đồng ý tuân thủ các quy định vận hành dịch vụ locker giặt sấy và chịu trách nhiệm với thông tin đã cung cấp.
+Khi sử dụng Smart Laundry Locker, người dùng đồng ý tuân thủ các quy định vận hành dịch vụ locker giặt sấy và chịu trách
+nhiệm với thông tin đã cung cấp.
 
 ## Trách nhiệm người dùng
 
@@ -10,4 +11,5 @@ Khi sử dụng Smart Laundry Locker, người dùng đồng ý tuân thủ các
 
 ## Trách nhiệm dịch vụ
 
-Ứng dụng hỗ trợ quản lý đơn hàng, locker, giao dịch và thông báo theo trạng thái hệ thống. Các sự cố phát sinh sẽ được tiếp nhận và xử lý theo quy trình hỗ trợ khách hàng.
+Ứng dụng hỗ trợ quản lý đơn hàng, locker, giao dịch và thông báo theo trạng thái hệ thống. Các sự cố phát sinh sẽ được
+tiếp nhận và xử lý theo quy trình hỗ trợ khách hàng.

@@ -1,76 +1,85 @@
 # Laundry Locker Microservices
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
-This repository is the Java/Spring microservices backend for the Smart Laundry Locker project. It is separate from the old monolith and is now the backend used by the web frontend and Flutter mobile app.
+This repository is the Java/Spring microservices backend for the Smart Laundry Locker project. It is separate from the
+old monolith and is now the backend used by the web frontend and Flutter mobile app.
 
 ## Current Snapshot
 
 - Java 21, Spring Boot 3.5.14, Spring Cloud 2025.0.2, Maven multi-module.
 - Gateway at `http://localhost:8080`, Eureka at `http://localhost:8761`.
 - PostgreSQL runs on host port `15432`; RabbitMQ runs on `5672` with UI at `http://localhost:15672`.
-- Locker Phase 1 and Phase 2 are implemented: physical cell layout, SEND, RENTAL, signed QR token, PIN/QR access verification, manager APIs, maintenance APIs, RBAC, and schedulers.
-- `laundry-service` and `partner-service` are not present as source modules in the current workspace. They remain reserved in compose/database naming, but `docker-compose.override.yml` places them behind the `missing-source` profile so normal local compose runs skip them.
+- Locker Phase 1 and Phase 2 are implemented: physical cell layout, SEND, RENTAL, signed QR token, PIN/QR access
+  verification, manager APIs, maintenance APIs, RBAC, and schedulers.
+- `laundry-service` and `partner-service` are not present as source modules in the current workspace. They remain
+  reserved in compose/database naming, but `docker-compose.override.yml` places them behind the `missing-source` profile
+  so normal local compose runs skip them.
 
 ## Modules
 
-| Module | Port | Current status |
-|---|---:|---|
-| `common-lib` | - | Shared DTOs, responses, event names, common exceptions. No shared entities. |
-| `discovery-server` | 8761 | Eureka registry. |
-| `api-gateway` | 8080 | Gateway routing, JWT validation, RBAC, identity header propagation. |
-| `auth-service` | 8081 | Register/login/refresh/logout, JWT, OTP/password flows, admin auth. |
-| `user-service` | 8082 | User profiles, roles, admin user APIs, internal profile lookup. |
-| `order-service` | 8083 | Laundry orders, SEND/RENTAL, PIN/QR access, promotions, ratings, complaints, scheduler, manager order APIs. |
-| `locker-service` | 8084 | Lockers, physical cells, layout, fault reports, manager and maintenance APIs. |
-| `payment-service` | 8086 | Payments, refunds, cash flow, VNPay/MoMo callback parity. |
-| `notification-service` | 8087 | Notifications, FCM token storage, FCM/WebSocket hooks, Rabbit listeners. |
-| `iot-service` | 8088 | Device status, unlock facade, PIN/QR access verification, MQTT command facade. |
-| `store-service` | 8089 | Store CRUD and admin APIs. |
-| `staff-service` | 8090 | Staff assignment/order facade. |
-| `loyalty-service` | 8092 | Points, stamps, rewards, redemption/admin APIs. |
-| `laundry-service` | 8085 | Reserved/missing source; skipped by compose override. |
-| `partner-service` | 8091 | Reserved/missing source; skipped by compose override. |
+| Module                 | Port | Current status                                                                                              |
+|------------------------|-----:|-------------------------------------------------------------------------------------------------------------|
+| `common-lib`           |    - | Shared DTOs, responses, event names, common exceptions. No shared entities.                                 |
+| `discovery-server`     | 8761 | Eureka registry.                                                                                            |
+| `api-gateway`          | 8080 | Gateway routing, JWT validation, RBAC, identity header propagation.                                         |
+| `auth-service`         | 8081 | Register/login/refresh/logout, JWT, OTP/password flows, admin auth.                                         |
+| `user-service`         | 8082 | User profiles, roles, admin user APIs, internal profile lookup.                                             |
+| `order-service`        | 8083 | Laundry orders, SEND/RENTAL, PIN/QR access, promotions, ratings, complaints, scheduler, manager order APIs. |
+| `locker-service`       | 8084 | Lockers, physical cells, layout, fault reports, manager and maintenance APIs.                               |
+| `payment-service`      | 8086 | Payments, refunds, cash flow, VNPay/MoMo callback parity.                                                   |
+| `notification-service` | 8087 | Notifications, FCM token storage, FCM/WebSocket hooks, Rabbit listeners.                                    |
+| `iot-service`          | 8088 | Device status, unlock facade, PIN/QR access verification, MQTT command facade.                              |
+| `store-service`        | 8089 | Store CRUD and admin APIs.                                                                                  |
+| `staff-service`        | 8090 | Staff assignment/order facade.                                                                              |
+| `loyalty-service`      | 8092 | Points, stamps, rewards, redemption/admin APIs.                                                             |
+| `laundry-service`      | 8085 | Reserved/missing source; skipped by compose override.                                                       |
+| `partner-service`      | 8091 | Reserved/missing source; skipped by compose override.                                                       |
 
 ## Databases
 
-Local Docker creates one PostgreSQL database per service through `docker/postgres/init-databases.sql`. Source-backed services use their matching schema:
+Local Docker creates one PostgreSQL database per service through `docker/postgres/init-databases.sql`. Source-backed
+services use their matching schema:
 
-| Service | Database | Schema |
-|---|---|---|
-| auth-service | `auth_db` | `auth_schema` |
-| user-service | `user_db` | `user_schema` |
-| order-service | `order_db` | `order_schema` |
-| locker-service | `locker_db` | `locker_schema` |
-| payment-service | `payment_db` | `payment_schema` |
+| Service              | Database          | Schema                |
+|----------------------|-------------------|-----------------------|
+| auth-service         | `auth_db`         | `auth_schema`         |
+| user-service         | `user_db`         | `user_schema`         |
+| order-service        | `order_db`        | `order_schema`        |
+| locker-service       | `locker_db`       | `locker_schema`       |
+| payment-service      | `payment_db`      | `payment_schema`      |
 | notification-service | `notification_db` | `notification_schema` |
-| iot-service | `iot_db` | `iot_schema` |
-| store-service | `store_db` | `store_schema` |
-| staff-service | `staff_db` | `staff_schema` |
-| loyalty-service | `loyalty_db` | `loyalty_schema` |
+| iot-service          | `iot_db`          | `iot_schema`          |
+| store-service        | `store_db`        | `store_schema`        |
+| staff-service        | `staff_db`        | `staff_schema`        |
+| loyalty-service      | `loyalty_db`      | `loyalty_schema`      |
 
-`laundry_db` and `partner_db` may also be initialized for future compatibility, but there is no current source module using them.
+`laundry_db` and `partner_db` may also be initialized for future compatibility, but there is no current source module
+using them.
 
 ## Gateway Routes
 
 Clients should call the gateway on port `8080`. Direct service ports are for local debugging.
 
-| Gateway path | Target service |
-|---|---|
-| `/api/auth/**`, `/api/admin/auth/**` | `auth-service` |
-| `/api/user/**`, `/api/users/**`, `/api/admin/users/**`, `/api/admin/audit-logs/**` | `user-service` |
-| `/api/orders/**`, `/api/manage/orders/**`, `/api/admin/orders/**`, `/api/admin/scheduler/**`, `/api/admin/dashboard/**` | `order-service` |
-| `/api/promotions/**`, `/api/admin/promotions/**` | `order-service` |
-| `/api/lockers/**`, `/api/boxes/**`, `/api/manage/lockers/**`, `/api/maintenance/**`, `/api/admin/lockers/**` | `locker-service` |
-| `/api/payments/**`, `/api/admin/payments/**` | `payment-service` |
-| `/api/notifications/**`, `/api/admin/notifications/**` | `notification-service` |
-| `/ws`, `/ws/**` | `notification-service` WebSocket/STOMP |
-| `/api/iot/**` | `iot-service` |
-| `/api/stores/**`, `/api/admin/stores/**` | `store-service` |
-| `/api/staff/**` | `staff-service` |
-| `/api/loyalty/**`, `/api/admin/loyalty/**` | `loyalty-service` |
+| Gateway path                                                                                                            | Target service                         |
+|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------|
+| `/api/auth/**`, `/api/admin/auth/**`                                                                                    | `auth-service`                         |
+| `/api/user/**`, `/api/users/**`, `/api/admin/users/**`, `/api/admin/audit-logs/**`                                      | `user-service`                         |
+| `/api/orders/**`, `/api/manage/orders/**`, `/api/admin/orders/**`, `/api/admin/scheduler/**`, `/api/admin/dashboard/**` | `order-service`                        |
+| `/api/promotions/**`, `/api/admin/promotions/**`                                                                        | `order-service`                        |
+| `/api/lockers/**`, `/api/boxes/**`, `/api/manage/lockers/**`, `/api/maintenance/**`, `/api/admin/lockers/**`            | `locker-service`                       |
+| `/api/payments/**`, `/api/admin/payments/**`                                                                            | `payment-service`                      |
+| `/api/notifications/**`, `/api/admin/notifications/**`                                                                  | `notification-service`                 |
+| `/ws`, `/ws/**`                                                                                                         | `notification-service` WebSocket/STOMP |
+| `/api/iot/**`                                                                                                           | `iot-service`                          |
+| `/api/stores/**`, `/api/admin/stores/**`                                                                                | `store-service`                        |
+| `/api/staff/**`                                                                                                         | `staff-service`                        |
+| `/api/loyalty/**`, `/api/admin/loyalty/**`                                                                              | `loyalty-service`                      |
 
 RBAC is enforced in the gateway:
 

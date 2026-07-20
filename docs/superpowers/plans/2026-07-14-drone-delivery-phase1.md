@@ -1,12 +1,17 @@
 # Drone Delivery Phase 1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace fake mobile drone booking with a real order-based backend flow that reserves a DRONE box and returns one real `orderId`.
+**Goal:** Replace fake mobile drone booking with a real order-based backend flow that reserves a DRONE box and returns
+one real `orderId`.
 
-**Architecture:** `order-service` becomes the customer-facing owner of drone-delivery order creation, querying, and cancellation. `locker-service` remains the source of truth for DRONE box reservation/release, while mobile stops creating local fake tracking records and waits for a real backend response.
+**Architecture:** `order-service` becomes the customer-facing owner of drone-delivery order creation, querying, and
+cancellation. `locker-service` remains the source of truth for DRONE box reservation/release, while mobile stops
+creating local fake tracking records and waits for a real backend response.
 
-**Tech Stack:** Spring Boot, Spring MVC, Spring Data JPA, Flyway, OpenFeign, RabbitMQ, Flutter, Dio-style API client wrappers, SmartDialog/UI flow code.
+**Tech Stack:** Spring Boot, Spring MVC, Spring Data JPA, Flyway, OpenFeign, RabbitMQ, Flutter, Dio-style API client
+wrappers, SmartDialog/UI flow code.
 
 ## Global Constraints
 
@@ -22,6 +27,7 @@
 ### Task 1: Backend Drone Order Foundation
 
 **Files:**
+
 - Create: `order-service/src/main/java/com/huynqb/laundrylocker/order/dto/CreateDroneDeliveryOrderRequest.java`
 - Create: `order-service/src/main/java/com/huynqb/laundrylocker/order/dto/DroneDeliveryOrderResponse.java`
 - Create: `order-service/src/main/resources/db/migration/V7__drone_delivery_order_foundation.sql`
@@ -32,12 +38,13 @@
 - Test: `order-service/src/test/java/com/huynqb/laundrylocker/order/service/OrderServiceDroneDeliveryTest.java`
 
 **Interfaces:**
+
 - Consumes: `LockerClient.reserveBox(...)`, `LockerCellClient.findAvailable(...)`, existing `OrderService.cancel(...)`
 - Produces:
-  - `OrderService.createDroneDelivery(CreateDroneDeliveryOrderRequest request, Long userId, String idempotencyKey)`
-  - `OrderService.getDroneDelivery(Long orderId, Long userId)`
-  - `POST /api/orders/drone-deliveries`
-  - `GET /api/orders/{orderId}/drone-delivery`
+    - `OrderService.createDroneDelivery(CreateDroneDeliveryOrderRequest request, Long userId, String idempotencyKey)`
+    - `OrderService.getDroneDelivery(Long orderId, Long userId)`
+    - `POST /api/orders/drone-deliveries`
+    - `GET /api/orders/{orderId}/drone-delivery`
 
 - [ ] **Step 1: Write the failing backend tests**
 
@@ -103,17 +110,19 @@ Expected: BUILD SUCCESS.
 ### Task 2: Mobile Booking Cutover
 
 **Files:**
+
 - Modify: `mobile/lib/features/locker_ops/data/locker_ops_service.dart`
 - Modify: `mobile/lib/features/drone_delivery/presentation/widgets/drone_booking_sheet.dart`
 - Test: `mobile/test/features/drone_delivery/drone_booking_sheet_test.dart`
 
 **Interfaces:**
+
 - Consumes:
-  - `POST /api/orders/drone-deliveries`
-  - backend response with real `id`
+    - `POST /api/orders/drone-deliveries`
+    - backend response with real `id`
 - Produces:
-  - `LockerOpsService.createDroneDeliveryOrder(...)`
-  - booking UX that waits for backend response and no longer writes fake `DRN-*`
+    - `LockerOpsService.createDroneDeliveryOrder(...)`
+    - booking UX that waits for backend response and no longer writes fake `DRN-*`
 
 - [ ] **Step 1: Write the failing mobile test**
 
@@ -154,11 +163,13 @@ Expected: no new errors.
 ### Task 3: Docs And Flow Sync
 
 **Files:**
+
 - Modify: `docs/PROJECT_PROGRESS_TRACKER.md`
 - Modify: `docs/BUSINESS_FLOWS_CURRENT.md`
 - Modify: `../mobile/docs/merge-status.md`
 
 **Interfaces:**
+
 - Consumes: implemented backend/mobile Phase 1 contract
 - Produces: updated living docs for future work
 

@@ -6,4 +6,5 @@ import java.time.LocalDateTime;
 /// to Manager/Admin via `GET /api/manage/iot/box-status` so ops can compare it
 /// against the order-driven logical status owned by locker-service.
 public record BoxHardwareStatusResponse(
-    Long boxId, Long lockerId, String hwState, LocalDateTime lastReportedAt) {}
+        Long boxId, Long lockerId, String hwState, LocalDateTime lastReportedAt) {
+}

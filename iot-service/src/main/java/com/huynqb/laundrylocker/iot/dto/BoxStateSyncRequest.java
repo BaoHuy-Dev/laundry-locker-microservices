@@ -10,4 +10,5 @@ import jakarta.validation.constraints.NotNull;
 /// not a command that needs a hardware reply, so it never blocks the order
 /// flow.
 public record BoxStateSyncRequest(
-    @NotNull Long lockerId, @NotNull Long boxId, @NotBlank String state, Long orderId) {}
+        @NotNull Long lockerId, @NotNull Long boxId, @NotBlank String state, Long orderId) {
+}

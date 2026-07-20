@@ -15,12 +15,14 @@ trị trong `.env` khi `docker compose up` (shell env ưu tiên hơn file `.env`
 firewall DigitalOcean chỉ mở inbound 22 + 8080.
 
 Hệ quả **bắt buộc nhớ**:
+
 - **Nginx PHẢI proxy về `8080`** (mục B). Trỏ 18080 → lệch port → **502 sau mỗi lần
   auto-deploy** (đây chính là lỗi "502 lúc được lúc không" đã gặp).
 - Local dev: `docker-compose.yml` mặc định `18080` (host 8080 hay bận). **Chỉ trên
   droplet mới là `8080`.**
 
 Cho `.env` khớp luôn `8080` để lần `docker compose up` thủ công không bị lệch:
+
 ```bash
 cd /opt/laundry-locker-microservices
 grep -q '^API_GATEWAY_PORT=' .env \
@@ -78,6 +80,7 @@ sudo certbot --nginx -d api.locker-drone.tech     # tự sửa Nginx sang 443 + 
 > **chạy lại đúng lệnh certbot** (thực tế lần 1–3 fail, lần 4 OK).
 
 **Kiểm tra:**
+
 ```bash
 curl -s -o /dev/null -w "gw 8080 -> %{http_code}\n" http://127.0.0.1:8080/actuator/health     # 200
 curl -is https://api.locker-drone.tech/actuator/health | head -1                              # HTTP/2 200
@@ -100,6 +103,7 @@ docker compose up -d --force-recreate api-gateway
 ```
 
 **Xác minh** (phải có dòng `access-control-allow-origin`):
+
 ```bash
 curl -is -X OPTIONS https://api.locker-drone.tech/api/admin/auth/login \
   -H 'Origin: https://admin.locker-drone.tech' \

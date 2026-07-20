@@ -1,16 +1,22 @@
 # Admin API Documentation
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 ## Base URL
+
 ```
 /api/admin
 ```
 
 ## Authentication
+
 Tất cả API Admin đều yêu cầu xác thực với role `ADMIN`.
+
 ```
 Authorization: Bearer <jwt_token>
 ```
@@ -22,9 +28,11 @@ Authorization: Bearer <jwt_token>
 **Base URL:** `/api/admin/users`
 
 ## 1.1 Get All Users
+
 Lấy danh sách tất cả users với phân trang.
 
 **Request:**
+
 ```http
 GET /api/admin/users?page=0&size=20&sort=id,desc
 ```
@@ -37,6 +45,7 @@ GET /api/admin/users?page=0&size=20&sort=id,desc
 | sort | String | No | Sắp xếp (vd: id,desc) |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -67,15 +76,18 @@ GET /api/admin/users?page=0&size=20&sort=id,desc
 ```
 
 ## 1.2 Create User
+
 Tạo user mới (ví dụ: Staff account).
 
 **Request:**
+
 ```http
 POST /api/admin/users
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "email": "staff@example.com",
@@ -98,6 +110,7 @@ Content-Type: application/json
 | phoneNumber | Max 20 characters |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -118,9 +131,11 @@ Content-Type: application/json
 ```
 
 ## 1.3 Get User By ID
+
 Lấy thông tin user theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/users/{id}
 ```
@@ -131,6 +146,7 @@ GET /api/admin/users/{id}
 | id | Long | User ID |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -151,15 +167,18 @@ GET /api/admin/users/{id}
 ```
 
 ## 1.4 Update User
+
 Cập nhật thông tin user.
 
 **Request:**
+
 ```http
 PUT /api/admin/users/{id}
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "name": "Updated Name",
@@ -175,6 +194,7 @@ Content-Type: application/json
 | email | Valid email format |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -195,15 +215,18 @@ Content-Type: application/json
 ```
 
 ## 1.5 Update User Status
+
 Kích hoạt/Vô hiệu hóa user.
 
 **Request:**
+
 ```http
 PUT /api/admin/users/{id}/status
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "enabled": false
@@ -211,6 +234,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -228,15 +252,18 @@ Content-Type: application/json
 ```
 
 ## 1.6 Update User Roles
+
 Cập nhật roles của user.
 
 **Request:**
+
 ```http
 PUT /api/admin/users/{id}/roles
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "roles": ["USER", "STAFF", "ADMIN"]
@@ -246,6 +273,7 @@ Content-Type: application/json
 **Available Roles:** `USER`, `STAFF`, `ADMIN`, `MODERATOR`, `PARTNER`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -263,14 +291,17 @@ Content-Type: application/json
 ```
 
 ## 1.7 Delete User
+
 Xóa user.
 
 **Request:**
+
 ```http
 DELETE /api/admin/users/{id}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -286,14 +317,17 @@ DELETE /api/admin/users/{id}
 **Base URL:** `/api/admin/stores`
 
 ## 2.1 Get All Stores
+
 Lấy danh sách tất cả stores với phân trang.
 
 **Request:**
+
 ```http
 GET /api/admin/stores?page=0&size=20
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -324,14 +358,17 @@ GET /api/admin/stores?page=0&size=20
 ```
 
 ## 2.2 Get Store By ID
+
 Lấy thông tin store theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/stores/{id}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -356,15 +393,18 @@ GET /api/admin/stores/{id}
 ```
 
 ## 2.3 Create Store
+
 Tạo store mới.
 
 **Request:**
+
 ```http
 POST /api/admin/stores
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "name": "New Store",
@@ -385,6 +425,7 @@ Content-Type: application/json
 | name | Required |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -409,9 +450,11 @@ Content-Type: application/json
 ```
 
 ## 2.4 Update Store
+
 Cập nhật thông tin store.
 
 **Request:**
+
 ```http
 PUT /api/admin/stores/{id}
 Content-Type: application/json
@@ -420,6 +463,7 @@ Content-Type: application/json
 **Request Body:** (giống Create Store)
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -429,15 +473,18 @@ Content-Type: application/json
 ```
 
 ## 2.5 Update Store Status
+
 Kích hoạt/Vô hiệu hóa store.
 
 **Request:**
+
 ```http
 PUT /api/admin/stores/{id}/status
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "enabled": false
@@ -445,6 +492,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -454,14 +502,17 @@ Content-Type: application/json
 ```
 
 ## 2.6 Delete Store
+
 Xóa store (soft delete).
 
 **Request:**
+
 ```http
 DELETE /api/admin/stores/{id}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -477,14 +528,17 @@ DELETE /api/admin/stores/{id}
 **Base URL:** `/api/admin/lockers`
 
 ## 3.1 Get All Lockers
+
 Lấy danh sách tất cả lockers với phân trang.
 
 **Request:**
+
 ```http
 GET /api/admin/lockers?page=0&size=20
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -520,14 +574,17 @@ GET /api/admin/lockers?page=0&size=20
 ```
 
 ## 3.2 Get Lockers By Store
+
 Lấy danh sách lockers theo store.
 
 **Request:**
+
 ```http
 GET /api/admin/lockers/store/{storeId}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -552,9 +609,11 @@ GET /api/admin/lockers/store/{storeId}
 ```
 
 ## 3.3 Get Locker By ID
+
 Lấy thông tin locker theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/lockers/{id}
 ```
@@ -562,15 +621,18 @@ GET /api/admin/lockers/{id}
 **Response (200 OK):** (giống Get All Lockers)
 
 ## 3.4 Create Locker
+
 Tạo locker mới.
 
 **Request:**
+
 ```http
 POST /api/admin/lockers
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "code": "LOCKER-002",
@@ -588,6 +650,7 @@ Content-Type: application/json
 | storeId | Required |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -597,15 +660,18 @@ Content-Type: application/json
 ```
 
 ## 3.5 Update Locker
+
 Cập nhật thông tin locker.
 
 **Request:**
+
 ```http
 PUT /api/admin/lockers/{id}
 Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -615,15 +681,18 @@ Content-Type: application/json
 ```
 
 ## 3.6 Set Maintenance Mode
+
 Bật/Tắt chế độ bảo trì cho locker.
 
 **Request:**
+
 ```http
 PUT /api/admin/lockers/{id}/maintenance
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "maintenance": true
@@ -631,6 +700,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -640,15 +710,18 @@ Content-Type: application/json
 ```
 
 ## 3.7 Add Box to Locker
+
 Thêm box mới vào locker.
 
 **Request:**
+
 ```http
 POST /api/admin/lockers/{id}/boxes
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "boxNumber": 21,
@@ -662,6 +735,7 @@ Content-Type: application/json
 | boxNumber | Required |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -671,15 +745,18 @@ Content-Type: application/json
 ```
 
 ## 3.8 Update Box Status
+
 Cập nhật trạng thái box.
 
 **Request:**
+
 ```http
 PUT /api/admin/lockers/boxes/{boxId}/status
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "status": "MAINTENANCE"
@@ -689,6 +766,7 @@ Content-Type: application/json
 **Box Status Values:** `AVAILABLE`, `OCCUPIED`, `RESERVED`, `MAINTENANCE`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -698,14 +776,17 @@ Content-Type: application/json
 ```
 
 ## 3.9 Delete Locker
+
 Xóa locker (soft delete).
 
 **Request:**
+
 ```http
 DELETE /api/admin/lockers/{id}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -721,14 +802,17 @@ DELETE /api/admin/lockers/{id}
 **Base URL:** `/api/admin/services`
 
 ## 4.1 Get All Services
+
 Lấy danh sách tất cả services với phân trang.
 
 **Request:**
+
 ```http
 GET /api/admin/services?page=0&size=20
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -757,9 +841,11 @@ GET /api/admin/services?page=0&size=20
 ```
 
 ## 4.2 Get Service By ID
+
 Lấy thông tin service theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/services/{id}
 ```
@@ -767,15 +853,18 @@ GET /api/admin/services/{id}
 **Response (200 OK):** (giống Get All Services)
 
 ## 4.3 Create Service
+
 Tạo service mới.
 
 **Request:**
+
 ```http
 POST /api/admin/services
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "name": "Dry Cleaning",
@@ -795,6 +884,7 @@ Content-Type: application/json
 | price | Required |
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -804,15 +894,18 @@ Content-Type: application/json
 ```
 
 ## 4.4 Update Service
+
 Cập nhật thông tin service.
 
 **Request:**
+
 ```http
 PUT /api/admin/services/{id}
 Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -822,15 +915,18 @@ Content-Type: application/json
 ```
 
 ## 4.5 Update Price
+
 Cập nhật giá service.
 
 **Request:**
+
 ```http
 PUT /api/admin/services/{id}/price
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "price": 75000.00
@@ -838,6 +934,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -847,15 +944,18 @@ Content-Type: application/json
 ```
 
 ## 4.6 Update Status
+
 Kích hoạt/Vô hiệu hóa service.
 
 **Request:**
+
 ```http
 PUT /api/admin/services/{id}/status
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "enabled": false
@@ -863,6 +963,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -872,14 +973,17 @@ Content-Type: application/json
 ```
 
 ## 4.7 Delete Service
+
 Xóa service (soft delete).
 
 **Request:**
+
 ```http
 DELETE /api/admin/services/{id}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -895,9 +999,11 @@ DELETE /api/admin/services/{id}
 **Base URL:** `/api/admin/orders`
 
 ## 5.1 Get All Orders
+
 Lấy danh sách tất cả orders với filter theo status.
 
 **Request:**
+
 ```http
 GET /api/admin/orders?status=WAITING&page=0&size=20
 ```
@@ -907,9 +1013,11 @@ GET /api/admin/orders?status=WAITING&page=0&size=20
 |-----------|------|----------|-------------|
 | status | OrderStatus | No | Lọc theo status |
 
-**Order Status Values:** `INITIALIZED`, `RESERVED`, `WAITING`, `COLLECTED`, `PROCESSING`, `READY`, `RETURNED`, `COMPLETED`, `CANCELED`
+**Order Status Values:** `INITIALIZED`, `RESERVED`, `WAITING`, `COLLECTED`, `PROCESSING`, `READY`, `RETURNED`,
+`COMPLETED`, `CANCELED`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -973,9 +1081,11 @@ GET /api/admin/orders?status=WAITING&page=0&size=20
 ```
 
 ## 5.2 Get Order By ID
+
 Lấy thông tin order theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/orders/{id}
 ```
@@ -983,9 +1093,11 @@ GET /api/admin/orders/{id}
 **Response (200 OK):** (giống Get All Orders)
 
 ## 5.3 Update Order Status
+
 Force update order status (Admin override).
 
 **Request:**
+
 ```http
 PUT /api/admin/orders/{id}/status?status=PROCESSING
 ```
@@ -996,6 +1108,7 @@ PUT /api/admin/orders/{id}/status?status=PROCESSING
 | status | OrderStatus | Yes | Status mới |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1005,14 +1118,17 @@ PUT /api/admin/orders/{id}/status?status=PROCESSING
 ```
 
 ## 5.4 Get Order Statistics
+
 Lấy thống kê orders.
 
 **Request:**
+
 ```http
 GET /api/admin/orders/statistics
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1032,14 +1148,17 @@ GET /api/admin/orders/statistics
 ```
 
 ## 5.5 Get Revenue Report
+
 Lấy báo cáo doanh thu.
 
 **Request:**
+
 ```http
 GET /api/admin/orders/revenue
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1080,9 +1199,11 @@ GET /api/admin/orders/revenue
 **Base URL:** `/api/admin/payments`
 
 ## 6.1 Get All Payments
+
 Lấy danh sách tất cả payments với filter theo status.
 
 **Request:**
+
 ```http
 GET /api/admin/payments?status=COMPLETED&page=0&size=20
 ```
@@ -1095,6 +1216,7 @@ GET /api/admin/payments?status=COMPLETED&page=0&size=20
 **Payment Status Values:** `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `REFUNDED`, `CANCELED`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1126,9 +1248,11 @@ GET /api/admin/payments?status=COMPLETED&page=0&size=20
 ```
 
 ## 6.2 Get Payment By ID
+
 Lấy thông tin payment theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/payments/{paymentId}
 ```
@@ -1136,9 +1260,11 @@ GET /api/admin/payments/{paymentId}
 **Response (200 OK):** (giống Get All Payments)
 
 ## 6.3 Update Payment Status
+
 Force update payment status (Admin override).
 
 **Request:**
+
 ```http
 PUT /api/admin/payments/{paymentId}/status?status=REFUNDED
 ```
@@ -1149,6 +1275,7 @@ PUT /api/admin/payments/{paymentId}/status?status=REFUNDED
 | status | PaymentStatus | Yes | Status mới |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1164,14 +1291,17 @@ PUT /api/admin/payments/{paymentId}/status?status=REFUNDED
 **Base URL:** `/api/admin/dashboard`
 
 ## 7.1 Get Dashboard Overview
+
 Lấy tổng quan dashboard với các key metrics.
 
 **Request:**
+
 ```http
 GET /api/admin/dashboard/overview
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1199,14 +1329,17 @@ GET /api/admin/dashboard/overview
 **Base URL:** `/api/admin/scheduler`
 
 ## 8.1 Trigger Auto-Cancel Job
+
 Kích hoạt thủ công job auto-cancel orders chưa confirmed.
 
 **Request:**
+
 ```http
 POST /api/admin/scheduler/auto-cancel
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1220,14 +1353,17 @@ POST /api/admin/scheduler/auto-cancel
 ```
 
 ## 8.2 Trigger Box Release Job
+
 Kích hoạt thủ công job release boxes từ completed orders.
 
 **Request:**
+
 ```http
 POST /api/admin/scheduler/release-boxes
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1241,14 +1377,17 @@ POST /api/admin/scheduler/release-boxes
 ```
 
 ## 8.3 Trigger Pickup Reminder Job
+
 Kích hoạt thủ công job gửi pickup reminders.
 
 **Request:**
+
 ```http
 POST /api/admin/scheduler/pickup-reminders
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1262,14 +1401,17 @@ POST /api/admin/scheduler/pickup-reminders
 ```
 
 ## 8.4 Get Scheduler Status
+
 Lấy trạng thái và cấu hình scheduler.
 
 **Request:**
+
 ```http
 GET /api/admin/scheduler/status
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1293,14 +1435,17 @@ GET /api/admin/scheduler/status
 **Base URL:** `/api/admin/loyalty`
 
 ## 9.1 Get User Loyalty Summary
+
 Lấy tổng quan loyalty của user.
 
 **Request:**
+
 ```http
 GET /api/admin/loyalty/users/{userId}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1343,15 +1488,18 @@ GET /api/admin/loyalty/users/{userId}
 ```
 
 ## 9.2 Adjust User Points
+
 Điều chỉnh điểm của user (dùng số âm để trừ điểm).
 
 **Request:**
+
 ```http
 POST /api/admin/loyalty/users/{userId}/points
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "userId": 1,
@@ -1367,6 +1515,7 @@ Content-Type: application/json
 | points | Required |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1387,14 +1536,17 @@ Content-Type: application/json
 ```
 
 ## 9.3 Get User Points History
+
 Lấy lịch sử điểm của user.
 
 **Request:**
+
 ```http
 GET /api/admin/loyalty/users/{userId}/history?page=0&size=20
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1435,14 +1587,17 @@ GET /api/admin/loyalty/users/{userId}/history?page=0&size=20
 **Point Transaction Types:** `EARN`, `REDEEM`, `EXPIRE`, `ADJUST`, `BONUS`, `REFUND`
 
 ## 9.4 Get Loyalty Statistics
+
 Lấy thống kê loyalty program.
 
 **Request:**
+
 ```http
 GET /api/admin/loyalty/statistics
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1464,9 +1619,11 @@ GET /api/admin/loyalty/statistics
 **Base URL:** `/api/admin/partners`
 
 ## 10.1 Get All Partners
+
 Lấy danh sách tất cả partners với filter theo status.
 
 **Request:**
+
 ```http
 GET /api/admin/partners?status=PENDING&page=0&size=20
 ```
@@ -1479,6 +1636,7 @@ GET /api/admin/partners?status=PENDING&page=0&size=20
 **Partner Status Values:** `PENDING`, `APPROVED`, `REJECTED`, `SUSPENDED`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1514,9 +1672,11 @@ GET /api/admin/partners?status=PENDING&page=0&size=20
 ```
 
 ## 10.2 Get Partner By ID
+
 Lấy thông tin partner theo ID.
 
 **Request:**
+
 ```http
 GET /api/admin/partners/{partnerId}
 ```
@@ -1524,15 +1684,18 @@ GET /api/admin/partners/{partnerId}
 **Response (200 OK):** (giống Get All Partners)
 
 ## 10.3 Approve Partner
+
 Phê duyệt partner application.
 
 **Request:**
+
 ```http
 POST /api/admin/partners/{partnerId}/approve
 Authorization: Bearer <jwt_token>
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1552,9 +1715,11 @@ Authorization: Bearer <jwt_token>
 ```
 
 ## 10.4 Reject Partner
+
 Từ chối partner application.
 
 **Request:**
+
 ```http
 POST /api/admin/partners/{partnerId}/reject?reason=Invalid business registration
 ```
@@ -1565,6 +1730,7 @@ POST /api/admin/partners/{partnerId}/reject?reason=Invalid business registration
 | reason | String | Yes | Lý do từ chối |
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1579,14 +1745,17 @@ POST /api/admin/partners/{partnerId}/reject?reason=Invalid business registration
 ```
 
 ## 10.5 Suspend Partner
+
 Tạm ngưng partner.
 
 **Request:**
+
 ```http
 POST /api/admin/partners/{partnerId}/suspend
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -1604,103 +1773,114 @@ POST /api/admin/partners/{partnerId}/suspend
 # Enums Reference
 
 ## OrderStatus
-| Value | Description |
-|-------|-------------|
+
+| Value       | Description                                      |
+|-------------|--------------------------------------------------|
 | INITIALIZED | Order created, waiting for customer to put items |
-| RESERVED | Order reserved but not yet started |
-| WAITING | Items placed, waiting for staff to collect |
-| COLLECTED | Staff collected items from locker |
-| PROCESSING | Items being processed at store |
-| READY | Items ready to be returned |
-| RETURNED | Items returned to locker |
-| COMPLETED | Customer received items, order completed |
-| CANCELED | Order canceled |
+| RESERVED    | Order reserved but not yet started               |
+| WAITING     | Items placed, waiting for staff to collect       |
+| COLLECTED   | Staff collected items from locker                |
+| PROCESSING  | Items being processed at store                   |
+| READY       | Items ready to be returned                       |
+| RETURNED    | Items returned to locker                         |
+| COMPLETED   | Customer received items, order completed         |
+| CANCELED    | Order canceled                                   |
 
 ## OrderType
-| Value | Description |
-|-------|-------------|
-| LAUNDRY | Regular laundry service |
-| DRY_CLEAN | Dry cleaning |
-| STORAGE | Storage only |
+
+| Value     | Description             |
+|-----------|-------------------------|
+| LAUNDRY   | Regular laundry service |
+| DRY_CLEAN | Dry cleaning            |
+| STORAGE   | Storage only            |
 
 ## PaymentMethod
-| Value | Description |
-|-------|-------------|
-| CASH | Cash payment |
-| WALLET | Wallet payment |
-| BANK_TRANSFER | Bank transfer |
-| MOMO | Momo e-wallet |
-| VNPAY | VNPay |
-| ZALOPAY | ZaloPay |
+
+| Value         | Description    |
+|---------------|----------------|
+| CASH          | Cash payment   |
+| WALLET        | Wallet payment |
+| BANK_TRANSFER | Bank transfer  |
+| MOMO          | Momo e-wallet  |
+| VNPAY         | VNPay          |
+| ZALOPAY       | ZaloPay        |
 
 ## PaymentStatus
-| Value | Description |
-|-------|-------------|
-| PENDING | Payment pending |
+
+| Value      | Description        |
+|------------|--------------------|
+| PENDING    | Payment pending    |
 | PROCESSING | Payment processing |
-| COMPLETED | Payment completed |
-| FAILED | Payment failed |
-| REFUNDED | Payment refunded |
-| CANCELED | Payment canceled |
+| COMPLETED  | Payment completed  |
+| FAILED     | Payment failed     |
+| REFUNDED   | Payment refunded   |
+| CANCELED   | Payment canceled   |
 
 ## PartnerStatus
-| Value | Description |
-|-------|-------------|
-| PENDING | Initial status when partner registers |
-| APPROVED | Partner has been approved by admin |
-| REJECTED | Partner application was rejected |
-| SUSPENDED | Partner account has been suspended |
+
+| Value     | Description                           |
+|-----------|---------------------------------------|
+| PENDING   | Initial status when partner registers |
+| APPROVED  | Partner has been approved by admin    |
+| REJECTED  | Partner application was rejected      |
+| SUSPENDED | Partner account has been suspended    |
 
 ## BoxStatus
-| Value | Description |
-|-------|-------------|
-| AVAILABLE | Box available for use |
-| OCCUPIED | Box occupied |
-| RESERVED | Box reserved |
+
+| Value       | Description           |
+|-------------|-----------------------|
+| AVAILABLE   | Box available for use |
+| OCCUPIED    | Box occupied          |
+| RESERVED    | Box reserved          |
 | MAINTENANCE | Box under maintenance |
 
 ## LockerStatus
-| Value | Description |
-|-------|-------------|
-| ACTIVE | Locker active |
-| INACTIVE | Locker inactive |
-| MAINTENANCE | Locker under maintenance |
-| DISCONNECTED | Locker disconnected |
+
+| Value        | Description              |
+|--------------|--------------------------|
+| ACTIVE       | Locker active            |
+| INACTIVE     | Locker inactive          |
+| MAINTENANCE  | Locker under maintenance |
+| DISCONNECTED | Locker disconnected      |
 
 ## RoleName
-| Value | Description |
-|-------|-------------|
-| USER | Regular user |
-| STAFF | Staff member |
-| ADMIN | Administrator |
-| MODERATOR | Moderator |
-| PARTNER | Partner |
+
+| Value     | Description   |
+|-----------|---------------|
+| USER      | Regular user  |
+| STAFF     | Staff member  |
+| ADMIN     | Administrator |
+| MODERATOR | Moderator     |
+| PARTNER   | Partner       |
 
 ## AuthProvider
-| Value | Description |
-|-------|-------------|
-| LOCAL | Local authentication |
-| GOOGLE | Google OAuth |
-| FACEBOOK | Facebook OAuth |
-| GITHUB | GitHub OAuth |
-| ZALO | Zalo OAuth |
-| PHONE | Phone OTP |
-| EMAIL | Email OTP |
+
+| Value    | Description          |
+|----------|----------------------|
+| LOCAL    | Local authentication |
+| GOOGLE   | Google OAuth         |
+| FACEBOOK | Facebook OAuth       |
+| GITHUB   | GitHub OAuth         |
+| ZALO     | Zalo OAuth           |
+| PHONE    | Phone OTP            |
+| EMAIL    | Email OTP            |
 
 ## PointTransactionType
-| Value | Description |
-|-------|-------------|
-| EARN | Points earned from order payment |
-| REDEEM | Points redeemed for discount |
-| EXPIRE | Points expired |
-| ADJUST | Points adjusted by admin |
-| BONUS | Bonus points from promotions |
+
+| Value  | Description                          |
+|--------|--------------------------------------|
+| EARN   | Points earned from order payment     |
+| REDEEM | Points redeemed for discount         |
+| EXPIRE | Points expired                       |
+| ADJUST | Points adjusted by admin             |
+| BONUS  | Bonus points from promotions         |
 | REFUND | Points refunded from cancelled order |
 
 ## StampType
-| Value | Description |
-|-------|-------------|
-| BOX | Stamp card for box usage |
+
+| Value   | Description                    |
+|---------|--------------------------------|
+| BOX     | Stamp card for box usage       |
 | SERVICE | Stamp card for laundry service |
 
 ---
@@ -1708,6 +1888,7 @@ POST /api/admin/partners/{partnerId}/suspend
 # Common Response Format
 
 ## Success Response
+
 ```json
 {
   "success": true,
@@ -1717,6 +1898,7 @@ POST /api/admin/partners/{partnerId}/suspend
 ```
 
 ## Error Response
+
 ```json
 {
   "success": false,
@@ -1732,6 +1914,7 @@ POST /api/admin/partners/{partnerId}/suspend
 ```
 
 ## Pagination Response
+
 ```json
 {
   "success": true,

@@ -1,7 +1,10 @@
 # Drone Precision Landing — Raspberry Pi 5 + GS Camera
 
 <!-- CURRENT_STATUS_START -->
-> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`, `RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
+> **Cập nhật 2026-06-13:** Tài liệu này đã được rà soát để bám theo trạng thái hiện tại của dự án. Backend Phase 2 cho
+> locker flow đã triển khai SEND / RENTAL / QR / RBAC / maintenance; FE admin build pass; Flutter mobile đã có luồng
+> Customer, Manager và Maintenance. Nguồn trạng thái chuẩn: `laundry-locker-microservices/docs/CURRENT_PROJECT_STATUS.md`,
+`RUN_RESULT.md`, `LOCKER_FLOW_PLAN.md`.
 <!-- CURRENT_STATUS_END -->
 
 SSH vào Pi:
@@ -19,7 +22,7 @@ Camera **Raspberry Pi Global Shutter (IMX296)** gắn dưới drone nhìn xuốn
 Script đọc **ArUco marker** đặt tại bãi đỗ locker, tính toán:
 
 | Thông số              | Ý nghĩa                                   |
-| --------------------- | ----------------------------------------- |
+|-----------------------|-------------------------------------------|
 | `altitude`            | Khoảng cách thẳng đứng drone → marker (m) |
 | `x_offset / y_offset` | Độ lệch ngang trái/phải, trước/sau (m)    |
 | `radius`              | √(x²+y²) — bán kính lệch tâm (m)          |
@@ -82,7 +85,7 @@ MAVLINK_BAUD              = 57600
 ## Cấu hình Flight Controller (ArduCopter)
 
 | Parameter           | Giá trị | Mô tả                       |
-| ------------------- | ------- | --------------------------- |
+|---------------------|---------|-----------------------------|
 | `PLND_ENABLED`      | `1`     | Bật Precision Landing       |
 | `PLND_TYPE`         | `1`     | Companion Computer          |
 | `PLND_EST_TYPE`     | `0`     | Raw sensor (không dùng EKF) |

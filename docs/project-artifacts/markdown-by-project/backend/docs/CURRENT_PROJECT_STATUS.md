@@ -4,20 +4,27 @@
 > Workspace: `G:\BigProject`
 > Backend repo: `laundry-locker-microservices`
 
-This document is the current source of truth for the capstone project state. Older Markdown files may describe earlier design assumptions, mocks, or partially completed phases. Use this file together with `BUSINESS_FLOWS_CURRENT.md`, `PROJECT_PROGRESS_TRACKER.md`, `RUN_RESULT.md`, and `LOCKER_FLOW_PLAN.md` when deciding what is actually implemented now.
+This document is the current source of truth for the capstone project state. Older Markdown files may describe earlier
+design assumptions, mocks, or partially completed phases. Use this file together with `BUSINESS_FLOWS_CURRENT.md`,
+`PROJECT_PROGRESS_TRACKER.md`, `RUN_RESULT.md`, and `LOCKER_FLOW_PLAN.md` when deciding what is actually implemented
+now.
 
 ## Living Docs For Future Work
 
 These two files must be updated whenever business behavior or project progress changes:
 
-- `docs/BUSINESS_FLOWS_CURRENT.md`: detailed current business flows, roles, endpoints, screens, events, and known partial/future flows.
-- `docs/PROJECT_PROGRESS_TRACKER.md`: implementation progress, component matrix, remaining work, verification log, and recent change log.
+- `docs/BUSINESS_FLOWS_CURRENT.md`: detailed current business flows, roles, endpoints, screens, events, and known
+  partial/future flows.
+- `docs/PROJECT_PROGRESS_TRACKER.md`: implementation progress, component matrix, remaining work, verification log, and
+  recent change log.
 
-When handing the project to another developer or AI coding agent, ask them to read `PROJECT_PROGRESS_TRACKER.md` first, then `BUSINESS_FLOWS_CURRENT.md`.
+When handing the project to another developer or AI coding agent, ask them to read `PROJECT_PROGRESS_TRACKER.md` first,
+then `BUSINESS_FLOWS_CURRENT.md`.
 
 ## System Scope
 
-The project is a smart laundry locker platform with separate backend, web frontend, Flutter mobile app, and IoT simulation/runtime code.
+The project is a smart laundry locker platform with separate backend, web frontend, Flutter mobile app, and IoT
+simulation/runtime code.
 
 Main folders:
 
@@ -37,7 +44,9 @@ Core services run through Docker Compose:
 - PostgreSQL host port: `15432`
 - RabbitMQ: `5672`, management UI `15672`
 
-Important note: `laundry-service` and `partner-service` source folders are not present in the workspace. `docker-compose.override.yml` keeps those missing-source services behind a profile so normal local compose runs do not try to build them.
+Important note: `laundry-service` and `partner-service` source folders are not present in the workspace.
+`docker-compose.override.yml` keeps those missing-source services behind a profile so normal local compose runs do not
+try to build them.
 
 ### Locker Phase 1
 
@@ -63,10 +72,10 @@ Implemented and tested:
 - Manager endpoints under `/api/manage/**`.
 - Maintenance endpoints under `/api/maintenance/**`.
 - Gateway RBAC:
-  - `/api/admin/**`: `ADMIN`
-  - `/api/manage/**`: `MANAGER` or `ADMIN`
-  - `/api/maintenance/**`: `MAINTENANCE` or `ADMIN`
-  - `/internal/**`: blocked through gateway, service-to-service only.
+    - `/api/admin/**`: `ADMIN`
+    - `/api/manage/**`: `MANAGER` or `ADMIN`
+    - `/api/maintenance/**`: `MAINTENANCE` or `ADMIN`
+    - `/internal/**`: blocked through gateway, service-to-service only.
 - Scheduler for overdue reminders and cleanup of completed order cells.
 
 Backend health was verified through:
@@ -81,10 +90,15 @@ Expected result: `200`.
 
 Implemented and verified:
 
-- Phase 1: correlation ID through gateway/services, Prometheus metrics, OpenAPI runtime docs, Dependency Review/CodeQL workflow, deploy build with `mvn -B clean verify`.
-- Phase 2: OpenFeign Resilience4j circuit breaker/timeouts, `/actuator/sbom`, CycloneDX SBOM generation, Trivy image scan gate, and locker-service Testcontainers smoke test.
-- Phase 3/4: gateway RBAC/access-token unit tests, Swagger UI/OpenAPI aggregation through gateway, Spring Boot build metadata, full 12-image Trivy matrix for existing Dockerfiles, deploy artifact SHA-256 checksum, and deploy script checksum verification.
-- Phase 4 continuation: GitHub artifact attestation/provenance for deploy artifacts, tag-based backend release workflow, release tarball/SBOM/checksum, GitHub Release publishing, and a release artifact verification helper script.
+- Phase 1: correlation ID through gateway/services, Prometheus metrics, OpenAPI runtime docs, Dependency Review/CodeQL
+  workflow, deploy build with `mvn -B clean verify`.
+- Phase 2: OpenFeign Resilience4j circuit breaker/timeouts, `/actuator/sbom`, CycloneDX SBOM generation, Trivy image
+  scan gate, and locker-service Testcontainers smoke test.
+- Phase 3/4: gateway RBAC/access-token unit tests, Swagger UI/OpenAPI aggregation through gateway, Spring Boot build
+  metadata, full 12-image Trivy matrix for existing Dockerfiles, deploy artifact SHA-256 checksum, and deploy script
+  checksum verification.
+- Phase 4 continuation: GitHub artifact attestation/provenance for deploy artifacts, tag-based backend release workflow,
+  release tarball/SBOM/checksum, GitHub Release publishing, and a release artifact verification helper script.
 
 Verification:
 
@@ -133,13 +147,13 @@ Implemented and verified:
 
 - Real login screen using `POST /api/auth/login` with `identifier` and `password`.
 - Role-based routing:
-  - `MANAGER` or `ADMIN` -> `/manager`
-  - `MAINTENANCE` -> `/maintenance-home`
-  - other users -> `/home`
+    - `MANAGER` or `ADMIN` -> `/manager`
+    - `MAINTENANCE` -> `/maintenance-home`
+    - other users -> `/home`
 - Customer home quick actions:
-  - `Thuê tủ` -> rental flow
-  - `Gửi hàng` -> send parcel flow
-  - `Đơn tủ` -> locker orders page
+    - `Thuê tủ` -> rental flow
+    - `Gửi hàng` -> send parcel flow
+    - `Đơn tủ` -> locker orders page
 - New locker operations module under `lib/features/locker_ops/`.
 - Manager home with stats/layout/orders tabs.
 - Maintenance home with fault/report queues.
@@ -170,9 +184,11 @@ Smoke test completed on emulator:
 
 Known non-blocking notes:
 
-- Home still calls some older endpoints such as `/advertisements`, `/blogs`, and `/wallet/balance`; these may return `404` in the current local backend and do not block the locker operations flow.
+- Home still calls some older endpoints such as `/advertisements`, `/blogs`, and `/wallet/balance`; these may return
+  `404` in the current local backend and do not block the locker operations flow.
 - Android build warns about Kotlin Gradle Plugin migration for future Flutter versions; current debug APK build passes.
-- Manual ADB typing for manager/maintenance UI smoke was unreliable because of emulator input/launcher behavior. Backend role login and code routing were verified.
+- Manual ADB typing for manager/maintenance UI smoke was unreliable because of emulator input/launcher behavior. Backend
+  role login and code routing were verified.
 
 ## IoT
 

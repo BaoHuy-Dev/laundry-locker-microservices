@@ -1,3 +1,4 @@
 package com.huynqb.laundrylocker.order.dto;
 
-public record DroneStatusUpdateRequest(String status, String reason) {}
+public record DroneStatusUpdateRequest(String status, String reason) {
+}

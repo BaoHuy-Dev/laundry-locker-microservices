@@ -1,6 +1,7 @@
 # 📖 Hướng Dẫn Chi Tiết Kết Nối Database DigitalOcean
 
-> **Tài liệu này giải thích chi tiết tại sao và cách thức kết nối tới PostgreSQL database đã deploy trên DigitalOcean Droplet.**
+> **Tài liệu này giải thích chi tiết tại sao và cách thức kết nối tới PostgreSQL database đã deploy trên DigitalOcean
+Droplet.**
 >
 > Nếu bạn chỉ cần hướng dẫn nhanh, xem [DATABASE_QUICK_CONNECT.md](./DATABASE_QUICK_CONNECT.md).
 
@@ -26,7 +27,8 @@
 
 ## 1. Tổng Quan Kiến Trúc Kết Nối
 
-Database PostgreSQL của dự án được deploy trên một **DigitalOcean Droplet** (máy chủ ảo Linux). PostgreSQL chạy bên trong **Docker container** trên Droplet đó.
+Database PostgreSQL của dự án được deploy trên một **DigitalOcean Droplet** (máy chủ ảo Linux). PostgreSQL chạy bên
+trong **Docker container** trên Droplet đó.
 
 ```
 ┌─────────────────┐       SSH Tunnel        ┌──────────────────────────────────┐
@@ -43,7 +45,8 @@ Database PostgreSQL của dự án được deploy trên một **DigitalOcean Dr
 
 1. **IDE của bạn** tạo một kết nối SSH tới Droplet (`146.190.84.136:22`)
 2. Qua SSH tunnel, IDE **chuyển tiếp (forward)** port `15432` từ Droplet về `127.0.0.1:15432` trên máy bạn
-3. IDE kết nối tới PostgreSQL tại `127.0.0.1:15432` — nhưng thực chất traffic đang đi qua SSH tunnel tới PostgreSQL trên Droplet
+3. IDE kết nối tới PostgreSQL tại `127.0.0.1:15432` — nhưng thực chất traffic đang đi qua SSH tunnel tới PostgreSQL trên
+   Droplet
 4. Vì PostgreSQL trong Docker được map `5432 → 15432` nên kết nối thành công
 
 ---
@@ -52,8 +55,10 @@ Database PostgreSQL của dự án được deploy trên một **DigitalOcean Dr
 
 ### ❌ Không kết nối trực tiếp vì:
 
-- **Bảo mật:** PostgreSQL trên Droplet chỉ lắng nghe trên `127.0.0.1` (localhost của server), **KHÔNG** mở ra internet. Điều này có nghĩa là không ai từ bên ngoài có thể truy cập trực tiếp vào database.
-- **Cấu hình Docker:** Trong `docker-compose.yml`, port được bind là `127.0.0.1:15432:5432` — chú ý prefix `127.0.0.1` có nghĩa là chỉ chấp nhận kết nối từ localhost của server.
+- **Bảo mật:** PostgreSQL trên Droplet chỉ lắng nghe trên `127.0.0.1` (localhost của server), **KHÔNG** mở ra internet.
+  Điều này có nghĩa là không ai từ bên ngoài có thể truy cập trực tiếp vào database.
+- **Cấu hình Docker:** Trong `docker-compose.yml`, port được bind là `127.0.0.1:15432:5432` — chú ý prefix `127.0.0.1`
+  có nghĩa là chỉ chấp nhận kết nối từ localhost của server.
 
 ### ✅ SSH Tunnel giải quyết vấn đề:
 
@@ -75,10 +80,10 @@ Database PostgreSQL của dự án được deploy trên một **DigitalOcean Dr
 
 ### Phần mềm cần có:
 
-| Phần mềm | Mục đích | Tải về |
-|-----------|----------|--------|
-| IntelliJ IDEA Ultimate hoặc DataGrip | IDE có hỗ trợ Database Tools | [jetbrains.com](https://www.jetbrains.com/) |
-| OpenSSH client | Tạo SSH key (Windows 10+ đã có sẵn) | Có sẵn trong Windows |
+| Phần mềm                             | Mục đích                            | Tải về                                      |
+|--------------------------------------|-------------------------------------|---------------------------------------------|
+| IntelliJ IDEA Ultimate hoặc DataGrip | IDE có hỗ trợ Database Tools        | [jetbrains.com](https://www.jetbrains.com/) |
+| OpenSSH client                       | Tạo SSH key (Windows 10+ đã có sẵn) | Có sẵn trong Windows                        |
 
 ### Thông tin cần xin từ trưởng nhóm:
 
@@ -126,7 +131,8 @@ Nếu trưởng nhóm gửi cho bạn file private key:
 
 > [!IMPORTANT]
 > **Tại sao phải đặt quyền `600`?**
-> SSH client sẽ **từ chối** sử dụng key file nếu file đó có quyền quá rộng (ví dụ ai cũng đọc được). Đây là cơ chế bảo mật để đảm bảo chỉ bạn mới có thể đọc private key.
+> SSH client sẽ **từ chối** sử dụng key file nếu file đó có quyền quá rộng (ví dụ ai cũng đọc được). Đây là cơ chế bảo
+> mật để đảm bảo chỉ bạn mới có thể đọc private key.
 
 ### Trường hợp B: Tạo key mới và gửi public key cho trưởng nhóm
 
@@ -134,8 +140,8 @@ Nếu trưởng nhóm gửi cho bạn file private key:
    ```bash
    ssh-keygen -t ed25519 -C "your.email@example.com"
    ```
-   - Khi hỏi nơi lưu file, nhấn **Enter** để dùng đường dẫn mặc định
-   - Passphrase: có thể để trống hoặc đặt passphrase tùy ý
+    - Khi hỏi nơi lưu file, nhấn **Enter** để dùng đường dẫn mặc định
+    - Passphrase: có thể để trống hoặc đặt passphrase tùy ý
 
 2. Gửi **public key** (`id_ed25519.pub`) cho trưởng nhóm:
    ```powershell
@@ -154,7 +160,8 @@ Nếu trưởng nhóm gửi cho bạn file private key:
    ```
 
 > [!WARNING]
-> **KHÔNG BAO GIỜ** chia sẻ file **private key** (`id_ed25519` — file KHÔNG có đuôi `.pub`). Chỉ chia sẻ **public key** (`id_ed25519.pub`).
+> **KHÔNG BAO GIỜ** chia sẻ file **private key** (`id_ed25519` — file KHÔNG có đuôi `.pub`). Chỉ chia sẻ **public key
+** (`id_ed25519.pub`).
 
 ---
 
@@ -177,21 +184,23 @@ Nếu trưởng nhóm gửi cho bạn file private key:
 3. Nhấn nút **`...`** (ba chấm) bên cạnh dropdown SSH configuration
 4. Trong cửa sổ **SSH Configurations**, nhấn **`+`** để tạo cấu hình mới:
 
-| Thuộc tính | Giá trị | Giải thích |
-|------------|---------|------------|
-| **Host** | `146.190.84.136` | Địa chỉ IP của DigitalOcean Droplet |
-| **Port** | `22` | Port mặc định của SSH |
-| **Username** | `root` | User trên server (DigitalOcean Droplet mặc định dùng `root`) |
-| **Authentication type** | `Key pair (OpenSSH or PuTTY)` | Xác thực bằng SSH key thay vì password |
-| **Private key file** | `C:\Users\<TenBan>\.ssh\id_ed25519` | Đường dẫn tới private key trên máy bạn |
-| **Passphrase** | *(để trống)* | Nếu key có passphrase thì nhập ở đây |
+| Thuộc tính              | Giá trị                             | Giải thích                                                   |
+|-------------------------|-------------------------------------|--------------------------------------------------------------|
+| **Host**                | `146.190.84.136`                    | Địa chỉ IP của DigitalOcean Droplet                          |
+| **Port**                | `22`                                | Port mặc định của SSH                                        |
+| **Username**            | `root`                              | User trên server (DigitalOcean Droplet mặc định dùng `root`) |
+| **Authentication type** | `Key pair (OpenSSH or PuTTY)`       | Xác thực bằng SSH key thay vì password                       |
+| **Private key file**    | `C:\Users\<TenBan>\.ssh\id_ed25519` | Đường dẫn tới private key trên máy bạn                       |
+| **Passphrase**          | *(để trống)*                        | Nếu key có passphrase thì nhập ở đây                         |
 
 > [!NOTE]
 > **Giải thích các giá trị:**
 > - **Host `146.190.84.136`**: Đây là IP public của Droplet trên DigitalOcean. Mọi thành viên đều dùng chung IP này.
 > - **Port `22`**: SSH sử dụng port 22 theo chuẩn. Server không thay đổi port mặc định.
-> - **Username `root`**: DigitalOcean Droplet mặc định tạo user `root`. Trong production nên tạo user riêng, nhưng cho development thì `root` là ok.
-> - **Key pair**: An toàn hơn password authentication. File `id_ed25519` là key thuật toán Ed25519 — nhỏ gọn và bảo mật cao.
+> - **Username `root`**: DigitalOcean Droplet mặc định tạo user `root`. Trong production nên tạo user riêng, nhưng cho
+    development thì `root` là ok.
+> - **Key pair**: An toàn hơn password authentication. File `id_ed25519` là key thuật toán Ed25519 — nhỏ gọn và bảo mật
+    cao.
 
 5. Nhấn **Test Connection** trong cửa sổ SSH Configurations
 6. Nếu thành công → Nhấn **OK** để lưu SSH configuration
@@ -210,25 +219,26 @@ Trong tab SSH/SSL, mục **Local port** hiển thị `<Dynamic>`. Điều này c
 
 Quay lại tab **General** và điền thông tin:
 
-| Thuộc tính | Giá trị | Giải thích |
-|------------|---------|------------|
-| **Name** | `postgres@127.0.0.1` | Tên hiển thị, đặt gì cũng được |
-| **Driver** | `PostgreSQL` | Driver kết nối PostgreSQL, IDE tự quản lý |
-| **Connection type** | `default` | Dùng kiểu kết nối mặc định (host + port) |
-| **Host** | `127.0.0.1` | Localhost — vì kết nối qua SSH tunnel |
-| **Port** | `15432` | Port PostgreSQL được map trong Docker |
-| **Authentication** | `User & Password` | Xác thực bằng username + password |
-| **User** | `postgres` | User admin mặc định của PostgreSQL |
-| **Password** | *(liên hệ trưởng nhóm)* | Mật khẩu database |
-| **Save** | `Forever` | Lưu password để không phải nhập lại |
-| **Database** | `postgres` | Database mặc định, dùng làm điểm vào |
-| **URL** | `jdbc:postgresql://127.0.0.1:15432/postgres` | Tự sinh từ các trường trên |
+| Thuộc tính          | Giá trị                                      | Giải thích                                |
+|---------------------|----------------------------------------------|-------------------------------------------|
+| **Name**            | `postgres@127.0.0.1`                         | Tên hiển thị, đặt gì cũng được            |
+| **Driver**          | `PostgreSQL`                                 | Driver kết nối PostgreSQL, IDE tự quản lý |
+| **Connection type** | `default`                                    | Dùng kiểu kết nối mặc định (host + port)  |
+| **Host**            | `127.0.0.1`                                  | Localhost — vì kết nối qua SSH tunnel     |
+| **Port**            | `15432`                                      | Port PostgreSQL được map trong Docker     |
+| **Authentication**  | `User & Password`                            | Xác thực bằng username + password         |
+| **User**            | `postgres`                                   | User admin mặc định của PostgreSQL        |
+| **Password**        | *(liên hệ trưởng nhóm)*                      | Mật khẩu database                         |
+| **Save**            | `Forever`                                    | Lưu password để không phải nhập lại       |
+| **Database**        | `postgres`                                   | Database mặc định, dùng làm điểm vào      |
+| **URL**             | `jdbc:postgresql://127.0.0.1:15432/postgres` | Tự sinh từ các trường trên                |
 
 ### 🤔 Giải thích quan trọng:
 
 #### Tại sao Host là `127.0.0.1` mà không phải IP server?
 
 Vì bạn đang dùng **SSH tunnel**! SSH tunnel sẽ:
+
 1. Kết nối SSH tới `146.190.84.136:22` (bước trước đã cấu hình)
 2. Tạo một "cổng" từ máy bạn (127.0.0.1) tới server
 3. Khi IDE kết nối tới `127.0.0.1:15432`, traffic thực chất được chuyển qua SSH tới `127.0.0.1:15432` **trên server**
@@ -252,12 +262,14 @@ ports:
 #### Tại sao dùng user `postgres` thay vì user riêng từng service?
 
 Mỗi microservice có database user riêng (ví dụ `auth_user`, `order_user`...), nhưng:
+
 - User `postgres` là **superuser** — có quyền truy cập **tất cả** databases
 - Khi dùng IDE để xem/debug data, bạn cần truy cập nhiều databases cùng lúc
 - User riêng từng service (như `auth_user`) chỉ có quyền trên database tương ứng (như `auth_db`)
 
 > [!CAUTION]
-> Vì bạn đang dùng **superuser**, hãy **CỰC KỲ CẨN THẬN** khi chạy lệnh UPDATE/DELETE. Sai sót có thể ảnh hưởng tất cả databases.
+> Vì bạn đang dùng **superuser**, hãy **CỰC KỲ CẨN THẬN** khi chạy lệnh UPDATE/DELETE. Sai sót có thể ảnh hưởng tất cả
+> databases.
 
 ---
 
@@ -265,13 +277,13 @@ Mỗi microservice có database user riêng (ví dụ `auth_user`, `order_user`.
 
 1. Nhấn nút **Test Connection** (góc dưới bên trái cửa sổ Data Sources and Drivers)
 2. IDE sẽ thực hiện tuần tự:
-   - ✅ Kết nối SSH tới `146.190.84.136:22`
-   - ✅ Tạo SSH tunnel
-   - ✅ Kết nối PostgreSQL qua tunnel
-   - ✅ Xác thực với user `postgres`
+    - ✅ Kết nối SSH tới `146.190.84.136:22`
+    - ✅ Tạo SSH tunnel
+    - ✅ Kết nối PostgreSQL qua tunnel
+    - ✅ Xác thực với user `postgres`
 3. Nếu mọi thứ OK, bạn sẽ thấy:
-   - Thông báo **"Succeeded"**
-   - Phiên bản: **PostgreSQL 16.14**
+    - Thông báo **"Succeeded"**
+    - Phiên bản: **PostgreSQL 16.14**
 4. Nhấn **OK** để lưu và đóng
 
 ---
@@ -287,21 +299,21 @@ Mặc định, IDE chỉ hiển thị database `postgres`. Để xem tất cả 
 
 ### Danh sách databases trong dự án:
 
-| Database | Microservice tương ứng | Mô tả |
-|----------|------------------------|--------|
-| `auth_db` | auth-service (port 8081) | Quản lý xác thực, JWT tokens |
-| `user_db` | user-service (port 8082) | Thông tin người dùng |
-| `order_db` | order-service (port 8083) | Quản lý đơn hàng giặt |
-| `locker_db` | locker-service (port 8084) | Quản lý tủ locker |
-| `laundry_db` | laundry-service (port 8085) | Quản lý dịch vụ giặt |
-| `payment_db` | payment-service (port 8086) | Quản lý thanh toán |
-| `notification_db` | notification-service (port 8087) | Quản lý thông báo |
-| `iot_db` | iot-service (port 8088) | Quản lý thiết bị IoT |
-| `store_db` | store-service (port 8089) | Quản lý cửa hàng |
-| `loyalty_db` | loyalty-service (port 8092) | Quản lý chương trình khách hàng thân thiết |
-| `partner_db` | *(chưa có service riêng)* | Quản lý đối tác |
-| `staff_db` | *(chưa có service riêng)* | Quản lý nhân viên |
-| `postgres` | — | Database mặc định của PostgreSQL (không chứa data ứng dụng) |
+| Database          | Microservice tương ứng           | Mô tả                                                       |
+|-------------------|----------------------------------|-------------------------------------------------------------|
+| `auth_db`         | auth-service (port 8081)         | Quản lý xác thực, JWT tokens                                |
+| `user_db`         | user-service (port 8082)         | Thông tin người dùng                                        |
+| `order_db`        | order-service (port 8083)        | Quản lý đơn hàng giặt                                       |
+| `locker_db`       | locker-service (port 8084)       | Quản lý tủ locker                                           |
+| `laundry_db`      | laundry-service (port 8085)      | Quản lý dịch vụ giặt                                        |
+| `payment_db`      | payment-service (port 8086)      | Quản lý thanh toán                                          |
+| `notification_db` | notification-service (port 8087) | Quản lý thông báo                                           |
+| `iot_db`          | iot-service (port 8088)          | Quản lý thiết bị IoT                                        |
+| `store_db`        | store-service (port 8089)        | Quản lý cửa hàng                                            |
+| `loyalty_db`      | loyalty-service (port 8092)      | Quản lý chương trình khách hàng thân thiết                  |
+| `partner_db`      | *(chưa có service riêng)*        | Quản lý đối tác                                             |
+| `staff_db`        | *(chưa có service riêng)*        | Quản lý nhân viên                                           |
+| `postgres`        | —                                | Database mặc định của PostgreSQL (không chứa data ứng dụng) |
 
 ---
 
@@ -338,7 +350,9 @@ Mặc định, IDE chỉ hiển thị database `postgres`. Để xem tất cả 
                         └──────────────────────────────────────┘
 ```
 
-**Thiết kế "Database-per-service":** Mỗi microservice sở hữu một database riêng. Đây là best practice trong kiến trúc microservices vì:
+**Thiết kế "Database-per-service":** Mỗi microservice sở hữu một database riêng. Đây là best practice trong kiến trúc
+microservices vì:
+
 - Đảm bảo **loose coupling** giữa các services
 - Mỗi service có thể **scale độc lập**
 - Tránh **tight coupling** qua foreign keys giữa services
@@ -357,6 +371,7 @@ ssh -L 15432:127.0.0.1:15432 -N -f root@146.190.84.136 -i ~/.ssh/id_ed25519
 ```
 
 **Giải thích:**
+
 - `-L 15432:127.0.0.1:15432`: Forward port 15432 từ remote tới local port 15432
 - `-N`: Không chạy command trên remote (chỉ tạo tunnel)
 - `-f`: Chạy SSH ở background
@@ -370,6 +385,7 @@ psql -h 127.0.0.1 -p 15432 -U postgres -d postgres
 ```
 
 Hoặc kết nối tới database cụ thể:
+
 ```bash
 psql -h 127.0.0.1 -p 15432 -U postgres -d auth_db
 ```
@@ -397,11 +413,13 @@ SSH: Connection to 146.190.84.136:22 refused
 ```
 
 **Nguyên nhân có thể:**
+
 1. IP server đã thay đổi (DigitalOcean có thể đổi IP khi rebuild Droplet)
 2. Server đang tắt hoặc khởi động lại
 3. Firewall chặn port 22
 
 **Cách xử lý:**
+
 1. Kiểm tra IP server: đăng nhập DigitalOcean dashboard hoặc hỏi trưởng nhóm
 2. Thử ping server: `ping 146.190.84.136`
 3. Kiểm tra port SSH: `telnet 146.190.84.136 22`
@@ -413,11 +431,13 @@ SSH: Auth fail for root
 ```
 
 **Nguyên nhân có thể:**
+
 1. Private key file sai đường dẫn
 2. Private key không khớp với public key trên server
 3. Quyền truy cập file key quá rộng
 
 **Cách xử lý:**
+
 1. Kiểm tra đường dẫn key: mở file explorer, navigate tới `C:\Users\<TenBan>\.ssh\`
 2. Xác nhận file `id_ed25519` tồn tại (file KHÔNG có đuôi `.pub`)
 3. Thử kết nối SSH bằng command line để xem lỗi chi tiết:
@@ -437,6 +457,7 @@ Connection to 127.0.0.1:15432 refused
 **Nguyên nhân:** Docker container PostgreSQL chưa chạy trên server.
 
 **Cách xử lý:** Liên hệ trưởng nhóm để kiểm tra container:
+
 ```bash
 # Trên server
 docker ps | grep postgres
@@ -454,6 +475,7 @@ docker-compose up -d postgres
 **Nguyên nhân:** Bạn đang cố kết nối tới database chưa được tạo.
 
 **Cách xử lý:** Kết nối tới database `postgres` trước, sau đó xem danh sách databases:
+
 ```sql
 SELECT datname FROM pg_database WHERE datistemplate = false;
 ```
@@ -502,22 +524,26 @@ SELECT datname FROM pg_database WHERE datistemplate = false;
 ### Q: Tôi dùng macOS/Linux, có khác gì không?
 
 **A:** Không khác nhiều. Chỉ khác đường dẫn private key:
+
 - **Windows:** `C:\Users\<TenBan>\.ssh\id_ed25519`
 - **macOS/Linux:** `~/.ssh/id_ed25519` (tức `/Users/<TenBan>/.ssh/id_ed25519` hoặc `/home/<TenBan>/.ssh/id_ed25519`)
 
 ### Q: Tôi có thể dùng DBeaver/pgAdmin thay IntelliJ không?
 
 **A:** Có! Mọi database client đều hỗ trợ SSH tunnel. Chỉ cần cấu hình tương tự:
+
 - **DBeaver:** Tab SSH → Enable SSH Tunnel → điền thông tin tương tự
 - **pgAdmin:** Servers → Register → SSH Tunnel tab → điền thông tin tương tự
 
 ### Q: Tại sao tôi thấy `PostgreSQL 16.14` chứ không phải phiên bản khác?
 
-**A:** Vì Docker image được chỉ định là `postgres:16-alpine` trong `docker-compose.yml`. `16.14` là phiên bản minor mới nhất của PostgreSQL 16.
+**A:** Vì Docker image được chỉ định là `postgres:16-alpine` trong `docker-compose.yml`. `16.14` là phiên bản minor mới
+nhất của PostgreSQL 16.
 
 ### Q: Nhiều người kết nối cùng lúc có sao không?
 
 **A:** Không sao! PostgreSQL hỗ trợ nhiều kết nối đồng thời. Tuy nhiên, hãy cẩn thận:
+
 - Tránh cùng sửa một record
 - Dùng transaction khi cần
 - Nếu gặp lock conflict, đợi hoặc thông báo nhóm
@@ -525,6 +551,7 @@ SELECT datname FROM pg_database WHERE datistemplate = false;
 ### Q: Tôi chạy Spring Boot service locally, service kết nối tới database trên DigitalOcean được không?
 
 **A:** Được, nhưng cần:
+
 1. Tạo SSH tunnel trước (xem mục [Kết Nối Bằng Command Line](#10-kết-nối-bằng-command-line-tùy-chọn))
 2. Cấu hình `application.yml` hoặc environment variable:
    ```yaml
@@ -538,7 +565,8 @@ SELECT datname FROM pg_database WHERE datistemplate = false;
 
 ### Q: IP server thay đổi thì phải làm gì?
 
-**A:** 
+**A:**
+
 1. Mở SSH configuration trong IDE (tab SSH/SSL → nhấn `...`)
 2. Đổi **Host** thành IP mới
 3. Test Connection lại

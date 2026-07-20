@@ -1,6 +1,7 @@
 # Chính Sách Bảo Mật
 
-Ứng dụng Smart Laundry Locker sử dụng thông tin tài khoản, thông tin đơn hàng và dữ liệu cần thiết để cung cấp dịch vụ locker giặt sấy.
+Ứng dụng Smart Laundry Locker sử dụng thông tin tài khoản, thông tin đơn hàng và dữ liệu cần thiết để cung cấp dịch vụ
+locker giặt sấy.
 
 ## Dữ liệu được sử dụng
 
@@ -10,4 +11,5 @@
 
 ## Cam kết
 
-Thông tin người dùng chỉ được dùng cho mục đích vận hành dịch vụ, hỗ trợ khách hàng, bảo mật tài khoản và cải thiện trải nghiệm ứng dụng.
+Thông tin người dùng chỉ được dùng cho mục đích vận hành dịch vụ, hỗ trợ khách hàng, bảo mật tài khoản và cải thiện trải
+nghiệm ứng dụng.

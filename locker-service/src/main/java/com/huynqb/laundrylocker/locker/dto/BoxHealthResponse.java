@@ -9,11 +9,12 @@ import java.time.LocalDateTime;
 /// "door left ajar" anomaly worth a maintenance look. `hwState`/`lastReportedAt`
 /// are null when the cabinet has never reported that box.
 public record BoxHealthResponse(
-    Long boxId,
-    Integer boxNumber,
-    String cellType,
-    String logicalStatus,
-    String hwState,
-    LocalDateTime lastReportedAt,
-    boolean doorOpen,
-    boolean needsAttention) {}
+        Long boxId,
+        Integer boxNumber,
+        String cellType,
+        String logicalStatus,
+        String hwState,
+        LocalDateTime lastReportedAt,
+        boolean doorOpen,
+        boolean needsAttention) {
+}

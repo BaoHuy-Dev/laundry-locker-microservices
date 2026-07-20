@@ -11,17 +11,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class NotificationEventListener {
 
-  private final NotificationService notificationService;
-  private final DeliveryNotificationService deliveryNotificationService;
+    private final NotificationService notificationService;
+    private final DeliveryNotificationService deliveryNotificationService;
 
-  @RabbitListener(queues = RabbitConfig.NOTIFICATION_QUEUE)
-  public void onEvent(DomainEvent event) {
-    // Event giao hàng (drone) có data payload riêng (orderId/status/eta) -> xử lý
-    // bằng DeliveryNotificationService; các event khác theo luồng chung.
-    if (DomainEventNames.DELIVERY_STATUS_CHANGED.equals(event.type())) {
-      deliveryNotificationService.notifyFromEvent(event);
-    } else {
-      notificationService.consumeDomainEvent(event);
+    @RabbitListener(queues = RabbitConfig.NOTIFICATION_QUEUE)
+    public void onEvent(DomainEvent event) {
+        // Event giao hàng (drone) có data payload riêng (orderId/status/eta) -> xử lý
+        // bằng DeliveryNotificationService; các event khác theo luồng chung.
+        if (DomainEventNames.DELIVERY_STATUS_CHANGED.equals(event.type())) {
+            deliveryNotificationService.notifyFromEvent(event);
+        } else {
+            notificationService.consumeDomainEvent(event);
+        }
     }
-  }
 }
