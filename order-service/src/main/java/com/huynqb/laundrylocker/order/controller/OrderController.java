@@ -127,6 +127,18 @@ public class OrderController {
         return ApiResponse.ok("ORDER_PICKUP_STORAGE_OK", "Storage order picked up", orderService.pickupStorage(orderId, userId));
     }
 
+    @PostMapping("/api/orders/{orderId}/report-box-fault")
+    public ApiResponse<OrderResponse> reportBoxFault(
+            @PathVariable Long orderId,
+            @RequestBody(required = false) Map<String, String> request,
+            @RequestHeader("X-User-Id") Long userId) {
+        String reason = request == null ? null : request.get("reason");
+        return ApiResponse.ok(
+                "ORDER_BOX_FAULT_REPORTED",
+                "Order box fault reported",
+                orderService.reportBoxFault(orderId, userId, reason));
+    }
+
     @PostMapping("/api/orders/{orderId}/reorder")
     public ApiResponse<OrderResponse> reorder(@PathVariable Long orderId, @RequestHeader("X-User-Id") Long userId) {
         return ApiResponse.ok("ORDER_REORDERED", "Reorder created", orderService.reorder(orderId, userId));

@@ -85,6 +85,15 @@ public class LockerController {
         return ApiResponse.ok("BOX_RELEASED", "Box released", lockerService.releaseBox(id));
     }
 
+    @PostMapping("/internal/boxes/{id}/fault")
+    public ApiResponse<CellResponse> markFaultInternal(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> body,
+            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        String reason = body == null ? null : body.get("reason");
+        return ApiResponse.ok("BOX_FAULT_REPORTED", "Box marked as faulty", lockerService.markFault(id, reason, userId));
+    }
+
     // Nguồn dữ liệu cho job đối soát ô ↔ đơn của order-service (Gap G4).
     @GetMapping("/internal/boxes")
     public ApiResponse<List<Map<String, Object>>> listBoxesInternal() {

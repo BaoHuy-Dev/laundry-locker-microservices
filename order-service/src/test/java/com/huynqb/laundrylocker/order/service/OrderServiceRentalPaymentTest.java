@@ -7,6 +7,7 @@ import com.huynqb.laundrylocker.order.client.UserClient;
 import com.huynqb.laundrylocker.order.dto.CellDto;
 import com.huynqb.laundrylocker.order.model.LockerOrder;
 import com.huynqb.laundrylocker.order.repository.*;
+import com.huynqb.laundrylocker.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +22,10 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,6 +66,7 @@ class OrderServiceRentalPaymentTest {
                 notificationClient,
                 qrTokenService);
         ReflectionTestUtils.setField(orderService, "rentalRateStandard", 5000L);
+        ReflectionTestUtils.setField(orderService, "requirePaymentBeforeDrop", true);
     }
 
     @Test
@@ -89,5 +94,26 @@ class OrderServiceRentalPaymentTest {
         assertEquals(BigDecimal.valueOf(20000), order.getOriginalPrice());
         assertEquals("UNPAID", order.getPaymentStatus());
         assertNull(order.getPaidAt());
+    }
+
+    @Test
+    void pickupStorageRejectsRentalWhenExtensionBalanceIsStillUnpaid() {
+        LockerOrder order = new LockerOrder();
+        order.setId(13L);
+        order.setUserId(44L);
+        order.setType("RENTAL");
+        order.setStatus("STORING");
+        order.setSendBoxId(902L);
+        order.setTotalPrice(BigDecimal.valueOf(15000));
+        order.setPaymentStatus("UNPAID");
+
+        when(orderRepository.findById(13L)).thenReturn(Optional.of(order));
+
+        BusinessException error = assertThrows(
+                BusinessException.class,
+                () -> orderService.pickupStorage(13L, 44L));
+
+        assertEquals("ORDER_UNPAID", error.getCode());
+        verify(lockerClient, never()).releaseBox(any());
     }
 }
