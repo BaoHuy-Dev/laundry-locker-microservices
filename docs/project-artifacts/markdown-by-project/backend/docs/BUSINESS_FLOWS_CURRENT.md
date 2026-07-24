@@ -671,31 +671,37 @@ Flow nghiệp vụ:
 
 1. Customer đăng nhập.
 2. Customer chọn locker, loại cell và số giờ thuê.
-3. Backend tìm/reserve cell phù hợp đang available.
+3. Nếu customer vào từ lưới ô, mobile gửi đúng `boxId` đã chọn; backend reserve chính xác ô đó. Nếu không chỉ rõ `boxId`, backend mới tự tìm cell phù hợp đang available.
 4. Backend tính giá thuê:
     - `STANDARD`: mặc định `5000` VND/giờ.
     - `XL`: mặc định `10000` VND/giờ.
-5. Backend tạo rental order và trả về PIN/QR.
-6. Customer dùng PIN/QR tại kiosk để mở ô trong thời gian thuê. PIN được dùng nhiều lần khi rental đang active.
+5. Backend tạo rental order ở trạng thái `INITIALIZED`, giữ ô đã chọn, lưu `rentalDurationHours`, trả về PIN/QR, nhưng **chưa** chạy `pickupDeadline`.
+6. Customer có thể thanh toán ngay hoặc bỏ đồ trước rồi thanh toán sau. Mobile không còn tự confirm sau nút mock payment.
+7. Customer dùng PIN/QR tại kiosk để mở ô và bỏ đồ.
+8. Customer bấm `Tôi đã bỏ đồ — bắt đầu kỳ thuê`; backend chuyển RENTAL sang `STORING` và chỉ lúc đó mới đặt `pickupDeadline = now + rentalDurationHours`.
 7. Customer gia hạn rental:
     - `POST /api/orders/{orderId}/extend-rental`
     - Backend cộng thêm `rate x hours` vào `totalPrice` theo loại ô thật và nếu đơn đã thanh toán trước đó thì chuyển
       lại `paymentStatus=UNPAID` để thu phần chênh lệch.
-8. Customer kết thúc rental theo 2 bước thủ công:
+9. Customer kết thúc rental theo 2 bước thủ công:
     - Mobile hiển thị sheet hướng dẫn "Lấy đồ tại kiosk" + PIN/QR.
     - Customer mở ô ở kiosk, lấy đồ, đóng cửa, rồi mới xác nhận bước cuối trên mobile.
-9. Mobile gọi `POST /api/orders/{orderId}/pickup-storage` sau khi customer bấm xác nhận đã lấy đồ và đóng tủ.
-10. Backend chỉ complete/release cell khi đơn không còn outstanding payment. Nếu rental đã gia hạn và `paymentStatus=UNPAID`,
+10. Mobile gọi `POST /api/orders/{orderId}/pickup-storage` sau khi customer bấm xác nhận đã lấy đồ và đóng tủ.
+11. Backend chỉ complete/release cell khi đơn không còn outstanding payment. Nếu rental đã gia hạn và `paymentStatus=UNPAID`,
     `pickup-storage` trả lỗi `ORDER_UNPAID` thay vì silently complete.
 
 Hành vi quan trọng:
 
 - PIN rental không bị consume sau một lần mở.
+- **Bắt đầu thuê khi chưa thanh toán (2026-07-25)**: `confirm()` cho RENTAL không còn bị gate bởi `require-payment-before-drop`; SEND vẫn giữ gate thanh toán trước khi confirm.
+- **Deadline rental chạy từ lúc bỏ đồ (2026-07-25)**: `pickupDeadline` không còn được set ở `createRental()`, mà chỉ được set khi customer xác nhận bắt đầu kỳ thuê.
 - Gia hạn rental tính phí theo loại cell thật.
 - **Gia hạn sau khi đã thanh toán (2026-07-24)**: payment-service checkout phần chênh lệch còn thiếu (`totalPrice - tổng các payment COMPLETED`),
   không còn chặn cứng chỉ vì đơn đã từng có một payment COMPLETED trước đó.
 - **Kết thúc rental sau khi gia hạn (2026-07-24)**: `pickup-storage` giờ bị chặn nếu đơn còn `paymentStatus=UNPAID`, nên
   customer phải thanh toán phần chênh lệch trước khi hoàn tất trả ô.
+- **Lấy sớm (2026-07-25)**: customer có thể kết thúc thuê sớm sau khi đã thanh toán; hệ thống không hoàn tiền phần giờ chưa dùng của gói đã đặt.
+- **Hủy sớm trước khi bắt đầu (2026-07-25)**: `cancel()` vẫn cho phép hủy ở `INITIALIZED`; ô được release và PIN bị xóa ngay để credential cũ không còn dùng được.
 - Phí quá hạn có thể được `order-service` tính khi pickup/end trễ.
 - **Đặt lại đơn (2026-06-16)**: `POST /api/orders/{orderId}/reorder` cho đơn RENTAL `COMPLETED`/`CANCELED` giờ gọi lại
   `createRental()` với `cellType` suy từ ô của đơn cũ (`cellTypeOfRental()`) và `hours` suy từ khoảng `createdAt`→
@@ -732,14 +738,16 @@ Flow nghiệp vụ:
 1. User nhập PIN hoặc scan QR.
 2. IoT service hỏi order service để resolve access.
 3. IoT validate access có đúng box được yêu cầu không.
-4. IoT gửi/chấp nhận lệnh mở cửa.
-5. Order flow quyết định lần mở này là confirm, complete, hay chỉ mở trong rental.
+4. Với kiosk code-only (`/api/iot/unlock-with-code`), IoT còn validate `request.lockerId == order.lockerId`; nhập đúng mã ở sai kiosk sẽ bị từ chối.
+5. IoT gửi/chấp nhận lệnh mở cửa.
+6. Order flow quyết định lần mở này là confirm, complete, hay chỉ mở trong rental.
 
 Lưu ý hiện tại:
 
 - Tablet-web cabinet UI là việc tương lai.
 - Một số màn hình mobile QR scanner cũ vẫn phục vụ QR-login. Các màn hình locker ops mới đã render QR access, nhưng UX
   scan tại cabinet vẫn thuộc Phase 3.
+- **Credential hết hiệu lực (2026-07-25)**: order `CANCELED` / `COMPLETED` / hết hiệu lực không còn resolve được qua PIN/QR; hủy đơn và auto-cancel chưa xác nhận đều xóa `pinCode`.
 
 ## 10. Luồng Uỷ Quyền Nhận Hộ
 

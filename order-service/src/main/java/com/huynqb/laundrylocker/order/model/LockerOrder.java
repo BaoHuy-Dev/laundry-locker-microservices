@@ -134,6 +134,9 @@ public class LockerOrder {
     @Column(name = "pickup_deadline")
     private LocalDateTime pickupDeadline;
 
+    @Column(name = "rental_duration_hours")
+    private Integer rentalDurationHours;
+
     @Column(name = "last_reminder_at")
     private LocalDateTime lastReminderAt;
 

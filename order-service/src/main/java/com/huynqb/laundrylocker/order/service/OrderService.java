@@ -153,6 +153,11 @@ public class OrderService {
         LockerOrder order = find(id);
         assertOwner(order, userId);
         validateStatus(order, Set.of("INITIALIZED"));
+        if ("RENTAL".equalsIgnoreCase(order.getType())) {
+            occupyBoxQuietly(order.getSendBoxId());
+            order.setPickupDeadline(LocalDateTime.now().plusHours(resolveRentalDurationHours(order)));
+            return transition(order, "STORING", userId, null, "Renter placed items; multi-use PIN active until deadline");
+        }
         assertPaidBeforeDrop(order);
         occupyBoxQuietly(order.getSendBoxId());
         if ("SEND".equalsIgnoreCase(order.getType())) {
@@ -164,9 +169,6 @@ public class OrderService {
             notifyParcelReadyForReceiver(order);
             return transition(order, "STORING", userId, null,
                     "Sender dropped parcel; pickup PIN issued to receiver " + order.getReceiverPhone());
-        }
-        if ("RENTAL".equalsIgnoreCase(order.getType())) {
-            return transition(order, "STORING", userId, null, "Renter placed items; multi-use PIN active until deadline");
         }
         return transition(order, "STORING", userId, null, "Customer confirmed items dropped in locker");
     }
@@ -204,7 +206,8 @@ public class OrderService {
                                 "RENTAL", "RENTAL",
                                 null, null, null, null, null, request.note(), null, null, null, request.promotionCode(), null, price));
         LockerOrder order = find(created.id());
-        order.setPickupDeadline(LocalDateTime.now().plusHours(request.hours()));
+        order.setPickupDeadline(null);
+        order.setRentalDurationHours(request.hours());
         return toResponse(orderRepository.save(order));
     }
 
@@ -293,11 +296,14 @@ public class OrderService {
             throw new BusinessException("ORDER_STATUS_INVALID", "Only rental orders can be extended");
         }
         validateStatus(order, Set.of("INITIALIZED", "STORING"));
-        LocalDateTime base =
-                order.getPickupDeadline() == null || order.getPickupDeadline().isBefore(LocalDateTime.now())
-                        ? LocalDateTime.now()
-                        : order.getPickupDeadline();
-        order.setPickupDeadline(base.plusHours(hours));
+        order.setRentalDurationHours(resolveRentalDurationHours(order) + hours);
+        if (!"INITIALIZED".equalsIgnoreCase(order.getStatus())) {
+            LocalDateTime base =
+                    order.getPickupDeadline() == null || order.getPickupDeadline().isBefore(LocalDateTime.now())
+                            ? LocalDateTime.now()
+                            : order.getPickupDeadline();
+            order.setPickupDeadline(base.plusHours(hours));
+        }
         BigDecimal extra = rentalRate(cellTypeOfRental(order)).multiply(BigDecimal.valueOf(hours));
         order.setTotalPrice(order.getTotalPrice().add(extra));
         order.setOriginalPrice(order.getOriginalPrice().add(extra));
@@ -465,6 +471,7 @@ public class OrderService {
         }
         assertDroneCancelable(order);
         order.setCancelReason(reason);
+        order.setPinCode(null);
         releaseBoxes(order);
         refundPromotionUsages(order);
         return transition(order, "CANCELED", userId, null, "Order canceled");
@@ -528,7 +535,10 @@ public class OrderService {
         if (!storageLike) {
             throw new BusinessException("ORDER_STATUS_INVALID", "Only storage/rental orders can use pickup-storage");
         }
-        validateStatus(order, Set.of("STORING", "INITIALIZED", "RETURNED"));
+        validateStatus(order,
+                "RENTAL".equalsIgnoreCase(order.getType()) || "RENTAL".equalsIgnoreCase(order.getServiceCategory())
+                        ? Set.of("STORING", "RETURNED")
+                        : Set.of("STORING", "INITIALIZED", "RETURNED"));
         assertPaidBeforeStorageCompletion(order);
         BigDecimal overtime = calculatePickupOvertimeFee(order);
         if (overtime.compareTo(BigDecimal.ZERO) > 0) {
@@ -561,6 +571,7 @@ public class OrderService {
         }
         if (shouldAutoCancelAfterFault(order)) {
             order.setCancelReason(null);
+            order.setPinCode(null);
             releaseBoxes(order);
             refundPromotionUsages(order);
             return transition(order, "CANCELED", userId, null, "Order auto-canceled after reporting reserved box fault");
@@ -674,6 +685,7 @@ public class OrderService {
                 orderRepository
                         .findByPinCode(pinCode)
                         .orElseThrow(() -> new BusinessException("ORDER_NOT_FOUND", "Order not found for PIN"));
+        assertAccessCredentialActive(order);
         assertPaidBeforePickup(order);
         return toResponse(order);
     }
@@ -695,6 +707,7 @@ public class OrderService {
             if (!qrTokenService.matches(trimmed, order.getId(), order.getPinCode())) {
                 throw new BusinessException("INVALID_ACCESS_CODE", "QR token expired or revoked");
             }
+            assertAccessCredentialActive(order);
             assertPaidBeforePickup(order);
             return toResponse(order);
         }
@@ -1092,6 +1105,7 @@ public class OrderService {
             if (order.getCreatedAt() == null || order.getCreatedAt().isAfter(cutoff)) {
                 continue;
             }
+            order.setPinCode(null);
             releaseBoxes(order);
             transition(
                     order,
@@ -1306,6 +1320,25 @@ public class OrderService {
         publishStatusChanged(saved, oldStatus);
         notifyStatus(saved, oldStatus);
         return toResponse(saved);
+    }
+
+    private int resolveRentalDurationHours(LockerOrder order) {
+        if (order.getRentalDurationHours() != null && order.getRentalDurationHours() > 0) {
+            return order.getRentalDurationHours();
+        }
+        if (order.getCreatedAt() != null && order.getPickupDeadline() != null) {
+            long inferred = ChronoUnit.HOURS.between(order.getCreatedAt(), order.getPickupDeadline());
+            if (inferred > 0) {
+                return Math.toIntExact(inferred);
+            }
+        }
+        return 1;
+    }
+
+    private void assertAccessCredentialActive(LockerOrder order) {
+        if (!Set.of("INITIALIZED", "STORING", "RETURNED").contains(order.getStatus())) {
+            throw new BusinessException("INVALID_ACCESS_CODE", "Access code is no longer active");
+        }
     }
 
     private Long resolveAndReserveSendBox(CreateOrderRequest request) {

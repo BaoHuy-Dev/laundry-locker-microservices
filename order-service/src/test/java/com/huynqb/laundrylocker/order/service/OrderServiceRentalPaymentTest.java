@@ -4,9 +4,13 @@ import com.huynqb.laundrylocker.order.client.LockerCellClient;
 import com.huynqb.laundrylocker.order.client.LockerClient;
 import com.huynqb.laundrylocker.order.client.NotificationClient;
 import com.huynqb.laundrylocker.order.client.UserClient;
+import com.huynqb.laundrylocker.order.dto.RentalOrderRequest;
 import com.huynqb.laundrylocker.order.dto.CellDto;
 import com.huynqb.laundrylocker.order.model.LockerOrder;
 import com.huynqb.laundrylocker.order.repository.*;
+import com.huynqb.laundrylocker.common.dto.ApiResponse;
+import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
+import com.huynqb.laundrylocker.common.dto.UserSummary;
 import com.huynqb.laundrylocker.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -115,5 +120,60 @@ class OrderServiceRentalPaymentTest {
 
         assertEquals("ORDER_UNPAID", error.getCode());
         verify(lockerClient, never()).releaseBox(any());
+    }
+
+    @Test
+    void createRentalKeepsDeadlineEmptyUntilCustomerActuallyStartsRental() {
+        final LockerOrder[] savedRef = new LockerOrder[1];
+        when(userClient.getUser(44L)).thenReturn(ApiResponse.ok(new UserSummary(44L, "a@b.c", "0909", "User", "ACTIVE")));
+        when(lockerClient.reserveBox(901L, null))
+                .thenReturn(ApiResponse.ok(new LockerBoxSummary(5L, 901L, "CAB-05", 4, "RESERVED")));
+        when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> {
+            LockerOrder saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(21L);
+                saved.setOrderCode("ORD-21");
+            }
+            savedRef[0] = saved;
+            return saved;
+        });
+        when(orderRepository.findById(21L)).thenAnswer(invocation -> Optional.ofNullable(savedRef[0]));
+
+        var response = orderService.createRental(new RentalOrderRequest(5L, 901L, "STANDARD", 4, null, null), 44L);
+
+        assertNull(response.pickupDeadline());
+    }
+
+    @Test
+    void confirmAllowsUnpaidRentalAndStartsDeadlineFromConfirmTime() {
+        LockerOrder order = new LockerOrder();
+        order.setId(22L);
+        order.setUserId(44L);
+        order.setOrderCode("ORD-22");
+        order.setType("RENTAL");
+        order.setServiceCategory("RENTAL");
+        order.setStatus("INITIALIZED");
+        order.setSendBoxId(901L);
+        order.setLockerId(5L);
+        order.setPinCode("490912");
+        order.setTotalPrice(BigDecimal.valueOf(20000));
+        order.setOriginalPrice(BigDecimal.valueOf(20000));
+        order.setPaymentStatus("UNPAID");
+        order.setCreatedAt(LocalDateTime.now().minusHours(2));
+        order.setPickupDeadline(LocalDateTime.now().plusHours(2));
+
+        when(orderRepository.findById(22L)).thenReturn(Optional.of(order));
+        when(lockerClient.occupyBox(901L))
+                .thenReturn(ApiResponse.ok(new LockerBoxSummary(5L, 901L, "CAB-05", 4, "OCCUPIED")));
+        when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var before = LocalDateTime.now();
+        var response = orderService.confirm(22L, 44L);
+        var after = LocalDateTime.now();
+
+        assertEquals("STORING", response.status());
+        assertEquals("UNPAID", response.paymentStatus());
+        assertTrue(response.pickupDeadline() != null && !response.pickupDeadline().isBefore(before.plusHours(4)));
+        assertTrue(!response.pickupDeadline().isAfter(after.plusHours(4).plusSeconds(1)));
     }
 }

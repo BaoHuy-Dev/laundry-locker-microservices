@@ -129,6 +129,9 @@ public class IotService {
         } catch (Exception ex) {
             return Map.of("accepted", false, "message", "Mã không hợp lệ hoặc đã hết hạn");
         }
+        if (order.lockerId() == null || !order.lockerId().equals(request.lockerId())) {
+            return Map.of("accepted", false, "message", "Mã này không thuộc tủ hiện tại");
+        }
         Long boxId = order.receiveBoxId() != null ? order.receiveBoxId() : order.sendBoxId();
         if (boxId == null) {
             return Map.of("accepted", false, "message", "Đơn này không gắn với ô tủ nào");
@@ -173,6 +176,9 @@ public class IotService {
         }
         try {
             OrderLookupResponse order = orderClient.getByAccess(code).data();
+            if (!isCredentialActive(order.status())) {
+                return new VerifyPinResponse(false, order.id(), boxId, order.status(), "Access code is no longer active");
+            }
             boolean validBox =
                     boxId.equals(order.sendBoxId()) || boxId.equals(order.receiveBoxId());
             if (!validBox) {
@@ -200,6 +206,12 @@ public class IotService {
 
     private void resetAttempts(Long boxId) {
         accessAttemptRepository.findById(boxId).ifPresent(accessAttemptRepository::delete);
+    }
+
+    private boolean isCredentialActive(String status) {
+        return "INITIALIZED".equalsIgnoreCase(status)
+                || "STORING".equalsIgnoreCase(status)
+                || "RETURNED".equalsIgnoreCase(status);
     }
 
     private void logAccess(
