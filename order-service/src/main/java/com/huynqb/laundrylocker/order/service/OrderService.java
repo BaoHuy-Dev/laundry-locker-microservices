@@ -1320,15 +1320,19 @@ public class OrderService {
 
     private int resolveRentalDurationHours(LockerOrder order) {
         if (order.getRentalDurationHours() != null && order.getRentalDurationHours() > 0) {
-            return order.getRentalDurationHours();
+            return clampRentalDurationHours(order.getRentalDurationHours());
         }
         if (order.getCreatedAt() != null && order.getPickupDeadline() != null) {
             long inferred = ChronoUnit.HOURS.between(order.getCreatedAt(), order.getPickupDeadline());
             if (inferred > 0) {
-                return Math.toIntExact(inferred);
+                return clampRentalDurationHours(Math.toIntExact(inferred));
             }
         }
         return 1;
+    }
+
+    private int clampRentalDurationHours(int hours) {
+        return Math.max(1, Math.min(720, hours));
     }
 
     private void assertAccessCredentialActive(LockerOrder order) {

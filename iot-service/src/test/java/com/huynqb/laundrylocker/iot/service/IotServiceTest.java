@@ -67,7 +67,6 @@ class IotServiceTest {
 
     @Test
     void unlockWithCodeRejectsCodeAtWrongLocker() {
-        when(accessAttemptRepository.findById(9002L)).thenReturn(Optional.empty());
         when(orderClient.getByAccess("PIN-123")).thenReturn(ApiResponse.ok(
                 new OrderLookupResponse(51L, 44L, 9L, 9002L, null, "STORING", "112233", null)));
 
@@ -75,7 +74,8 @@ class IotServiceTest {
 
         assertFalse(Boolean.TRUE.equals(result.get("accepted")));
         assertEquals("Mã không hợp lệ hoặc đã hết hạn", result.get("message"));
-        verify(accessAttemptRepository).save(any(AccessAttempt.class));
+        assertFalse(result.containsKey("boxId"));
+        verify(accessAttemptRepository, never()).save(any(AccessAttempt.class));
         verify(lockerMqttService, never()).sendUnlockCommandAsync(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
         verify(lockerClient, never()).openBox(org.mockito.ArgumentMatchers.anyLong());
     }

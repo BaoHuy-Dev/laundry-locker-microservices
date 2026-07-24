@@ -216,4 +216,43 @@ class OrderServiceRentalPaymentTest {
         assertNull(reordered.pickupDeadline());
         assertEquals(BigDecimal.valueOf(20000), reordered.totalPrice());
     }
+
+    @Test
+    void reorderClampsLegacyRentalDurationToPolicyMaximum() {
+        LockerOrder original = new LockerOrder();
+        original.setId(25L);
+        original.setUserId(44L);
+        original.setType("RENTAL");
+        original.setStatus("COMPLETED");
+        original.setLockerId(5L);
+        original.setSendBoxId(901L);
+        original.setCustomerNote("Đơn cũ");
+        original.setCreatedAt(LocalDateTime.of(2026, 7, 1, 0, 0));
+        original.setPickupDeadline(LocalDateTime.of(2026, 8, 15, 0, 0));
+
+        final LockerOrder[] savedRef = new LockerOrder[1];
+        when(orderRepository.findById(25L)).thenReturn(Optional.of(original));
+        when(userClient.getUser(44L)).thenReturn(ApiResponse.ok(new UserSummary(44L, "a@b.c", "0909", "User", "ACTIVE")));
+        when(lockerCellClient.getCell(901L)).thenReturn(ApiResponse.ok(
+                new CellDto(901L, 1, "S", "STANDARD", 0, 0, "AVAILABLE", null)));
+        when(lockerCellClient.findAvailable(5L, null, "STANDARD")).thenReturn(ApiResponse.ok(
+                new CellDto(901L, 1, "S", "STANDARD", 0, 0, "AVAILABLE", null)));
+        when(lockerClient.reserveBox(901L, null))
+                .thenReturn(ApiResponse.ok(new LockerBoxSummary(5L, 901L, "CAB-05", 4, "RESERVED")));
+        when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> {
+            LockerOrder saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(26L);
+                saved.setOrderCode("ORD-26");
+            }
+            savedRef[0] = saved;
+            return saved;
+        });
+        when(orderRepository.findById(26L)).thenAnswer(invocation -> Optional.ofNullable(savedRef[0]));
+
+        var reordered = orderService.reorder(25L, 44L);
+
+        assertNull(reordered.pickupDeadline());
+        assertEquals(BigDecimal.valueOf(5000L * 720), reordered.totalPrice());
+    }
 }
