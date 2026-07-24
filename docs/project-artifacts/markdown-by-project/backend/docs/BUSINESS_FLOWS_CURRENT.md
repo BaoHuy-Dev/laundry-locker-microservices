@@ -639,9 +639,9 @@ Hành vi quan trọng:
 - PIN ban đầu dành cho sender deposit.
 - Sau confirm drop, PIN được rotate thành PIN pickup cho receiver.
 - QR token gắn với PIN đang active, nên QR cũ sẽ invalid sau khi rotate PIN.
-- **Mở tủ qua mobile (2026-06-16)**: chi tiết đơn trên mobile có nút "Mở tủ" gọi `POST /api/iot/unlock` (xem mục 19)
-  thay vì chỉ hiện PIN/QR để người dùng tự nhập ở thiết bị cabinet — vẫn 2 bước thủ công riêng (mở tủ rồi mới bấm "Xác
-  nhận đã bỏ hàng"/"Hoàn tất"), không tự động chain.
+- **Mở tủ qua mobile (cập nhật 2026-07-24)**: customer mobile vẫn hiển thị PIN/QR trong chi tiết đơn, nhưng action mở trực tiếp
+  đã được ẩn khỏi UI order-history/detail. Flow chuẩn hiện tại là dùng PIN/QR đó tại kiosk để mở ô; mobile không còn gọi
+  `POST /api/iot/unlock` trực tiếp từ sheet customer.
 - **Đặt lại đơn (2026-06-16)**: `POST /api/orders/{orderId}/reorder` cho đơn SEND `COMPLETED`/`CANCELED` giờ gọi lại
   `createSend()` (tìm ô trống mới + sinh PIN/QR mới) thay vì hành vi cũ tạo đơn không có ô nào được giữ.
 
@@ -676,14 +676,17 @@ Flow nghiệp vụ:
     - `STANDARD`: mặc định `5000` VND/giờ.
     - `XL`: mặc định `10000` VND/giờ.
 5. Backend tạo rental order và trả về PIN/QR.
-6. Customer có thể mở ô trong thời gian thuê. PIN được dùng nhiều lần khi rental đang active.
+6. Customer dùng PIN/QR tại kiosk để mở ô trong thời gian thuê. PIN được dùng nhiều lần khi rental đang active.
 7. Customer gia hạn rental:
     - `POST /api/orders/{orderId}/extend-rental`
     - Backend cộng thêm `rate x hours` vào `totalPrice` theo loại ô thật và nếu đơn đã thanh toán trước đó thì chuyển
       lại `paymentStatus=UNPAID` để thu phần chênh lệch.
-8. Customer kết thúc rental:
-    - `POST /api/orders/{orderId}/pickup-storage`
-9. Backend complete order và release cell.
+8. Customer kết thúc rental theo 2 bước thủ công:
+    - Mobile hiển thị sheet hướng dẫn "Lấy đồ tại kiosk" + PIN/QR.
+    - Customer mở ô ở kiosk, lấy đồ, đóng cửa, rồi mới xác nhận bước cuối trên mobile.
+9. Mobile gọi `POST /api/orders/{orderId}/pickup-storage` sau khi customer bấm xác nhận đã lấy đồ và đóng tủ.
+10. Backend chỉ complete/release cell khi đơn không còn outstanding payment. Nếu rental đã gia hạn và `paymentStatus=UNPAID`,
+    `pickup-storage` trả lỗi `ORDER_UNPAID` thay vì silently complete.
 
 Hành vi quan trọng:
 
@@ -691,6 +694,8 @@ Hành vi quan trọng:
 - Gia hạn rental tính phí theo loại cell thật.
 - **Gia hạn sau khi đã thanh toán (2026-07-24)**: payment-service checkout phần chênh lệch còn thiếu (`totalPrice - tổng các payment COMPLETED`),
   không còn chặn cứng chỉ vì đơn đã từng có một payment COMPLETED trước đó.
+- **Kết thúc rental sau khi gia hạn (2026-07-24)**: `pickup-storage` giờ bị chặn nếu đơn còn `paymentStatus=UNPAID`, nên
+  customer phải thanh toán phần chênh lệch trước khi hoàn tất trả ô.
 - Phí quá hạn có thể được `order-service` tính khi pickup/end trễ.
 - **Đặt lại đơn (2026-06-16)**: `POST /api/orders/{orderId}/reorder` cho đơn RENTAL `COMPLETED`/`CANCELED` giờ gọi lại
   `createRental()` với `cellType` suy từ ô của đơn cũ (`cellTypeOfRental()`) và `hours` suy từ khoảng `createdAt`→
@@ -768,6 +773,7 @@ Fault flow được implement trong `locker-service`.
 User/customer report:
 
 ```http
+POST /api/orders/{orderId}/report-box-fault
 POST /api/boxes/{id}/fault
 POST /api/lockers/{id}/report
 GET /api/lockers/my-reports
@@ -794,19 +800,23 @@ Admin/manager/maintenance xem và xử lý:
 Flow nghiệp vụ:
 
 1. User/customer/staff báo ô tủ bị lỗi.
-2. Backend mark cell thành `FAULT`.
-3. Backend tạo/cập nhật locker report với box id và lý do.
-4. Cell bị lỗi bị loại khỏi luồng reserve bình thường.
-5. Backend trả danh sách fault/report kèm locker name/code/address/toạ độ, thông tin ô, và **(mới 2026-06-16)** tên/SĐT
+2. Nếu customer báo từ chi tiết đơn active, mobile gọi `POST /api/orders/{orderId}/report-box-fault` để backend tự tìm ô đang
+   giữ của order đó.
+3. Backend mark cell thành `FAULT`.
+4. Backend tạo/cập nhật locker report với box id và lý do.
+5. Nếu order đang `INITIALIZED` và `paymentStatus=UNPAID`, backend auto-cancel order sau khi mark fault; các order active đã
+   thanh toán/đang storing thì chỉ ghi report, không auto-cancel.
+6. Cell bị lỗi bị loại khỏi luồng reserve bình thường.
+7. Backend trả danh sách fault/report kèm locker name/code/address/toạ độ, thông tin ô, và **(mới 2026-06-16)** tên/SĐT
    khách báo cáo (`reporterName`/`reporterPhone`, tra qua `user-service`, best-effort — không vỡ list nếu lookup lỗi).
-6. Maintenance user xem các report đang mở, ưu tiên theo trạng thái/SLA, và mở chỉ đường tới tủ lỗi.
-7. Maintenance claim report: `OPEN -> IN_PROGRESS`.
-8. Maintenance resolve report.
-9. Backend clear fault và đưa cell về `AVAILABLE`.
-10. **(Mới 2026-06-16)** Sau khi report `RESOLVED`, khách có thể đánh giá 1-5 sao (
-    `POST /api/lockers/reports/{id}/rate`, upsert — đánh giá lại sẽ ghi đè), xem lại bằng
-    `GET /api/lockers/reports/{id}/rating`. Maintenance xem điểm trung bình của chính mình qua
-    `GET /api/maintenance/my-rating-average` (tính trên các report được `assignedToUserId` = mình).
+8. Maintenance user xem các report đang mở, ưu tiên theo trạng thái/SLA, và mở chỉ đường tới tủ lỗi.
+9. Maintenance claim report: `OPEN -> IN_PROGRESS`.
+10. Maintenance resolve report.
+11. Backend clear fault và đưa cell về `AVAILABLE`.
+12. **(Mới 2026-06-16)** Sau khi report `RESOLVED`, khách có thể đánh giá 1-5 sao (
+     `POST /api/lockers/reports/{id}/rate`, upsert — đánh giá lại sẽ ghi đè), xem lại bằng
+     `GET /api/lockers/reports/{id}/rating`. Maintenance xem điểm trung bình của chính mình qua
+     `GET /api/maintenance/my-rating-average` (tính trên các report được `assignedToUserId` = mình).
 
 Lưu ý hiện tại:
 

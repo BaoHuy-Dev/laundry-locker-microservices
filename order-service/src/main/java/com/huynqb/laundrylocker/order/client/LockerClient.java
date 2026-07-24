@@ -3,6 +3,8 @@ package com.huynqb.laundrylocker.order.client;
 import com.huynqb.laundrylocker.common.dto.ApiResponse;
 import com.huynqb.laundrylocker.common.dto.LockerBoxSummary;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,4 +31,10 @@ public interface LockerClient {
 
     @PostMapping("/{id}/release")
     ApiResponse<LockerBoxSummary> releaseBox(@PathVariable Long id);
+
+    @PostMapping("/{id}/fault")
+    ApiResponse<Map<String, Object>> reportFault(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body,
+            @RequestHeader("X-User-Id") Long userId);
 }

@@ -459,6 +459,7 @@ public class OrderService {
     @Transactional
     public OrderResponse cancel(Long id, Integer reason, Long userId) {
         LockerOrder order = find(id);
+        assertOwner(order, userId);
         if (!CANCELABLE.contains(order.getStatus())) {
             throw new BusinessException("ORDER_STATUS_INVALID", "Order cannot be canceled at this status");
         }
@@ -528,6 +529,7 @@ public class OrderService {
             throw new BusinessException("ORDER_STATUS_INVALID", "Only storage/rental orders can use pickup-storage");
         }
         validateStatus(order, Set.of("STORING", "INITIALIZED", "RETURNED"));
+        assertPaidBeforeStorageCompletion(order);
         BigDecimal overtime = calculatePickupOvertimeFee(order);
         if (overtime.compareTo(BigDecimal.ZERO) > 0) {
             order.setExtraFee(order.getExtraFee().add(overtime));
@@ -538,6 +540,33 @@ public class OrderService {
         order.setPinCode(null);
         return transition(order, "COMPLETED", userId, order.getReceiveBoxId(),
                 "RENTAL".equalsIgnoreCase(order.getType()) ? "Rental ended, cell released" : "Storage order picked up");
+    }
+
+    @Transactional
+    public OrderResponse reportBoxFault(Long id, Long userId, String reason) {
+        LockerOrder order = find(id);
+        assertOwner(order, userId);
+        validateStatus(order, Set.of("INITIALIZED", "STORING", "RETURNED"));
+        Long boxId = activeBoxId(order);
+        if (boxId == null) {
+            throw new BusinessException("BOX_NOT_FOUND", "Order has no active box to report");
+        }
+        try {
+            Map<String, String> body = reason == null || reason.isBlank()
+                    ? Map.of()
+                    : Map.of("reason", reason);
+            lockerClient.reportFault(boxId, body, userId);
+        } catch (Exception ex) {
+            throw unwrapDownstreamError(ex, "BOX_FAULT_REPORT_FAILED", "Could not report fault for box " + boxId);
+        }
+        if (shouldAutoCancelAfterFault(order)) {
+            order.setCancelReason(null);
+            releaseBoxes(order);
+            refundPromotionUsages(order);
+            return transition(order, "CANCELED", userId, null, "Order auto-canceled after reporting reserved box fault");
+        }
+        addHistory(order.getId(), order.getStatus(), order.getStatus(), userId, "Customer reported a fault on the assigned box");
+        return toResponse(order);
     }
 
     @Transactional
@@ -1527,6 +1556,20 @@ public class OrderService {
         }
     }
 
+    private void assertPaidBeforeStorageCompletion(LockerOrder order) {
+        if (!requirePaymentBeforeDrop) {
+            return;
+        }
+        BigDecimal total = order.getTotalPrice();
+        boolean hasFee = total != null && total.compareTo(BigDecimal.ZERO) > 0;
+        boolean paid = "PAID".equalsIgnoreCase(order.getPaymentStatus());
+        if (hasFee && !paid) {
+            throw new BusinessException(
+                    "ORDER_UNPAID",
+                    "Vui lòng thanh toán đơn trước khi kết thúc thuê/trả ô.");
+        }
+    }
+
     private void assertPaidBeforePickup(LockerOrder order) {
         if (!"DRONE_DELIVERY".equalsIgnoreCase(order.getType())) {
             return;
@@ -1553,9 +1596,18 @@ public class OrderService {
     }
 
     private void assertOwner(LockerOrder order, Long userId) {
-        if (userId != null && !userId.equals(order.getUserId())) {
+        if (userId == null || !userId.equals(order.getUserId())) {
             throw new BusinessException("ORDER_FORBIDDEN", "Order does not belong to user");
         }
+    }
+
+    private Long activeBoxId(LockerOrder order) {
+        return firstNonNull(firstNonNull(order.getSendBoxId(), order.getReceiveBoxId()), order.getReservedBoxId());
+    }
+
+    private boolean shouldAutoCancelAfterFault(LockerOrder order) {
+        return "INITIALIZED".equalsIgnoreCase(order.getStatus())
+                && "UNPAID".equalsIgnoreCase(order.getPaymentStatus());
     }
 
     private void assertOwnerOrReceiver(LockerOrder order, Long userId) {
