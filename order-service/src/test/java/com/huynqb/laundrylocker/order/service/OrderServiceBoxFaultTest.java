@@ -118,6 +118,45 @@ class OrderServiceBoxFaultTest {
     }
 
     @Test
+    void reportBoxFaultRejectsCompletedOrder() {
+        LockerOrder order = customerOrder();
+        order.setId(26L);
+        order.setStatus("COMPLETED");
+        order.setPaymentStatus("PAID");
+        order.setSendBoxId(7006L);
+
+        when(orderRepository.findById(26L)).thenReturn(Optional.of(order));
+
+        BusinessException error = assertThrows(
+                BusinessException.class,
+                () -> orderService.reportBoxFault(26L, 44L, "Kẹt cửa"));
+
+        assertEquals("ORDER_STATUS_INVALID", error.getCode());
+        verify(lockerClient, never()).reportFault(any(), any(), any());
+    }
+
+    @Test
+    void reportBoxFaultAllowsMissingReason() {
+        LockerOrder order = customerOrder();
+        order.setId(27L);
+        order.setStatus("INITIALIZED");
+        order.setPaymentStatus("UNPAID");
+        order.setSendBoxId(7007L);
+
+        when(orderRepository.findById(27L)).thenReturn(Optional.of(order));
+        when(lockerClient.reportFault(7007L, Map.of(), 44L))
+                .thenReturn(ApiResponse.ok(Map.of("boxId", 7007L, "status", "FAULT")));
+        when(lockerClient.releaseBox(7007L))
+                .thenReturn(ApiResponse.ok(new LockerBoxSummary(7L, 7007L, "CAB-07", 7, "FAULT")));
+        when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.reportBoxFault(27L, 44L, null);
+
+        verify(lockerClient).reportFault(7007L, Map.of(), 44L);
+        assertEquals("CANCELED", order.getStatus());
+    }
+
+    @Test
     void reportBoxFaultRejectsNonOwner() {
         LockerOrder order = customerOrder();
         order.setId(24L);

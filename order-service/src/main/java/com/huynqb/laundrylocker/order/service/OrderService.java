@@ -546,12 +546,16 @@ public class OrderService {
     public OrderResponse reportBoxFault(Long id, Long userId, String reason) {
         LockerOrder order = find(id);
         assertOwner(order, userId);
+        validateStatus(order, Set.of("INITIALIZED", "STORING", "RETURNED"));
         Long boxId = activeBoxId(order);
         if (boxId == null) {
             throw new BusinessException("BOX_NOT_FOUND", "Order has no active box to report");
         }
         try {
-            lockerClient.reportFault(boxId, Map.of("reason", reason), userId);
+            Map<String, String> body = reason == null || reason.isBlank()
+                    ? Map.of()
+                    : Map.of("reason", reason);
+            lockerClient.reportFault(boxId, body, userId);
         } catch (Exception ex) {
             throw unwrapDownstreamError(ex, "BOX_FAULT_REPORT_FAILED", "Could not report fault for box " + boxId);
         }
@@ -1603,7 +1607,7 @@ public class OrderService {
 
     private boolean shouldAutoCancelAfterFault(LockerOrder order) {
         return "INITIALIZED".equalsIgnoreCase(order.getStatus())
-                && !"PAID".equalsIgnoreCase(order.getPaymentStatus());
+                && "UNPAID".equalsIgnoreCase(order.getPaymentStatus());
     }
 
     private void assertOwnerOrReceiver(LockerOrder order, Long userId) {
