@@ -605,16 +605,12 @@ public class OrderService {
                     userId);
         }
         if ("RENTAL".equals(type)) {
-            long hours = 1;
-            if (original.getPickupDeadline() != null && original.getCreatedAt() != null) {
-                hours = Math.min(720, Math.max(1, ChronoUnit.HOURS.between(original.getCreatedAt(), original.getPickupDeadline())));
-            }
             return createRental(
                     new RentalOrderRequest(
                             original.getLockerId(),
                             null,
                             cellTypeOfRental(original),
-                            (int) hours,
+                            resolveRentalDurationHours(original),
                             original.getCustomerNote(),
                             null),
                     userId);

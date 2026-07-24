@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,13 +67,15 @@ class IotServiceTest {
 
     @Test
     void unlockWithCodeRejectsCodeAtWrongLocker() {
+        when(accessAttemptRepository.findById(9002L)).thenReturn(Optional.empty());
         when(orderClient.getByAccess("PIN-123")).thenReturn(ApiResponse.ok(
                 new OrderLookupResponse(51L, 44L, 9L, 9002L, null, "STORING", "112233", null)));
 
         Map<String, Object> result = iotService.unlockWithCode(new UnlockWithCodeRequest(7L, "PIN-123"));
 
         assertFalse(Boolean.TRUE.equals(result.get("accepted")));
-        assertEquals("Mã này không thuộc tủ hiện tại", result.get("message"));
+        assertEquals("Mã không hợp lệ hoặc đã hết hạn", result.get("message"));
+        verify(accessAttemptRepository).save(any(AccessAttempt.class));
         verify(lockerMqttService, never()).sendUnlockCommandAsync(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
         verify(lockerClient, never()).openBox(org.mockito.ArgumentMatchers.anyLong());
     }

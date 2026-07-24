@@ -176,4 +176,44 @@ class OrderServiceRentalPaymentTest {
         assertTrue(response.pickupDeadline() != null && !response.pickupDeadline().isBefore(before.plusHours(4)));
         assertTrue(!response.pickupDeadline().isAfter(after.plusHours(4).plusSeconds(1)));
     }
+
+    @Test
+    void reorderUsesStoredRentalDurationHoursInsteadOfCreatedAtToDeadlineGap() {
+        LockerOrder original = new LockerOrder();
+        original.setId(23L);
+        original.setUserId(44L);
+        original.setType("RENTAL");
+        original.setStatus("COMPLETED");
+        original.setLockerId(5L);
+        original.setSendBoxId(901L);
+        original.setRentalDurationHours(4);
+        original.setCustomerNote("Giữ đồ ngắn hạn");
+        original.setCreatedAt(LocalDateTime.of(2026, 7, 25, 10, 0));
+        original.setPickupDeadline(LocalDateTime.of(2026, 7, 25, 22, 0));
+
+        final LockerOrder[] savedRef = new LockerOrder[1];
+        when(orderRepository.findById(23L)).thenReturn(Optional.of(original));
+        when(userClient.getUser(44L)).thenReturn(ApiResponse.ok(new UserSummary(44L, "a@b.c", "0909", "User", "ACTIVE")));
+        when(lockerCellClient.getCell(901L)).thenReturn(ApiResponse.ok(
+                new CellDto(901L, 1, "S", "STANDARD", 0, 0, "AVAILABLE", null)));
+        when(lockerCellClient.findAvailable(5L, null, "STANDARD")).thenReturn(ApiResponse.ok(
+                new CellDto(901L, 1, "S", "STANDARD", 0, 0, "AVAILABLE", null)));
+        when(lockerClient.reserveBox(901L, null))
+                .thenReturn(ApiResponse.ok(new LockerBoxSummary(5L, 901L, "CAB-05", 4, "RESERVED")));
+        when(orderRepository.save(any(LockerOrder.class))).thenAnswer(invocation -> {
+            LockerOrder saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(24L);
+                saved.setOrderCode("ORD-24");
+            }
+            savedRef[0] = saved;
+            return saved;
+        });
+        when(orderRepository.findById(24L)).thenAnswer(invocation -> Optional.ofNullable(savedRef[0]));
+
+        var reordered = orderService.reorder(23L, 44L);
+
+        assertNull(reordered.pickupDeadline());
+        assertEquals(BigDecimal.valueOf(20000), reordered.totalPrice());
+    }
 }

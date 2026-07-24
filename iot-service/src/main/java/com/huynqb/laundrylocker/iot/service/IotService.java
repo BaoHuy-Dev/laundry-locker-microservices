@@ -129,12 +129,13 @@ public class IotService {
         } catch (Exception ex) {
             return Map.of("accepted", false, "message", "Mã không hợp lệ hoặc đã hết hạn");
         }
-        if (order.lockerId() == null || !order.lockerId().equals(request.lockerId())) {
-            return Map.of("accepted", false, "message", "Mã này không thuộc tủ hiện tại");
-        }
         Long boxId = order.receiveBoxId() != null ? order.receiveBoxId() : order.sendBoxId();
         if (boxId == null) {
             return Map.of("accepted", false, "message", "Đơn này không gắn với ô tủ nào");
+        }
+        if (order.lockerId() == null || !order.lockerId().equals(request.lockerId())) {
+            recordFailedAttempt(boxId);
+            return Map.of("accepted", false, "boxId", boxId, "message", "Mã không hợp lệ hoặc đã hết hạn");
         }
         VerifyPinResponse verification = verifyAccess(boxId, request.code());
         if (!Boolean.TRUE.equals(verification.valid())) {
