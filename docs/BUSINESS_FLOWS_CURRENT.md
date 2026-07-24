@@ -446,8 +446,8 @@ Endpoint kỹ thuật/vận hành:
 
 CORS cho web frontend:
 
-- Web admin/FE chạy ở origin `http://localhost:3000` gọi gateway (local `:18080`, mặc định `:8080`). CORS được cấu hình
-  tại **`spring.cloud.gateway.server.webflux.globalcors`**: cho phép origin `http://localhost:3000`, methods
+- Web admin/FE chạy ở origin `http://localhost:3000` hoặc `http://localhost:3001` gọi gateway (local `:18080`, mặc định `:8080`). CORS được cấu hình
+  tại **`spring.cloud.gateway.server.webflux.globalcors`**: cho phép origin `http://localhost:3000,http://localhost:3001`, methods
   `GET,POST,PUT,PATCH,DELETE,OPTIONS`, `allowedHeaders: "*"`, `allowCredentials: true`.
 - **Lưu ý (Spring Cloud Gateway 4.3.x / Spring Cloud 2025.0.x):** prefix cũ `spring.cloud.gateway.globalcors` đã
   `deprecated` từ gateway 4.3.0 và **không còn bind** vào `GlobalCorsProperties`; đặt CORS ở đó sẽ bị bỏ qua, làm trình
@@ -679,6 +679,8 @@ Flow nghiệp vụ:
 6. Customer có thể mở ô trong thời gian thuê. PIN được dùng nhiều lần khi rental đang active.
 7. Customer gia hạn rental:
     - `POST /api/orders/{orderId}/extend-rental`
+    - Backend cộng thêm `rate x hours` vào `totalPrice` theo loại ô thật và nếu đơn đã thanh toán trước đó thì chuyển
+      lại `paymentStatus=UNPAID` để thu phần chênh lệch.
 8. Customer kết thúc rental:
     - `POST /api/orders/{orderId}/pickup-storage`
 9. Backend complete order và release cell.
@@ -687,6 +689,8 @@ Hành vi quan trọng:
 
 - PIN rental không bị consume sau một lần mở.
 - Gia hạn rental tính phí theo loại cell thật.
+- **Gia hạn sau khi đã thanh toán (2026-07-24)**: payment-service checkout phần chênh lệch còn thiếu (`totalPrice - tổng các payment COMPLETED`),
+  không còn chặn cứng chỉ vì đơn đã từng có một payment COMPLETED trước đó.
 - Phí quá hạn có thể được `order-service` tính khi pickup/end trễ.
 - **Đặt lại đơn (2026-06-16)**: `POST /api/orders/{orderId}/reorder` cho đơn RENTAL `COMPLETED`/`CANCELED` giờ gọi lại
   `createRental()` với `cellType` suy từ ô của đơn cũ (`cellTypeOfRental()`) và `hours` suy từ khoảng `createdAt`→

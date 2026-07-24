@@ -301,6 +301,10 @@ public class OrderService {
         BigDecimal extra = rentalRate(cellTypeOfRental(order)).multiply(BigDecimal.valueOf(hours));
         order.setTotalPrice(order.getTotalPrice().add(extra));
         order.setOriginalPrice(order.getOriginalPrice().add(extra));
+        if (extra.compareTo(BigDecimal.ZERO) > 0) {
+            order.setPaymentStatus("UNPAID");
+            order.setPaidAt(null);
+        }
         LockerOrder saved = orderRepository.save(order);
         addHistory(saved.getId(), saved.getStatus(), saved.getStatus(), userId,
                 "Rental extended by " + hours + "h until " + saved.getPickupDeadline());
