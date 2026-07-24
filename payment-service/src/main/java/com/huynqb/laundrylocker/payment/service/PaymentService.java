@@ -117,12 +117,15 @@ public class PaymentService {
         if (order == null) {
             throw new NotFoundException("Order", request.orderId());
         }
-        BigDecimal amount = order.totalPrice() == null ? BigDecimal.ZERO : order.totalPrice();
+        BigDecimal totalAmount = order.totalPrice() == null ? BigDecimal.ZERO : order.totalPrice();
+        BigDecimal completedAmount = repository.findByOrderId(request.orderId()).stream()
+                .filter(p -> "COMPLETED".equals(p.getStatus()))
+                .map(PaymentRecord::getAmount)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal amount = totalAmount.subtract(completedAmount).max(BigDecimal.ZERO);
 
-        boolean alreadyPaid =
-                repository.findByOrderId(request.orderId()).stream()
-                        .anyMatch(p -> "COMPLETED".equals(p.getStatus()));
-        if (alreadyPaid) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("ORDER_ALREADY_PAID", "Đơn này đã được thanh toán");
         }
 

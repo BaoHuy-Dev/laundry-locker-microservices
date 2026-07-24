@@ -65,8 +65,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
       # Comma-separated allowed CORS origins; override on droplet .env to add the
-      # production domain (e.g. http://localhost:3000,https://lockerly.tech).
-      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # production domain (e.g. http://localhost:3000,http://localhost:3001,https://lockerly.tech).
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
       JAVA_OPTS: "-Xms64m -Xmx320m -XX:+UseContainerSupport"
     ports:
       - "${API_GATEWAY_PORT:-18080}:8080"
