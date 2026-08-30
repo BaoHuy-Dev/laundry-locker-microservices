@@ -5,6 +5,10 @@ cách xử lý**. Domain thật: **`locker-drone.tech`**.
 
 > Nếu đổi domain khác: thay tất cả `locker-drone.tech` trong các file dưới đây.
 
+> **Dựng hạ tầng từ đầu trên Azure** (tạo VM, NSG, Docker, Nginx, TLS): xem
+> [`infra/azure/README.md`](../../../../infra/azure/README.md). Tài liệu này tập trung vào
+> domain/DNS, cấu hình client và xử lý sự cố.
+
 ## 📑 Mục lục
 
 | File                                                   | Nội dung                                                                                  |
@@ -28,7 +32,7 @@ Mobile app        ────────────────────�
                          └─────────────────────────────────────────────────────────────────┘
                                                        │  (A record "api" → IP, DNS only)
                                                        ▼
-                           Droplet 146.190.84.136 ── Nginx (TLS Let's Encrypt)
+                        Azure VM `<AZURE_VM_IP>` ── Nginx :443 (TLS Let's Encrypt)
                                                        └─ proxy_pass 127.0.0.1:8080
                                                                     ▼
                                                        api-gateway (Docker) ──▶ 11 microservices
@@ -41,13 +45,13 @@ Mobile app        ────────────────────�
 | Domain                 | `locker-drone.tech` (DNS ở Cloudflare)                                           |
 | Web admin              | `https://admin.locker-drone.tech` (Cloudflare **Worker** static assets)          |
 | **API**                | **`https://api.locker-drone.tech`**                                              |
-| Droplet                | `146.190.84.136` (DigitalOcean) — **dùng chung** với project `aisl.io.vn`        |
-| Code backend (droplet) | `/opt/laundry-locker-microservices` (có `…​.previous` backup — đừng đụng)        |
+| Azure VM               | `<AZURE_VM_IP>` — Ubuntu 22.04, `Standard_B2ms`, resource group `laundry-locker-rg` |
+| Code backend (trên VM) | `/opt/laundry-locker-microservices` (có `…​.previous` backup — đừng đụng)       |
 | Gateway container      | `ll-ms-api-gateway` · port nội bộ `8080` → **host `8080` (auto-deploy ép)**      |
 | Repo FE (code)         | `LeThiYenVi/laundry-locker-frontend` (code trong `fe/`)                          |
 | Repo BE (code)         | `BaoHuy-Dev/laundry-locker-microservices` (merge `develop` → auto-deploy)        |
 | Worker FE              | `laundry-locker-frontend-1` (account `nqbhuy2004nt@gmail.com`)                   |
-| Cert                   | `/etc/letsencrypt/live/api.locker-drone.tech/` — hết hạn 2026-09-20 (auto-renew) |
+| Cert                   | `/etc/letsencrypt/live/api.locker-drone.tech/` — cấp bằng `certbot --nginx`, tự gia hạn |
 
 ## 🔑 Giá trị cấu hình chuẩn (copy nhanh)
 
@@ -58,10 +62,10 @@ https://api.locker-drone.tech
 # FE — fe/.env (build local nướng vào JS)  /  cũng đặt ở Cloudflare build env nếu nối Git
 VITE_API_BASE_URL=https://api.locker-drone.tech
 
-# CORS — .env droplet (cạnh docker-compose.yml)
+# CORS — .env Azure VM (cạnh docker-compose.yml)
 APP_CORS_ALLOWED_ORIGINS=http://localhost:3000,https://locker-drone.tech,https://admin.locker-drone.tech
 
-# Gateway port — .env droplet (ghim chống 502)
+# Gateway port — .env Azure VM (ghim chống 502)
 API_GATEWAY_PORT=8080
 
 # Mobile — smart-laundry-locker-mobile/.env

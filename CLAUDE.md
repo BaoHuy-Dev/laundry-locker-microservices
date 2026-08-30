@@ -179,7 +179,7 @@ All services expose Spring Actuator: `/actuator/health`, `/actuator/metrics`, `/
 
 ## Architecture Decisions (Deliberately Deferred)
 
-These are explicitly NOT being built at current scale (1 droplet, small team). Do not propose or implement them unless
+These are explicitly NOT being built at current scale (1 VM, small team). Do not propose or implement them unless
 the stated trigger conditions are met. See `docs/ARCHITECTURE_DECISIONS.md`.
 
 | Topic                 | Decision                  | Trigger to revisit                                          |
@@ -210,12 +210,12 @@ Current investment priority: healthcheck + deploy runbook, Postgres backups, Rab
 
 ## Deployed Environment
 
-- **Shared backend (DigitalOcean):** `http://146.190.84.136:8080` — all clients default to this.
+- **Shared backend (Azure):** `https://api.locker-drone.tech` — all clients default to this.
 - **Local (Docker Compose):** gateway at `http://localhost:18080` (host 8080 may be occupied).
-- Deploy is automatic: merge to `develop` → GitHub Actions (`deploy-droplet.yml`) builds + deploys + Flyway migrates on
+- Deploy is automatic: merge to `develop` → GitHub Actions (`deploy-azure.yml`) builds + deploys + Flyway migrates on
   startup.
-- **Direct DB access** requires SSH tunnel via `146.190.84.136:22`; PostgreSQL exposed at port `15432` inside the
-  tunnel (firewall only opens 22 + 8080).
+- **Direct DB access** requires SSH tunnel via `<AZURE_VM_IP>:22`; PostgreSQL exposed at port `15432` inside the
+  tunnel (the Azure NSG only opens 22 + 80 + 443; port 8080 stays VM-internal behind Nginx).
 
 ## Test Accounts (password `12345678` for all demo accounts)
 

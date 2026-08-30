@@ -14,7 +14,7 @@ hiện tại** — kèm lý do và **điều kiện kích hoạt xem lại**, đ
   phương án hiện tại; `SUPERSEDED` = đã bị thay thế.
 - "Hoãn" **không phải** "không bao giờ". Mỗi ADR có mục **Điều kiện xem lại** — khi một điều kiện chạm ngưỡng, mở lại
   ADR đó và làm theo mục **Khi áp dụng (phác thảo cho CodeX)**.
-- Nguyên tắc nền: **giữ độ phức tạp tối thiểu cần thiết** cho quy mô hiện tại (1 droplet, traffic vừa, đội nhỏ). Không "
+- Nguyên tắc nền: **giữ độ phức tạp tối thiểu cần thiết** cho quy mô hiện tại (1 VM, traffic vừa, đội nhỏ). Không "
   mạ vàng" kiến trúc.
 
 ## Bối cảnh kiến trúc hiện tại (baseline 2026-06-14)
@@ -28,7 +28,7 @@ hiện tại** — kèm lý do và **điều kiện kích hoạt xem lại**, đ
 | Messaging          | **RabbitMQ**, 1 topic exchange `laundry.events` (order/payment/locker/iot events)                                                                                     |
 | Lưu trữ            | PostgreSQL (mỗi service một schema/db), Flyway migration                                                                                                              |
 | Bảo mật            | JWT (`tokenUse=access`) + RBAC tại gateway; chặn `/internal/**`                                                                                                       |
-| Triển khai         | **Docker Compose trên 1 droplet**; GitHub Actions CI/CD (test, CodeQL, Trivy, SBOM, provenance, release theo tag)                                                     |
+| Triển khai         | **Docker Compose trên 1 VM**; GitHub Actions CI/CD (test, CodeQL, Trivy, SBOM, provenance, release theo tag)                                                     |
 | Observability      | Spring Boot Actuator: `/health`, `/metrics`, `/prometheus`; correlation id xuyên service (MDC)                                                                        |
 | Services có source | gateway, discovery, auth, user, order, locker, iot, payment, notification, store, staff, loyalty, common-lib (`laundry-service`/`partner-service` đã bỏ/không source) |
 
@@ -39,7 +39,7 @@ này.
 
 | ADR | Chủ đề                              | Quyết định                                                         | Trạng thái              | Ngưỡng xem lại (rút gọn)                                                                    |
 |-----|-------------------------------------|--------------------------------------------------------------------|-------------------------|---------------------------------------------------------------------------------------------|
-| 001 | Kubernetes / Helm / GitOps          | **Hoãn** — giữ Docker Compose 1 droplet                            | ACCEPTED (defer)        | Cần >1 node, zero-downtime, autoscale, hoặc SLA/uptime cam kết                              |
+| 001 | Kubernetes / Helm / GitOps          | **Hoãn** — giữ Docker Compose 1 VM                            | ACCEPTED (defer)        | Cần >1 node, zero-downtime, autoscale, hoặc SLA/uptime cam kết                              |
 | 002 | Kafka thay RabbitMQ                 | **Hoãn** — giữ RabbitMQ                                            | ACCEPTED (keep current) | Cần event replay, streaming/analytics, throughput cao, nhiều consumer group đọc lại lịch sử |
 | 003 | CQRS / Event Sourcing toàn hệ thống | **Không áp dụng (now)** — giữ CRUD + transactional + domain events | ACCEPTED (keep current) | Báo cáo/đọc nặng làm hại OLTP, yêu cầu audit/temporal phức tạp                              |
 | 004 | GraphQL                             | **Không áp dụng (now)** — giữ REST                                 | ACCEPTED (keep current) | Client over/under-fetch nhiều round-trip; nhu cầu field linh hoạt theo client               |
@@ -51,12 +51,12 @@ này.
 
 **Trạng thái:** ACCEPTED (defer). **Ngày:** 2026-06-14.
 
-**Bối cảnh.** Hiện deploy bằng Docker Compose trên **một droplet**. K8s/Helm/GitOps cho khả năng tự phục hồi, rolling
+**Bối cảnh.** Hiện deploy bằng Docker Compose trên **một VM**. K8s/Helm/GitOps cho khả năng tự phục hồi, rolling
 update, autoscale, multi-node — nhưng kéo theo chi phí vận hành lớn (control plane, networking, storage class, RBAC
 cluster, observability stack, học phí team).
 
 **Quyết định.** **Hoãn.** Giữ Docker Compose + GitHub Actions deploy. Tốt nhưng "hơi nặng nếu hiện chỉ deploy một
-droplet".
+Azure VM".
 
 **Phương án nhẹ đang dùng NOW (làm cho chắc thay vì lên K8s):**
 
@@ -64,7 +64,7 @@ droplet".
   `/actuator/health`), `depends_on: condition: service_healthy`.
 - Cấu hình qua `.env` (không commit secret); image build + scan (Trivy) + SBOM đã có trong CI.
 - Deploy "GitOps-lite": merge vào nhánh deploy → GitHub Actions build/verify (`mvn -B clean verify`, không skip test) →
-  ship artifact có checksum + provenance → script deploy trên droplet (`scripts/`).
+  ship artifact có checksum + provenance → script deploy trên Azure VM (`scripts/`).
 - **Runbook** vận hành 1 trang: cách restart, xem log, rollback (giữ N image cũ), backup Postgres.
 
 **Hệ quả.** Không có self-healing đa node, không rolling zero-downtime (chấp nhận downtime ngắn khi deploy). Bù lại: đơn
@@ -72,14 +72,14 @@ giản, rẻ, dễ debug.
 
 **Điều kiện xem lại (làm K8s khi chạm 1 trong số):**
 
-- Cần **>1 node** (HA, vượt giới hạn 1 droplet) hoặc **autoscale** theo tải.
+- Cần **>1 node** (HA, vượt giới hạn 1 VM) hoặc **autoscale** theo tải.
 - Cần **zero-downtime rolling/canary** có cam kết uptime/SLA.
 - Vận hành >~12 service hoặc nhiều môi trường (staging/prod/region) cần chuẩn hoá.
-- Traffic thật ổn định cao (vd > vài chục RPS kéo dài) khiến 1 droplet thành điểm nghẽn.
+- Traffic thật ổn định cao (vd > vài chục RPS kéo dài) khiến 1 VM thành điểm nghẽn.
 
 **Khi áp dụng (phác thảo cho CodeX):**
 
-1. Bắt đầu **managed K8s** (DigitalOcean DOKS) để khỏi tự vận hành control plane.
+1. Bắt đầu **managed K8s** (Azure AKS) để khỏi tự vận hành control plane.
 2. Đóng gói mỗi service thành **Helm chart** (hoặc 1 umbrella chart + values theo env); chuyển `.env` → `ConfigMap`/
    `Secret` (xài External Secrets nếu cần).
 3. Mang healthcheck Compose → `readiness/liveness probe` (đã có `/actuator/health`).
@@ -221,7 +221,7 @@ quyết định riêng lúc đó.
 
 ## Việc nên đầu tư NGAY (thay vì các thứ nặng ở trên)
 
-Vì đã hoãn các hạng mục nặng, ưu tiên củng cố nền tảng hiện tại cho "vững ở quy mô 1 droplet":
+Vì đã hoãn các hạng mục nặng, ưu tiên củng cố nền tảng hiện tại cho "vững ở quy mô 1 VM":
 
 1. **Deploy chắc tay**: healthcheck + restart policy đầy đủ trong compose; script deploy + rollback; runbook 1 trang.
 2. **Sao lưu Postgres** định kỳ + thử restore (quan trọng nhất khi chạy 1 node).

@@ -20,7 +20,7 @@ file **`fe/.env`** — KHÔNG đọc biến trên dashboard Cloudflare. File ph�
 VITE_API_BASE_URL=https://api.locker-drone.tech
 ```
 
-> ⚠️ Để `http://146.190.84.136:8080` ở đây → web chạy HTTPS gọi API qua HTTP →
+> ⚠️ Để `https://api.locker-drone.tech` ở đây → web chạy HTTPS gọi API qua HTTP →
 > trình duyệt chặn **Mixed Content**. Bắt buộc HTTPS domain.
 
 ---

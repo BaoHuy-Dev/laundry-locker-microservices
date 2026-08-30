@@ -28,12 +28,12 @@ Cloudflare → **DNS → Records → Add record**:
 
 | Type         | Name    | Content          | Proxy status           | Ghi chú                                                                     |
 |--------------|---------|------------------|------------------------|-----------------------------------------------------------------------------|
-| `A`          | `api`   | `146.190.84.136` | **DNS only** (mây xám) | Trỏ tới droplet để Nginx/Certbot xử lý                                      |
+| `A`          | `api`   | `<AZURE_VM_IP>` | **DNS only** (mây xám) | Trỏ tới Azure VM để Nginx/Certbot xử lý                                      |
 | `CNAME`/auto | `admin` | (Worker tự thêm) | Proxied                | Tạo tự động khi gắn custom domain cho Worker — xem [03](03-frontend-web.md) |
 
 > ⚠️ **Record `api` bắt buộc để DNS only (mây xám) khi cấp SSL.** Let's Encrypt cần
-> nối thẳng tới droplet. Nếu bật Proxied (mây cam) trước khi có cert → Certbot fail
+> nối thẳng tới Azure VM. Nếu bật Proxied (mây cam) trước khi có cert → Certbot fail
 > ("Timeout during connect"). Sau khi có cert, bật Proxied cũng được.
 
 ✅ **Xong bước này khi:** Cloudflare báo domain Active và record `api` trỏ đúng
-`146.190.84.136`.
+`<AZURE_VM_IP>`.

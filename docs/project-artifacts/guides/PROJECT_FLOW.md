@@ -39,7 +39,7 @@ Nếu nội dung các phần cũ bên dưới mâu thuẫn với snapshot này, 
 | Firmware tủ                   | `laundry-locker-frontend/iot/`                        | PlatformIO/Arduino + tablet-web                                                                                                          | Firmware ESP/Arduino cho tủ                                                                                                                            |
 | Mobile App (chính)            | `smart-laundry-locker-mobile/`                        | Flutter (Dart), envied, dio, Riverpod/Bloc, Firebase                                                                                     | App khách hàng (Android/iOS)                                                                                                                           |
 | IoT Locker                    | `smart-locker-iot/`                                   | Python (uv), paho-MQTT, pyserial, Arduino RS485, PostgreSQL/SQLite                                                                       | Phần mềm chạy trên Raspberry Pi điều khiển tủ thật                                                                                                     |
-| File cấu hình tham khảo       | `Application.txt`, `env.txt`, `pro.txt`, `Host *.txt` | —                                                                                                                                        | Config của **monolith cũ** (`laundry-locker-backend`) + thông tin DB server `146.190.84.136` (deploy)                                                  |
+| File cấu hình tham khảo       | `Application.txt`, `env.txt`, `pro.txt`, `Host *.txt` | —                                                                                                                                        | Config của **monolith cũ** (`laundry-locker-backend`) + thông tin DB server `<AZURE_VM_IP>` (deploy)                                                  |
 
 > ⚠️ Các file `.txt` ở gốc workspace chứa secret (SMTP, OAuth2, VNPay, MoMo, Supabase, Azure...). **Không commit**
 > chúng. Trong tài liệu này mọi secret được che `****`.
@@ -340,7 +340,7 @@ Hoặc dùng script tổng ở gốc workspace: `.\run-all.ps1` / `.\stop-all.ps
 
 ### 4.5 Môi trường deploy hiện có (tham khảo)
 
-- Server `146.190.84.136` (theo file Host): PostgreSQL của microservices expose port 15432 — cấu trúc DB giống local.
+- Server `<AZURE_VM_IP>` (theo file Host): PostgreSQL của microservices expose port 15432 — cấu trúc DB giống local.
 - Monolith cũ từng deploy với Supabase (Postgres) + Upstash (Redis) + Azure — xem `pro.txt` (secret nằm trong file,
   không in lại ở đây).
 - Monolith cũ (`Application.txt`) dùng thêm Redis, OAuth2 (Google/GitHub/Facebook/Zalo), HiveMQ public broker — các phần

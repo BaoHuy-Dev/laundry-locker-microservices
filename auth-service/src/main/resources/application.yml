@@ -77,7 +77,7 @@ app:
     credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
   # Seed tài khoản ADMIN đầu tiên lúc khởi động (đăng ký công khai luôn ép
   # CUSTOMER nên cần 1 admin mồi). Trống = tắt. Đổi mật khẩu sau lần đăng
-  # nhập đầu; trên droplet đặt qua .env.
+  # nhập đầu; trên server đặt qua .env.
   bootstrap:
     admin:
       email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}

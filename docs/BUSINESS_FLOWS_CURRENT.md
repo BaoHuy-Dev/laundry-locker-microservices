@@ -34,17 +34,17 @@ Dự án hiện tại là nền tảng Smart Laundry Locker gồm:
 Entrypoint chính của backend:
 
 ```text
-API Gateway (deploy, dùng chung cả nhóm): http://146.190.84.136:8080
+API Gateway (deploy, dùng chung cả nhóm): https://api.locker-drone.tech
 API Gateway (local khi chạy docker để dev): http://localhost:18080  (host 8080 thường bị chiếm)
 ```
 
-**Chính sách môi trường (chốt 2026-06-16):** cả nhóm dùng chung backend + PostgreSQL đã deploy trên DigitalOcean droplet
-`146.190.84.136`; không chạy local nữa, không bắt buộc bật docker (chỉ bật docker local khi đang sửa code backend để
+**Chính sách môi trường (chốt 2026-06-16):** cả nhóm dùng chung backend + PostgreSQL đã deploy trên Azure Azure VM
+`<AZURE_VM_IP>`; không chạy local nữa, không bắt buộc bật docker (chỉ bật docker local khi đang sửa code backend để
 test). Web FE (`laundry-locker-frontend/fe`) và mobile (`smart-laundry-locker-mobile`) đều cấu hình base URL mặc định về
-`http://146.190.84.136:8080`. Vì client luôn đi qua gateway, trỏ FE/mobile về server đồng nghĩa dùng luôn database trên
-server (client không nối DB trực tiếp). Nối DB trực tiếp (DBeaver/psql) dùng `146.190.84.136:15432` nhưng cần mở port
+`https://api.locker-drone.tech`. Vì client luôn đi qua gateway, trỏ FE/mobile về server đồng nghĩa dùng luôn database trên
+server (client không nối DB trực tiếp). Nối DB trực tiếp (DBeaver/psql) dùng `<AZURE_VM_IP>:15432` nhưng cần mở port
 `15432` trên cloud firewall trước (hiện chỉ mở `22` + `8080`). Khi backend có code mới merge vào nhánh chính (
-`develop`), workflow `deploy-droplet.yml` tự deploy lên droplet và Flyway tự migrate DB lúc service khởi động.
+`develop`), workflow `deploy-azure.yml` tự deploy lên Azure VM và Flyway tự migrate DB lúc service khởi động.
 
 Phạm vi hiện tại cần ghi nhớ:
 
@@ -58,7 +58,7 @@ Phạm vi hiện tại cần ghi nhớ:
 - Sản phẩm đang chạy chính là nền tảng locker/laundry/SEND/RENTAL. Drone delivery đầy đủ, engine phân công drone,
   realtime tracking và AI/RAG vẫn là việc tương lai.
 - Quyết định kiến trúc (K8s/Helm/GitOps, Kafka, CQRS/Event Sourcing, GraphQL, service mesh) hiện **được hoãn có chủ đích
-  ** ở quy mô 1 droplet — xem `docs/ARCHITECTURE_DECISIONS.md` để biết lý do và điều kiện xem lại. Stack hiện tại: REST
+  ** ở quy mô 1 VM — xem `docs/ARCHITECTURE_DECISIONS.md` để biết lý do và điều kiện xem lại. Stack hiện tại: REST
   qua gateway + Eureka + Resilience4j + RabbitMQ + Docker Compose.
 
 ## 2. Mô Hình Vai Trò Và Quyền Truy Cập
@@ -387,7 +387,7 @@ Luồng 2FA admin (web) và **shape response** (để client chuẩn hoá đúng
    `{requiresTwoFactor, tempToken, expiresIn, maskedEmail, message}` (trong `data`). OTP **luôn được log** ở
    `auth-service` (`Development OTP: <code>`) — dùng để lấy mã khi chưa cấu hình SMTP. **Gửi email thật (2026-06-16):**
    mail config trong `docker-compose.yml` (auth-service) đã cho overridable qua env — mặc định `localhost:1025` (không
-   gửi được, chỉ log). Để OTP tới email thật, đặt trên droplet (`.env`): `SPRING_MAIL_HOST=smtp.gmail.com`,
+   gửi được, chỉ log). Để OTP tới email thật, đặt trên Azure VM (`.env`): `SPRING_MAIL_HOST=smtp.gmail.com`,
    `SPRING_MAIL_PORT=587`, `SPRING_MAIL_USERNAME=<gmail>`, `SPRING_MAIL_PASSWORD=<app password 16 ký tự>`,
    `SPRING_MAIL_SMTP_AUTH=true`, `SPRING_MAIL_SMTP_STARTTLS=true` rồi recreate auth-service. `SmtpEmailService` nuốt lỗi
    gửi mail (warn-log, không chặn flow) nên OTP vẫn dùng được qua log nếu SMTP sai.
@@ -478,8 +478,8 @@ Hardening hiện tại:
     - Backend CI chạy `mvn -B test`.
     - Backend security workflow chạy Dependency Review, CodeQL, generate SBOM artifact, và Trivy image scan cho 12 image
       có Dockerfile.
-    - Deploy workflow (`deploy-droplet.yml`) tự chạy khi `push` vào nhánh chính `develop` (+ `workflow_dispatch`): build
-      bằng `mvn -B clean verify` (không skip test), đóng gói tarball, SCP/SSH vào droplet rồi
+    - Deploy workflow (`deploy-azure.yml`) tự chạy khi `push` vào nhánh chính `develop` (+ `workflow_dispatch`): build
+      bằng `mvn -B clean verify` (không skip test), đóng gói tarball, SCP/SSH vào Azure VM rồi
       `scripts/deploy-from-artifact.sh` chạy `docker compose up -d --build`. Mỗi service tự chạy Flyway migration lúc
       khởi động ⇒ **merge code mới vào `develop` sẽ tự deploy code + migrate DB trên server** (dữ liệu giữ qua docker
       volume Postgres).

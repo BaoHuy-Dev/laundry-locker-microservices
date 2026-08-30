@@ -8,7 +8,7 @@
 |-------------------------------------|---------------------------------------------------------------------------------------------------|
 | **Web** (sau khi sửa code FE)       | `cd fe && npm run build && npx wrangler deploy`                                                   |
 | **Backend** (cách chuẩn)            | merge vào `develop` → GitHub Actions tự build + deploy                                            |
-| **Backend** (thủ công trên droplet) | `cd /opt/laundry-locker-microservices && git pull origin develop && docker compose up -d --build` |
+| **Backend** (thủ công trên Azure VM) | `cd /opt/laundry-locker-microservices && git pull origin develop && docker compose up -d --build` |
 | **Mobile**                          | sửa `.env` → `dart run build_runner build` → `flutter build apk --release`                        |
 | Restart 1 service                   | `docker compose up -d --force-recreate <service>`                                                 |
 | Xem service sống/chết               | `docker compose ps`                                                                               |
@@ -39,4 +39,4 @@ Nếu port không phải 8080 → xem [02 mục A](02-backend-https-cors.md) (gh
 - `.tech`: free **năm đầu**, năm 2 trả phí → nhắc lịch ~tháng 5/2027 (gia hạn hoặc
   đổi sang `.id.vn` free 2 năm).
 - Cloudflare (DNS + Worker) + Let's Encrypt: **free**.
-- Droplet DigitalOcean: chi phí hiện tại không đổi.
+- Azure VM Azure: chi phí hiện tại không đổi.

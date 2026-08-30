@@ -1,7 +1,7 @@
-# 🔌 Kết Nối Database DigitalOcean — Hướng Dẫn Nhanh
+# 🔌 Kết Nối Database Azure — Hướng Dẫn Nhanh
 
 > **Mục đích:** Hướng dẫn nhanh để các thành viên trong nhóm kết nối tới PostgreSQL database đã deploy trên
-> DigitalOcean.
+> Azure.
 >
 > **Xem thêm:** [DATABASE_CONNECTION_GUIDE.md](./DATABASE_CONNECTION_GUIDE.md) để hiểu chi tiết từng bước.
 
@@ -28,7 +28,7 @@ Chuyển sang tab **SSH/SSL** và điền:
 | Thuộc tính          | Giá trị                                  |
 |---------------------|------------------------------------------|
 | ☑ Use SSH tunnel    | **Bật (tích chọn)**                      |
-| Host                | `146.190.84.136`                         |
+| Host                | `<AZURE_VM_IP>`                         |
 | Port                | `22`                                     |
 | Username            | `root`                                   |
 | Authentication type | `Key pair (OpenSSH or PuTTY)`            |
@@ -87,7 +87,7 @@ postgres@127.0.0.1
 
 | Lỗi                                  | Cách xử lý                                                                                 |
 |--------------------------------------|--------------------------------------------------------------------------------------------|
-| `Connection refused` trên SSH        | Kiểm tra IP server `146.190.84.136` có đúng không, hoặc hỏi trưởng nhóm xem IP có thay đổi |
+| `Connection refused` trên SSH        | Kiểm tra IP server `<AZURE_VM_IP>` có đúng không, hoặc hỏi trưởng nhóm xem IP có thay đổi |
 | `Auth fail` trên SSH                 | Kiểm tra private key file đúng đường dẫn, đúng file                                        |
 | `Connection refused` trên PostgreSQL | Kiểm tra port `15432` và host `127.0.0.1`                                                  |
 | `Password authentication failed`     | Liên hệ trưởng nhóm để lấy lại mật khẩu đúng                                               |
