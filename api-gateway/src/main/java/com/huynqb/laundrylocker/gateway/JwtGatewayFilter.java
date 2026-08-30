@@ -44,9 +44,20 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
+        // Spring Cloud Gateway's discovery locator exposes every registered app as
+        // /{service-id}/** — a path shape that slips past both the /internal block
+        // and the path-prefix RBAC below (/user-service/api/admin/users would reach
+        // the admin API with any valid token). The locator is disabled in
+        // application.yml; this guard keeps the bypass closed even if it is turned
+        // back on. 404 rather than 403: the route legitimately does not exist.
+        if (isServiceIdPrefixed(path)) {
+            exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
+            return exchange.getResponse().setComplete();
+        }
         // Service-to-service endpoints are reachable only inside the cluster
-        // (Feign via Eureka); never through the public gateway.
-        if (path.startsWith("/internal")) {
+        // (Feign via Eureka); never through the public gateway. Matched per path
+        // segment so no prefix trick can hide the "internal" hop.
+        if (hasSegment(path, "internal")) {
             exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
             return exchange.getResponse().setComplete();
         }
@@ -161,6 +172,42 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
                 || path.endsWith("/report")
                 || path.endsWith("/open")
                 || path.endsWith("/rate");
+    }
+
+    // Eureka application ids the discovery locator would turn into a path prefix
+    // (lower-case-service-id: true). Anything addressed this way is a bypass attempt.
+    private static final List<String> SERVICE_ID_PREFIXES =
+            List.of(
+                    "api-gateway",
+                    "auth-service",
+                    "discovery-server",
+                    "iot-service",
+                    "locker-service",
+                    "loyalty-service",
+                    "notification-service",
+                    "order-service",
+                    "payment-service",
+                    "store-service",
+                    "user-service");
+
+    private boolean isServiceIdPrefixed(String path) {
+        return SERVICE_ID_PREFIXES.contains(firstSegment(path));
+    }
+
+    private String firstSegment(String path) {
+        int start = path.startsWith("/") ? 1 : 0;
+        int end = path.indexOf('/', start);
+        String segment = end < 0 ? path.substring(start) : path.substring(start, end);
+        return segment.toLowerCase();
+    }
+
+    private boolean hasSegment(String path, String segment) {
+        for (String part : path.split("/")) {
+            if (segment.equalsIgnoreCase(part)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean hasAny(List<String> roles, String... required) {

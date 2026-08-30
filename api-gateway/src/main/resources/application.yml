@@ -10,7 +10,12 @@ spring:
         webflux:
           discovery:
             locator:
-              enabled: true
+              # PHẢI để false. Locator sinh thêm route /{service-id}/** song song
+              # với các route khai báo bên dưới; dạng đường dẫn đó lọt qua cả chốt
+              # chặn /internal lẫn RBAC theo tiền tố trong JwtGatewayFilter
+              # (vd /user-service/api/admin/users trả về toàn bộ user với bất kỳ
+              # token hợp lệ nào). Mọi route hợp lệ đều đã khai báo tường minh.
+              enabled: false
               lower-case-service-id: true
           routes:
             - id: auth-service
@@ -123,7 +128,7 @@ spring:
 
           # Global CORS. Origins are env-driven so production domains can be added
           # without a code change: set APP_CORS_ALLOWED_ORIGINS (comma-separated)
-          # on the droplet .env, e.g.
+          # in the server .env, e.g.
           #   APP_CORS_ALLOWED_ORIGINS=http://localhost:3000,https://lockerly.tech,https://admin.lockerly.tech
           # NOTE: must live under spring.cloud.gateway.server.webflux.globalcors.
           # The old spring.cloud.gateway.globalcors prefix is deprecated since

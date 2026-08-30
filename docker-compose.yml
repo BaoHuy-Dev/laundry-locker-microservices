@@ -64,10 +64,15 @@ services:
       SERVER_PORT: 8080
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
-      # Comma-separated allowed CORS origins; override on droplet .env to add the
+      # Comma-separated allowed CORS origins; override in the server .env to add the
       # production domain (e.g. http://localhost:3000,http://localhost:3001,https://lockerly.tech).
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
       JAVA_OPTS: "-Xms64m -Xmx320m -XX:+UseContainerSupport"
+    # Cổng duy nhất của hệ thống mở ra ngoài. 9 service nghiệp vụ KHÔNG publish
+    # port lên host: mọi lời gọi phải đi qua gateway để chịu xác thực JWT + RBAC.
+    # Chúng vẫn gọi lẫn nhau bình thường qua mạng Docker (Eureka + lb://).
+    # Cần debug thẳng một service: docker compose exec <service> sh, hoặc tạm thêm
+    # lại khối ports rồi bỏ đi sau.
     ports:
       - "${API_GATEWAY_PORT:-18080}:8080"
     depends_on:
@@ -88,7 +93,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: auth_pass
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
-      # SMTP overridable từ env/.env trên droplet để gửi OTP qua email thật.
+      # SMTP overridable từ env/.env trên server để gửi OTP qua email thật.
       # Mặc định localhost:1025 (mail-catcher dev, không auth/TLS) → giữ nguyên hành vi cũ.
       # Gửi thật qua Gmail: đặt SPRING_MAIL_HOST=smtp.gmail.com, PORT=587,
       # USERNAME=<gmail>, PASSWORD=<app password 16 ký tự>, SMTP_AUTH=true, STARTTLS=true.
@@ -114,8 +119,6 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       APP_SECURITY_JWT_SECRET: laundry-locker-microservices-secret-key-change-me-please-32chars
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8081:8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -142,8 +145,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8082:8082"
     depends_on:
       postgres:
         condition: service_healthy
@@ -170,8 +171,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8083:8083"
     depends_on:
       postgres:
         condition: service_healthy
@@ -198,8 +197,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8084:8084"
     depends_on:
       postgres:
         condition: service_healthy
@@ -225,12 +222,12 @@ services:
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
-      # VNPay — override on droplet .env for a real merchant; defaults = sandbox/demo.
+      # VNPay — override in the server .env for a real merchant; defaults = sandbox/demo.
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-DEMO}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-demo-secret}
       VNPAY_PAY_URL: ${VNPAY_PAY_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/payments/vnpay/return}
-      # MoMo — optional; set partner-code/access-key/secret-key on droplet .env to enable MoMo checkout.
+      # MoMo — optional; set partner-code/access-key/secret-key in the server .env to enable MoMo checkout.
       MOMO_PARTNER_CODE: ${MOMO_PARTNER_CODE:-DEMO}
       MOMO_ACCESS_KEY: ${MOMO_ACCESS_KEY:-demo}
       MOMO_SECRET_KEY: ${MOMO_SECRET_KEY:-demo-secret}
@@ -238,8 +235,6 @@ services:
       MOMO_REDIRECT_URL: ${MOMO_REDIRECT_URL:-http://localhost:8080/api/payments/momo/return}
       MOMO_IPN_URL: ${MOMO_IPN_URL:-http://localhost:8080/api/payments/momo/callback}
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8086:8086"
     depends_on:
       postgres:
         condition: service_healthy
@@ -266,8 +261,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8087:8087"
     depends_on:
       postgres:
         condition: service_healthy
@@ -294,8 +287,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8088:8088"
     depends_on:
       postgres:
         condition: service_healthy
@@ -322,8 +313,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8089:8089"
     depends_on:
       postgres:
         condition: service_healthy
@@ -350,8 +339,6 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseContainerSupport"
-    ports:
-      - "127.0.0.1:8092:8092"
     depends_on:
       postgres:
         condition: service_healthy
