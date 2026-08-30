@@ -1,5 +1,5 @@
 -- Script bổ sung dữ liệu cho account technical huynqbse180211@fpt.edu.vn
--- Chạy trên Droplet qua docker exec:
+-- Chạy trên server (Azure VM) qua docker exec:
 -- cat seed.sql | docker exec -i ll-ms-postgres psql -U postgres
 
 \set

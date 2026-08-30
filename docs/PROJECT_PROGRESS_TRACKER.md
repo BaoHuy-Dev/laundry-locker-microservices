@@ -400,49 +400,51 @@ Không commit:
 
 ## Ghi Chú Deploy / Database
 
-### Chính Sách Server Dùng Chung (chốt 2026-06-16)
+### Chính Sách Server Dùng Chung (cập nhật 2026-08-28 — chuyển sang Azure)
 
-Từ 2026-06-16, **cả nhóm dùng chung backend + database đã deploy trên droplet**, không chạy local nữa (trừ khi đang sửa
-code backend thì mới cần bật docker local để test):
+Cả nhóm dùng chung backend + database đã deploy, không chạy local nữa (trừ khi đang sửa code backend thì mới bật
+docker local để test):
 
-- **Entrypoint cho client**: `http://146.190.84.136:8080` (API Gateway). Đây là port duy nhất (cùng SSH 22) được
-  DigitalOcean cloud firewall `smartlocker-firewall` mở inbound.
+- **Entrypoint cho client**: `https://api.locker-drone.tech` — Nginx trên Azure VM nhận :443 (TLS Let's Encrypt) rồi
+  proxy vào `127.0.0.1:8080` của api-gateway. Client **không** gọi thẳng IP: đổi server chỉ cần đổi DNS.
+- **Azure NSG** chỉ mở inbound `22` (SSH), `80` (ACME/redirect), `443`. Cổng `8080` nằm trong VM, không lộ ra Internet.
 - **Web FE** (`laundry-locker-frontend/fe`): `VITE_API_BASE_URL`, default trong `api-paths.ts`, và proxy
-  `vite.config.ts` đều trỏ `http://146.190.84.136:8080`. `fe/.env` **được track trong git** nên đổi 1 lần áp dụng cho cả
-  nhóm.
-- **Mobile** (`smart-laundry-locker-mobile`): `env_config.g.dart` (generated, track) + `defaultValue` trong
-  `env_config.dart` đã = `http://146.190.84.136:8080`; `.env.example` cập nhật theo. Mobile `.env` là file private,
-  không track — member tự copy từ `.env.example`.
-- **Database**: client KHÔNG nối thẳng DB; chúng đi qua gateway server, nên trỏ FE/mobile về server là tự động dùng DB
-  trên server. Nếu cần nối DB trực tiếp (DBeaver/psql hoặc chạy 1 service local trỏ DB server) thì dùng
-  `146.190.84.136:15432` — **nhưng port 15432 hiện KHÔNG mở trên cloud firewall**, cần thêm rule inbound (nên giới hạn
-  theo IP nhóm) trước khi nối được từ ngoài.
-- **Auto-deploy khi merge nhánh chính**: `.github/workflows/deploy-droplet.yml` đã chạy on `push: develop` (+
-  `workflow_dispatch`): `mvn -B clean verify` → đóng gói tarball → SCP/SSH vào droplet (secrets
-  `DROPLET_HOST/DROPLET_USER/DROPLET_SSH_KEY/DROPLET_PORT`) → `scripts/deploy-from-artifact.sh` chạy
-  `docker compose up -d --build --remove-orphans`. **DB tự cập nhật theo**: mỗi service chạy Flyway migration lúc khởi
-  động, nên migration mới được áp tự động khi deploy; dữ liệu giữ qua docker volume Postgres. ⇒ Yêu cầu "merge vào nhánh
-  chính → tự deploy code + DB mới nhất" **đã được đáp ứng sẵn**.
+  `vite.config.ts` đều trỏ `https://api.locker-drone.tech`. `fe/.env` **được track trong git** nên đổi 1 lần áp cho cả nhóm.
+- **Mobile** (`smart-laundry-locker-mobile`): `defaultValue` trong `env_config.dart` và `.env.example` = domain HTTPS.
+  Mobile `.env` là file private, không track — member tự copy từ `.env.example`. Đổi `.env` xong phải chạy lại
+  `dart run build_runner build --delete-conflicting-outputs` vì envied nướng giá trị vào `env_config.g.dart`.
+  App **không còn** ngoại lệ cleartext cho server thật (`network_security_config.xml` chỉ còn host local) vì API đã HTTPS.
+- **Database**: client KHÔNG nối thẳng DB; chúng đi qua gateway, nên trỏ FE/mobile về server là tự động dùng DB server.
+  Postgres chạy trong container, chỉ nghe trong VM. Nối trực tiếp bằng **SSH tunnel**, không mở port:
+  `ssh -L 15432:127.0.0.1:15432 -N azureuser@<AZURE_VM_IP>` rồi trỏ DBeaver/psql vào `localhost:15432`.
+- **Auto-deploy khi merge nhánh chính**: `.github/workflows/deploy-azure.yml` chạy on `push: main/develop` (+
+  `workflow_dispatch`): `mvn -B clean verify` → đóng gói tarball (kèm checksum + provenance, **loại trừ `docs/`**) →
+  SCP/SSH vào Azure VM (secrets `AZURE_VM_HOST/AZURE_VM_USER/AZURE_VM_SSH_KEY/AZURE_VM_PORT`) →
+  `scripts/deploy-from-artifact.sh` chạy `docker compose up -d --build --remove-orphans`, chờ Eureka đăng ký đủ 10
+  service, lỗi thì **tự rollback** về bản `.previous`. **DB tự cập nhật theo**: mỗi service chạy Flyway migration lúc
+  khởi động; dữ liệu giữ qua docker volume Postgres.
+- Hướng dẫn dựng hạ tầng từ đầu: [`infra/azure/README.md`](../infra/azure/README.md).
 
-### Lưu Ý Port Gateway (quan trọng) — đã fix bền vững 2026-06-16
+### Lưu Ý Port Gateway (quan trọng)
 
 - `docker-compose.yml` map gateway `"${API_GATEWAY_PORT:-18080}:8080"` → **mặc định host 18080** (cho local dev, vì host
-  8080 thường bị chiếm). Nhưng cloud firewall DO chỉ mở `22` + `8080` inbound, nên client ngoài **phải** vào `:8080`.
-- **Fix bền vững**: `scripts/deploy-from-artifact.sh` giờ `export API_GATEWAY_PORT="${API_GATEWAY_PORT:-8080}"` ⇒ **mọi
-  lần deploy lên droplet, gateway luôn được publish ở host 8080** mà không cần sửa env tay (deploy ghi đè thư mục nên
-  `.env` set tay sẽ mất). Local vẫn giữ mặc định 18080 vì dev chạy `docker compose` trực tiếp, không qua deploy script.
-  Health-check trong script dò `http://127.0.0.1:8080/actuator/health` nên khớp.
-- **Chẩn đoán sự cố 2026-06-16 (root cause thật)**: lúc user báo "mobile không kết nối được", `docker compose ps` trên
-  droplet cho thấy **tất cả service Up** nhưng `ll-ms-api-gateway` map `0.0.0.0:18080->8080/tcp` — tức gateway chạy ở
-  host **18080** (firewall chặn) trong khi `:8080` không có listener ⇒ client ngoài "connection refused". Không phải
-  OOM (RAM thật 7.8Gi/8GB, đã thêm swap 4GB). Fix tức thời: thêm `API_GATEWAY_PORT=8080` vào `.env` droplet +
-  `docker compose up -d api-gateway`. Fix bền vững: như trên (trong deploy script).
+  8080 thường bị chiếm). Trên server, Nginx proxy vào `127.0.0.1:8080`, nên gateway **phải** nằm ở host 8080.
+- **Fix bền vững**: `scripts/deploy-from-artifact.sh` `export API_GATEWAY_PORT="${API_GATEWAY_PORT:-8080}"` ⇒ mọi lần
+  deploy gateway luôn publish ở host 8080 mà không cần sửa env tay. Local vẫn giữ 18080 vì dev chạy `docker compose`
+  trực tiếp, không qua deploy script. Health-check trong script dò `http://127.0.0.1:8080/actuator/health` nên khớp.
+- **Sự cố lịch sử (2026-06-16, trên server DigitalOcean cũ)**: "mobile không kết nối được" — `docker compose ps` cho
+  thấy tất cả service Up nhưng `ll-ms-api-gateway` map `0.0.0.0:18080->8080/tcp`, tức gateway chạy ở host 18080 trong
+  khi firewall chỉ mở 8080 ⇒ client ngoài "connection refused". Không phải OOM (RAM 7.8Gi/8GB, đã thêm swap 4GB).
+  Bài học vẫn đúng trên Azure: sau deploy luôn kiểm tra `docker compose ps` xem gateway có đúng ở `8080` không.
 
-### Tham Chiếu DigitalOcean Droplet đã quan sát
+### Tham Chiếu Azure VM
 
-- Public IP: `146.190.84.136`
-- PostgreSQL expose port `15432`
-- Password superuser `postgres` đã được reset thủ công thành `postgres` khi troubleshoot.
+- Resource group / VM / IP: tạo bằng `bash infra/azure/provision-vm.sh` (in ra Public IP tĩnh ở cuối). Điền IP thật
+  vào đây sau khi provision xong, và cập nhật A record `api.locker-drone.tech`.
+- Kích thước khuyến nghị: `Standard_B2ms` (2 vCPU / 8 GB) — 12 service Spring Boot + Postgres + RabbitMQ ≈ 6.3 GB RAM.
+- PostgreSQL chạy trong container, cổng `15432` **chỉ trong VM** (truy cập qua SSH tunnel).
+- Secret vận hành nằm ở `/opt/laundry-locker-microservices/.env` trên VM — deploy script giữ lại file này qua mỗi lần
+  deploy. Xem bảng biến trong `infra/azure/README.md`.
 - Deploy DB seed accounts đã quan sát:
     - `customer.seed@laundry.test`
     - `staff.seed@laundry.test`

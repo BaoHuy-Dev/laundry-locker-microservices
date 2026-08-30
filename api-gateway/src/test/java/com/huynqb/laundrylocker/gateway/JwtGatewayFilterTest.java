@@ -50,6 +50,49 @@ class JwtGatewayFilterTest {
     }
 
     @Test
+    void blocksDiscoveryLocatorBypassToAdminApi() {
+        // Regression: with the discovery locator on, /user-service/api/admin/users
+        // reached the admin API with a plain CUSTOMER token because the RBAC check
+        // only matches a leading /api/admin.
+        MockServerWebExchange exchange =
+                exchangeWithBearer(
+                        MockServerHttpRequest.get("/user-service/api/admin/users"),
+                        token("access", "CUSTOMER"));
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+        assertEquals(HttpStatus.NOT_FOUND, exchange.getResponse().getStatusCode());
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
+    void blocksDiscoveryLocatorBypassToInternalApi() {
+        MockServerWebExchange exchange =
+                exchangeWithBearer(
+                        MockServerHttpRequest.get("/user-service/internal/users/1"),
+                        token("access", "CUSTOMER"));
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+        assertEquals(HttpStatus.NOT_FOUND, exchange.getResponse().getStatusCode());
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
+    void blocksInternalSegmentThatIsNotAtTheStart() {
+        MockServerWebExchange exchange =
+                MockServerWebExchange.from(MockServerHttpRequest.get("/api/internal/users/1").build());
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.filter(exchange, chainThatMarks(chainCalled)).block();
+
+        assertEquals(HttpStatus.FORBIDDEN, exchange.getResponse().getStatusCode());
+        assertFalse(chainCalled.get());
+    }
+
+    @Test
     void rejectsRefreshTokenForBusinessApi() {
         MockServerWebExchange exchange =
                 exchangeWithBearer(MockServerHttpRequest.get("/api/orders/my-orders"), token("refresh", "CUSTOMER"));

@@ -106,7 +106,7 @@ Nếu vẫn 409 → email/SĐT đó **đã tồn tại thật**, đổi giá tr�
 
 ---
 
-## Bộ lệnh chẩn đoán nhanh (chạy trên droplet)
+## Bộ lệnh chẩn đoán nhanh (chạy trên Azure VM)
 
 ```bash
 cd /opt/laundry-locker-microservices

@@ -1,7 +1,7 @@
-# 📖 Hướng Dẫn Chi Tiết Kết Nối Database DigitalOcean
+# 📖 Hướng Dẫn Chi Tiết Kết Nối Database Azure
 
-> **Tài liệu này giải thích chi tiết tại sao và cách thức kết nối tới PostgreSQL database đã deploy trên DigitalOcean
-Droplet.**
+> **Tài liệu này giải thích chi tiết tại sao và cách thức kết nối tới PostgreSQL database đã deploy trên Azure
+Azure VM.**
 >
 > Nếu bạn chỉ cần hướng dẫn nhanh, xem [DATABASE_QUICK_CONNECT.md](./DATABASE_QUICK_CONNECT.md).
 
@@ -27,13 +27,13 @@ Droplet.**
 
 ## 1. Tổng Quan Kiến Trúc Kết Nối
 
-Database PostgreSQL của dự án được deploy trên một **DigitalOcean Droplet** (máy chủ ảo Linux). PostgreSQL chạy bên
-trong **Docker container** trên Droplet đó.
+Database PostgreSQL của dự án được deploy trên một **Azure VM** (máy chủ ảo Linux). PostgreSQL chạy bên
+trong **Docker container** trên Azure VM đó.
 
 ```
 ┌─────────────────┐       SSH Tunnel        ┌──────────────────────────────────┐
-│  Máy tính của    │ ───────────────────────► │  DigitalOcean Droplet            │
-│  bạn (localhost) │    Port 22 (SSH)         │  IP: 146.190.84.136              │
+│  Máy tính của    │ ───────────────────────► │  Azure VM            │
+│  bạn (localhost) │    Port 22 (SSH)         │  IP: <AZURE_VM_IP>              │
 │                  │                          │                                  │
 │  IntelliJ/       │  localhost:15432 ◄──────►│  Docker: PostgreSQL 16           │
 │  DataGrip        │  (qua SSH tunnel)        │  Container port: 5432            │
@@ -43,10 +43,10 @@ trong **Docker container** trên Droplet đó.
 
 ### Luồng kết nối hoạt động như thế nào?
 
-1. **IDE của bạn** tạo một kết nối SSH tới Droplet (`146.190.84.136:22`)
-2. Qua SSH tunnel, IDE **chuyển tiếp (forward)** port `15432` từ Droplet về `127.0.0.1:15432` trên máy bạn
+1. **IDE của bạn** tạo một kết nối SSH tới Azure VM (`<AZURE_VM_IP>:22`)
+2. Qua SSH tunnel, IDE **chuyển tiếp (forward)** port `15432` từ Azure VM về `127.0.0.1:15432` trên máy bạn
 3. IDE kết nối tới PostgreSQL tại `127.0.0.1:15432` — nhưng thực chất traffic đang đi qua SSH tunnel tới PostgreSQL trên
-   Droplet
+   Azure VM
 4. Vì PostgreSQL trong Docker được map `5432 → 15432` nên kết nối thành công
 
 ---
@@ -55,7 +55,7 @@ trong **Docker container** trên Droplet đó.
 
 ### ❌ Không kết nối trực tiếp vì:
 
-- **Bảo mật:** PostgreSQL trên Droplet chỉ lắng nghe trên `127.0.0.1` (localhost của server), **KHÔNG** mở ra internet.
+- **Bảo mật:** PostgreSQL trên Azure VM chỉ lắng nghe trên `127.0.0.1` (localhost của server), **KHÔNG** mở ra internet.
   Điều này có nghĩa là không ai từ bên ngoài có thể truy cập trực tiếp vào database.
 - **Cấu hình Docker:** Trong `docker-compose.yml`, port được bind là `127.0.0.1:15432:5432` — chú ý prefix `127.0.0.1`
   có nghĩa là chỉ chấp nhận kết nối từ localhost của server.
@@ -89,7 +89,7 @@ trong **Docker container** trên Droplet đó.
 
 1. ✅ **SSH private key file** (`id_ed25519`) — hoặc được thêm public key của bạn vào server
 2. ✅ **Mật khẩu PostgreSQL** cho user `postgres`
-3. ✅ **IP server** hiện tại (có thể thay đổi nếu tạo lại Droplet)
+3. ✅ **IP server** hiện tại (có thể thay đổi nếu tạo lại Azure VM)
 
 ---
 
@@ -155,7 +155,7 @@ Nếu trưởng nhóm gửi cho bạn file private key:
 
 3. Trưởng nhóm sẽ thêm public key vào server bằng lệnh:
    ```bash
-   # Trên server DigitalOcean
+   # Trên server Azure
    echo "nội_dung_public_key" >> ~/.ssh/authorized_keys
    ```
 
@@ -186,18 +186,18 @@ Nếu trưởng nhóm gửi cho bạn file private key:
 
 | Thuộc tính              | Giá trị                             | Giải thích                                                   |
 |-------------------------|-------------------------------------|--------------------------------------------------------------|
-| **Host**                | `146.190.84.136`                    | Địa chỉ IP của DigitalOcean Droplet                          |
+| **Host**                | `<AZURE_VM_IP>`                    | Địa chỉ IP của Azure VM                          |
 | **Port**                | `22`                                | Port mặc định của SSH                                        |
-| **Username**            | `root`                              | User trên server (DigitalOcean Droplet mặc định dùng `root`) |
+| **Username**            | `root`                              | User trên server (Azure VM mặc định dùng `root`) |
 | **Authentication type** | `Key pair (OpenSSH or PuTTY)`       | Xác thực bằng SSH key thay vì password                       |
 | **Private key file**    | `C:\Users\<TenBan>\.ssh\id_ed25519` | Đường dẫn tới private key trên máy bạn                       |
 | **Passphrase**          | *(để trống)*                        | Nếu key có passphrase thì nhập ở đây                         |
 
 > [!NOTE]
 > **Giải thích các giá trị:**
-> - **Host `146.190.84.136`**: Đây là IP public của Droplet trên DigitalOcean. Mọi thành viên đều dùng chung IP này.
+> - **Host `<AZURE_VM_IP>`**: Đây là IP public của Azure VM trên Azure. Mọi thành viên đều dùng chung IP này.
 > - **Port `22`**: SSH sử dụng port 22 theo chuẩn. Server không thay đổi port mặc định.
-> - **Username `root`**: DigitalOcean Droplet mặc định tạo user `root`. Trong production nên tạo user riêng, nhưng cho
+> - **Username `root`**: Azure VM mặc định tạo user `root`. Trong production nên tạo user riêng, nhưng cho
     development thì `root` là ok.
 > - **Key pair**: An toàn hơn password authentication. File `id_ed25519` là key thuật toán Ed25519 — nhỏ gọn và bảo mật
     cao.
@@ -239,7 +239,7 @@ Quay lại tab **General** và điền thông tin:
 
 Vì bạn đang dùng **SSH tunnel**! SSH tunnel sẽ:
 
-1. Kết nối SSH tới `146.190.84.136:22` (bước trước đã cấu hình)
+1. Kết nối SSH tới `<AZURE_VM_IP>:22` (bước trước đã cấu hình)
 2. Tạo một "cổng" từ máy bạn (127.0.0.1) tới server
 3. Khi IDE kết nối tới `127.0.0.1:15432`, traffic thực chất được chuyển qua SSH tới `127.0.0.1:15432` **trên server**
 
@@ -277,7 +277,7 @@ Mỗi microservice có database user riêng (ví dụ `auth_user`, `order_user`.
 
 1. Nhấn nút **Test Connection** (góc dưới bên trái cửa sổ Data Sources and Drivers)
 2. IDE sẽ thực hiện tuần tự:
-    - ✅ Kết nối SSH tới `146.190.84.136:22`
+    - ✅ Kết nối SSH tới `<AZURE_VM_IP>:22`
     - ✅ Tạo SSH tunnel
     - ✅ Kết nối PostgreSQL qua tunnel
     - ✅ Xác thực với user `postgres`
@@ -320,7 +320,7 @@ Mặc định, IDE chỉ hiển thị database `postgres`. Để xem tất cả 
 ## 9. Kiến Trúc Database Của Dự Án
 
 ```
-                          DigitalOcean Droplet
+                          Azure VM
                         ┌──────────────────────────────────────┐
                         │   Docker Container: PostgreSQL 16    │
                         │   ┌──────────────────────────────┐   │
@@ -367,7 +367,7 @@ Nếu bạn muốn kết nối bằng command line thay vì IDE:
 ### Bước 1: Tạo SSH tunnel
 
 ```bash
-ssh -L 15432:127.0.0.1:15432 -N -f root@146.190.84.136 -i ~/.ssh/id_ed25519
+ssh -L 15432:127.0.0.1:15432 -N -f azureuser@<AZURE_VM_IP> -i ~/.ssh/id_ed25519
 ```
 
 **Giải thích:**
@@ -375,7 +375,7 @@ ssh -L 15432:127.0.0.1:15432 -N -f root@146.190.84.136 -i ~/.ssh/id_ed25519
 - `-L 15432:127.0.0.1:15432`: Forward port 15432 từ remote tới local port 15432
 - `-N`: Không chạy command trên remote (chỉ tạo tunnel)
 - `-f`: Chạy SSH ở background
-- `root@146.190.84.136`: User và IP server
+- `azureuser@<AZURE_VM_IP>`: User và IP server
 - `-i ~/.ssh/id_ed25519`: Chỉ định private key
 
 ### Bước 2: Kết nối PostgreSQL
@@ -409,20 +409,20 @@ kill <PID>
 #### `Connection refused` hoặc `Connection timed out`
 
 ```
-SSH: Connection to 146.190.84.136:22 refused
+SSH: Connection to <AZURE_VM_IP>:22 refused
 ```
 
 **Nguyên nhân có thể:**
 
-1. IP server đã thay đổi (DigitalOcean có thể đổi IP khi rebuild Droplet)
+1. IP server đã thay đổi (Azure có thể đổi IP khi rebuild Azure VM)
 2. Server đang tắt hoặc khởi động lại
 3. Firewall chặn port 22
 
 **Cách xử lý:**
 
-1. Kiểm tra IP server: đăng nhập DigitalOcean dashboard hoặc hỏi trưởng nhóm
-2. Thử ping server: `ping 146.190.84.136`
-3. Kiểm tra port SSH: `telnet 146.190.84.136 22`
+1. Kiểm tra IP server: đăng nhập Azure dashboard hoặc hỏi trưởng nhóm
+2. Thử ping server: `ping <AZURE_VM_IP>`
+3. Kiểm tra port SSH: `telnet <AZURE_VM_IP> 22`
 
 #### `Auth fail` hoặc `Permission denied (publickey)`
 
@@ -442,7 +442,7 @@ SSH: Auth fail for root
 2. Xác nhận file `id_ed25519` tồn tại (file KHÔNG có đuôi `.pub`)
 3. Thử kết nối SSH bằng command line để xem lỗi chi tiết:
    ```bash
-   ssh -v root@146.190.84.136 -i ~/.ssh/id_ed25519
+   ssh -v azureuser@<AZURE_VM_IP> -i ~/.ssh/id_ed25519
    ```
    Flag `-v` (verbose) sẽ hiện chi tiết quá trình xác thực
 
@@ -548,7 +548,7 @@ nhất của PostgreSQL 16.
 - Dùng transaction khi cần
 - Nếu gặp lock conflict, đợi hoặc thông báo nhóm
 
-### Q: Tôi chạy Spring Boot service locally, service kết nối tới database trên DigitalOcean được không?
+### Q: Tôi chạy Spring Boot service locally, service kết nối tới database trên Azure được không?
 
 **A:** Được, nhưng cần:
 

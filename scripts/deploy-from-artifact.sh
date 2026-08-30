@@ -8,12 +8,13 @@ NEW_DIR="${APP_DIR}.new"
 BACKUP_DIR="${APP_DIR}.previous"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-720}"
 
-# Publish the API gateway on host port 8080 on the droplet. The DigitalOcean
-# cloud firewall only opens 22 + 8080 inbound, so external clients (web/mobile)
-# must reach the gateway on 8080. docker-compose.yml defaults this to 18080 for
-# local dev (where host 8080 is usually occupied); the deploy path overrides it
-# to 8080 here so the gateway is reachable after every deploy without manual env
-# edits (which a deploy would wipe). The health check below also probes :8080.
+# Publish the API gateway on host port 8080 on the server. Nginx terminates TLS
+# on :443 and proxies to 127.0.0.1:8080, so the gateway must sit on 8080 (the
+# Azure NSG only opens 22 + 80 + 443 inbound; 8080 stays VM-internal).
+# docker-compose.yml defaults this to 18080 for local dev (where host 8080 is
+# usually occupied); the deploy path overrides it to 8080 here so the gateway is
+# reachable after every deploy without manual env edits (which a deploy would
+# wipe). The health check below also probes :8080.
 export API_GATEWAY_PORT="${API_GATEWAY_PORT:-8080}"
 
 rollback() {
@@ -39,7 +40,11 @@ command -v curl >/dev/null
 
 if [ -s "$CHECKSUM_FILE" ]; then
   command -v sha256sum >/dev/null
-  sha256sum -c "$CHECKSUM_FILE"
+  # `sha256sum -c` giải tên file bên trong checksum theo THƯ MỤC HIỆN TẠI. Script
+  # này chạy qua `ssh 'bash -s'` nên cwd là HOME của deploy user, trong khi artifact
+  # nằm ở /tmp -> kiểm tra phải chạy trong đúng thư mục chứa artifact, nếu không
+  # luôn báo "FAILED open or read" và rollback oan.
+  ( cd "$(dirname "$ARCHIVE")" && sha256sum -c "$(basename "$CHECKSUM_FILE")" )
 fi
 
 wait_for_http() {

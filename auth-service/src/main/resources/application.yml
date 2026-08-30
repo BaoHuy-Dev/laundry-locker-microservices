@@ -30,11 +30,6 @@ spring:
     create-schemas: true
     schemas: auth_schema
     default-schema: auth_schema
-  rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:localhost}
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:guest}
-    password: ${SPRING_RABBITMQ_PASSWORD:guest}
 eureka:
   client:
     service-url:
@@ -82,7 +77,7 @@ app:
     credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
   # Seed tài khoản ADMIN đầu tiên lúc khởi động (đăng ký công khai luôn ép
   # CUSTOMER nên cần 1 admin mồi). Trống = tắt. Đổi mật khẩu sau lần đăng
-  # nhập đầu; trên droplet đặt qua .env.
+  # nhập đầu; trên server đặt qua .env.
   bootstrap:
     admin:
       email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}

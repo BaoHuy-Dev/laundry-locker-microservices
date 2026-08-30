@@ -106,10 +106,16 @@ JWT — they trust the `X-User-Id`, `X-User-Email`, `X-User-Roles`, `X-Correlati
 
 Role-path mapping:
 
+Canonical role set: `CUSTOMER` · `ADMIN` (web console) · `TECHNICIAN` (locker upkeep + IoT) ·
+`MAINTENANCE` (drone team). `MANAGER` and `STAFF` were retired — do not reintroduce them.
+
 - `/api/admin/**` → `ADMIN` only
-- `/api/manage/**` → `MANAGER` or `ADMIN`
-- `/api/maintenance/**` → `MAINTENANCE` or `ADMIN`
+- `/api/maintenance/drone**` → `MAINTENANCE` or `ADMIN` (drone team surface)
+- `/api/maintenance/**` → `MAINTENANCE`, `TECHNICIAN` or `ADMIN`
+- `/api/technician/**` → `TECHNICIAN` or `ADMIN`
 - `/internal/**` → blocked externally (403)
+- `/{service-id}/**` → 404. The discovery locator is disabled; this shape used to bypass
+  both the `/internal` block and the RBAC above.
 
 ## Database & Migrations
 
@@ -179,7 +185,7 @@ All services expose Spring Actuator: `/actuator/health`, `/actuator/metrics`, `/
 
 ## Architecture Decisions (Deliberately Deferred)
 
-These are explicitly NOT being built at current scale (1 droplet, small team). Do not propose or implement them unless
+These are explicitly NOT being built at current scale (1 VM, small team). Do not propose or implement them unless
 the stated trigger conditions are met. See `docs/ARCHITECTURE_DECISIONS.md`.
 
 | Topic                 | Decision                  | Trigger to revisit                                          |
@@ -210,12 +216,12 @@ Current investment priority: healthcheck + deploy runbook, Postgres backups, Rab
 
 ## Deployed Environment
 
-- **Shared backend (DigitalOcean):** `http://146.190.84.136:8080` — all clients default to this.
+- **Shared backend (Azure):** `https://api.locker-drone.tech` — all clients default to this.
 - **Local (Docker Compose):** gateway at `http://localhost:18080` (host 8080 may be occupied).
-- Deploy is automatic: merge to `develop` → GitHub Actions (`deploy-droplet.yml`) builds + deploys + Flyway migrates on
+- Deploy is automatic: merge to `develop` → GitHub Actions (`deploy-azure.yml`) builds + deploys + Flyway migrates on
   startup.
-- **Direct DB access** requires SSH tunnel via `146.190.84.136:22`; PostgreSQL exposed at port `15432` inside the
-  tunnel (firewall only opens 22 + 8080).
+- **Direct DB access** requires SSH tunnel via `<AZURE_VM_IP>:22`; PostgreSQL exposed at port `15432` inside the
+  tunnel (the Azure NSG only opens 22 + 80 + 443; port 8080 stays VM-internal behind Nginx).
 
 ## Test Accounts (password `12345678` for all demo accounts)
 
@@ -224,7 +230,7 @@ Current investment priority: healthcheck + deploy runbook, Postgres backups, Rab
 | `baohuy2k12k4@gmail.com`             | ADMIN       |
 | `nqbhuy2004nt@gmail.com`             | CUSTOMER    |
 | `se180211nguyenquocbaohuy@gmail.com` | MAINTENANCE |
-| `huynqbse180211@fpt.edu.vn`          | MANAGER     |
+| `huynqbse180211@fpt.edu.vn`          | TECHNICIAN  |
 
 ## RabbitMQ Events
 

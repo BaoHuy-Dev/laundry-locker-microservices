@@ -6,20 +6,20 @@
 
 ---
 
-## A. ⚠️ Port gateway trên droplet = 8080 (KHỚP với auto-deploy)
+## A. ⚠️ Port gateway trên Azure VM = 8080 (KHỚP với auto-deploy)
 
 Gateway publish ra host theo biến `API_GATEWAY_PORT`. **Auto-deploy ÉP port này =
 `8080`**: `scripts/deploy-from-artifact.sh` có dòng
 `export API_GATEWAY_PORT="${API_GATEWAY_PORT:-8080}"` — biến shell này **ĐÈ** giá
 trị trong `.env` khi `docker compose up` (shell env ưu tiên hơn file `.env`). Lý do:
-firewall DigitalOcean chỉ mở inbound 22 + 8080.
+Azure NSG chỉ mở inbound 22 + 80 + 443; cổng 8080 nằm trong VM, chỉ Nginx gọi tới.
 
 Hệ quả **bắt buộc nhớ**:
 
 - **Nginx PHẢI proxy về `8080`** (mục B). Trỏ 18080 → lệch port → **502 sau mỗi lần
   auto-deploy** (đây chính là lỗi "502 lúc được lúc không" đã gặp).
 - Local dev: `docker-compose.yml` mặc định `18080` (host 8080 hay bận). **Chỉ trên
-  droplet mới là `8080`.**
+  Azure VM mới là `8080`.**
 
 Cho `.env` khớp luôn `8080` để lần `docker compose up` thủ công không bị lệch:
 
@@ -31,7 +31,7 @@ grep -q '^API_GATEWAY_PORT=' .env \
 docker port ll-ms-api-gateway        # PHẢI ra: 8080/tcp -> 0.0.0.0:8080
 ```
 
-> ❌ **ĐỪNG ghim 18080 cho droplet** — auto-deploy sẽ ép lại 8080 và gây 502.
+> ❌ **ĐỪNG ghim 18080 cho Azure VM** — auto-deploy sẽ ép lại 8080 và gây 502.
 
 ---
 

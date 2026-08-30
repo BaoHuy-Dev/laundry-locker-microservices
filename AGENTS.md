@@ -147,7 +147,7 @@ chore: mô tả ngắn
 | Eureka           | `http://localhost:8761`                     |
 | RabbitMQ UI      | `http://localhost:15672` (guest/guest)      |
 | PostgreSQL       | `localhost:15432` (postgres/postgres)       |
-| Backend deployed | `http://146.190.84.136:8080`                |
+| Backend deployed | `https://api.locker-drone.tech`                |
 | Auto-deploy      | merge → `develop` → GitHub Actions → deploy |
 
 Login body dùng `identifier`, không phải `email`:
