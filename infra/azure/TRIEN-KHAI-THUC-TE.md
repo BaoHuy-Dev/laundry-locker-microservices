@@ -8,7 +8,8 @@ Khác với [RUNBOOK.md](RUNBOOK.md) (hướng dẫn tổng quát dùng script),
 thực tế**: có cả những chỗ đã vấp và cách xử lý.
 
 - **Ngày thực hiện:** 30/08/2026
-- **Kết quả:** `https://api.locker-drone.tech` đang chạy trên Azure VM, TLS hợp lệ, 13 container Up
+- **Kết quả:** `https://api.locker-drone.tech` chạy trên Azure VM, TLS hợp lệ, 13 container Up;
+  web admin, landing page và bản web của app mobile đều tự deploy khi push nhánh chính
 - **Tài khoản Azure:** `nhatkse182290@fpt.edu.vn` · subscription *Azure for Students*
 
 ---
@@ -31,8 +32,12 @@ thực tế**: có cả những chỗ đã vấp và cách xử lý.
 | ✅ | CI/CD: push nhánh chính là tự deploy cả 3 phần | xong |
 | ✅ | Mọi lần deploy tự ghi vào `DEPLOY-LOG.md` | xong |
 | ✅ | App mobile xem được trên trình duyệt (Flutter Web) | xong |
-| ⬜ | Thêm 2 secret Cloudflare vào repo mobile | **cần bạn** |
-| ⬜ | Merge các PR để pipeline chạy lần đầu | **cần bạn** |
+| ✅ | Merge cả 7 PR — pipeline đã chạy thật một vòng | xong |
+| ✅ | Vá 2 CVE mức CRITICAL trong ảnh container | xong |
+| ✅ | 2 secret Cloudflare + Worker `laundry-locker-mobile-web` | xong |
+| ✅ | `https://app.locker-drone.tech` — bản web của app mobile | xong |
+| ⬜ | Bật Dependency graph cho repo backend | **cần bạn** |
+| ⬜ | Chọn ngưỡng cho `container-scan` | **cần bạn quyết** |
 
 ---
 
@@ -477,54 +482,25 @@ Cập nhật 30/08/2026, sau khi cả bốn PR đã merge và pipeline chạy th
 Ba việc ở bản trước (Gmail app password, push code bật auto-deploy, trỏ web/mobile
 về API mới) **đã xong**, không còn phải làm.
 
-### ① Hai secret Cloudflare cho repo mobile — *việc duy nhất đang chặn*
+### ✔ Đã xong — bản web của app mobile đã lên sóng
 
-Repo `smart-laundry-locker-mobile` chưa có secret nào, nên workflow build xong bản
-web rồi **bỏ qua** bước deploy (có chủ ý — xem mục 17). Thêm vào là bước deploy tự
-bật, không phải sửa file nào.
+Hai việc đầu của bản trước không còn phải làm:
 
-Hai giá trị này **giống hệt** hai secret đang dùng ở repo `laundry-locker-frontend`.
-Secret trên GitHub chỉ ghi được chứ không đọc lại được, kể cả với quyền admin — nên
-phải lấy lại từ Cloudflare:
-
-| Secret | Lấy ở đâu |
+| | Kết quả |
 |---|---|
-| `CLOUDFLARE_ACCOUNT_ID` | dash.cloudflare.com → chọn tài khoản → **Workers & Pages** → cột phải, mục *Account ID* → Copy |
-| `CLOUDFLARE_API_TOKEN` | dash.cloudflare.com → góc phải → **My Profile** → **API Tokens** → *Create Token* → mẫu **Edit Cloudflare Workers** → chọn đúng account → Continue → Create. Token chỉ hiện **một lần** |
+| Hai secret Cloudflare | đã thêm vào repo `smart-laundry-locker-mobile` |
+| Worker | `laundry-locker-mobile-web`, 72 file |
+| Địa chỉ | **https://app.locker-drone.tech** |
+| SPA fallback | `/orders` trả 200 (không phải 404) |
+| CORS | preflight 200, đăng nhập từ origin đó trả 200 |
 
-Nếu token cũ còn lưu ở đâu đó thì dùng lại được, khỏi tạo mới.
+Từ giờ push vào `develop`/`main` của repo mobile là bản web tự cập nhật.
 
-Điền bằng dòng lệnh, giá trị không bị lưu vào lịch sử shell:
+> **Token đó đã lộ trong lịch sử chat.** Nên vào Cloudflare tạo token mới rồi thu hồi
+> token cũ, và cập nhật lại secret `CLOUDFLARE_API_TOKEN` ở **cả hai** repo mobile và
+> frontend nếu dùng chung. Account ID không phải bí mật, không cần đổi.
 
-```bash
-gh secret set CLOUDFLARE_ACCOUNT_ID --repo BaoHuy-Dev/smart-laundry-locker-mobile
-gh secret set CLOUDFLARE_API_TOKEN  --repo BaoHuy-Dev/smart-laundry-locker-mobile
-# mỗi lệnh sẽ hỏi giá trị — dán vào rồi Enter
-```
-
-Hoặc qua giao diện: repo → **Settings** → **Secrets and variables** → **Actions** →
-*New repository secret*.
-
-Xong thì chạy lại workflow, không cần commit gì:
-
-```bash
-gh workflow run deploy-web.yml --repo BaoHuy-Dev/smart-laundry-locker-mobile --ref develop
-```
-
-### ② Gắn domain `app.locker-drone.tech` vào Worker
-
-Chỉ làm được **sau** khi ① xong và Worker `laundry-locker-mobile-web` đã tồn tại.
-
-dash.cloudflare.com → **Workers & Pages** → `laundry-locker-mobile-web` → tab
-**Settings** → **Domains & Routes** → *Add* → **Custom domain** → nhập
-`app.locker-drone.tech`. Cloudflare tự tạo bản ghi DNS và cấp chứng chỉ.
-
-Origin này đã nằm sẵn trong `APP_CORS_ALLOWED_ORIGINS` của gateway nên gọi API được
-ngay. Nếu bạn dùng địa chỉ `*.workers.dev` thay vì domain riêng thì phải thêm origin
-đó vào `.env` trên VM rồi `docker compose up -d api-gateway`, nếu không trình duyệt
-sẽ chặn mọi lời gọi API.
-
-### ③ Bật Dependency graph để check `dependency-review` hết đỏ
+### ① Bật Dependency graph để check `dependency-review` hết đỏ
 
 Check này đỏ với thông báo *"Dependency review is not supported on this repository"* —
 là thiếu cài đặt chứ không phải lỗi code. Tôi thử bật qua API nhưng không được, đây
@@ -535,16 +511,16 @@ repo `laundry-locker-microservices` → **Settings** → **Advanced Security**
 
 Check này chỉ chạy trên pull request, không ảnh hưởng gì tới deploy.
 
-### ④ Quyết định về ngưỡng của `container-scan`
+### ② Quyết định về ngưỡng của `container-scan`
 
-Xem mục 17 — cần bạn chọn hướng, không nên để tôi tự quyết.
+Xem mục 17.4 — cần bạn chọn hướng, không nên để tôi tự quyết.
 
-### ⑤ Hai cổng thanh toán thật *(khi nào cần demo VNPay/MoMo)*
+### ③ Hai cổng thanh toán thật *(khi nào cần demo VNPay/MoMo)*
 
 Điền `VNPAY_*` và `MOMO_*` vào `/opt/laundry-locker-microservices/.env` trên VM rồi
 `docker compose up -d payment-service`.
 
-### ⑥ Quản lý chi phí
+### ④ Quản lý chi phí
 
 ```bash
 az vm deallocate -g laundry-locker-rg -n laundry-locker-vm   # ngừng tính tiền compute
@@ -555,7 +531,7 @@ az vm start      -g laundry-locker-rg -n laundry-locker-vm   # bật lại, IP g
 Gói Azure for Students không cho tạo budget alert, nhưng `spendingLimit: On` đang bật
 — hết credit là dịch vụ dừng chứ không phát sinh hoá đơn.
 
-### ⑦ Tuỳ chọn — giảm kích thước gói deploy
+### ⑤ Tuỳ chọn — giảm kích thước gói deploy
 
 Tarball hiện ~962 MB. Đã đo: 962 trong 971 MB là các fat jar mà Dockerfile thật sự
 cần, nên cắt `*/target/` không giúp được bao nhiêu. Muốn nhỏ hơn thật thì phải đổi
@@ -803,3 +779,59 @@ Ba hướng, tôi không tự chọn thay bạn:
 
 Ba lỗi HIGH ở tầng OS (`libcrypto3`, CVE-2026-14456) đến từ ảnh nền, chỉ hết khi ảnh
 nền ra bản mới — không sửa được từ phía POM.
+
+### 17.5 — `cloudflare/wrangler-action` không deploy được Worker chỉ có assets
+
+**Triệu chứng.** Secret đã có, chốt kiểm secret nhận đúng, `flutter test` và
+`build web` đều xanh, riêng bước deploy đỏ:
+
+```
+npm error npx canceled due to missing packages and no YES option: ["wrangler@4.127.1"]
+✘ [ERROR] Missing entry-point
+```
+
+**Nguyên nhân.** Hai lỗi nối nhau. Action chạy `npx` mà thiếu `--yes` nên bị huỷ ngay
+ở bước tải gói; nó rơi về một bản wrangler cũ hơn có sẵn, và bản cũ đó không hiểu cấu
+hình *assets-only* — `wrangler.jsonc` chỉ có `assets.directory`, không có `main` — nên
+đòi entry-point.
+
+**Xử lý.** Gọi wrangler thẳng, ghim phiên bản:
+
+```yaml
+- name: Deploy lên Cloudflare
+  run: npx --yes wrangler@4.114.0 deploy
+  env:
+    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+Repo `laundry-locker-frontend` đã vấp đúng lỗi này và chuyển sang cách gọi này từ
+trước — `wrangler.jsonc` của nó cũng assets-only y hệt và deploy được. Khi một repo
+trong workspace đã có cách làm chạy được cho cùng một việc, đối chiếu sang đó nhanh
+hơn nhiều so với đọc log.
+
+### 17.6 — Gắn custom domain cho Worker bằng API
+
+Không cần vào giao diện Cloudflare. Lấy `zone_id` rồi gọi một lệnh:
+
+```bash
+CF_TOKEN=<token Cloudflare>
+CF_ACCOUNT=<account id>
+AUTH="Authorization: Bearer $CF_TOKEN"
+
+# 1) lấy zone_id của locker-drone.tech
+curl -s -H "$AUTH" "https://api.cloudflare.com/client/v4/zones?name=locker-drone.tech" | python -m json.tool
+
+# 2) gắn hostname vào Worker (thay <zone_id> bằng giá trị vừa lấy)
+curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/domains" -H "$AUTH" -H 'Content-Type: application/json' -d '{"environment":"production","hostname":"app.locker-drone.tech","service":"laundry-locker-mobile-web","zone_id":"<zone_id>"}'
+```
+
+Cloudflare tự tạo bản ghi DNS và cấp chứng chỉ; sau khoảng một phút là truy cập được.
+
+Nghiệm thu nên gồm cả ba mục, vì mỗi mục hỏng theo một kiểu khác nhau:
+
+| Kiểm tra | Ý nghĩa nếu sai |
+|---|---|
+| `GET /` trả 200 và có `flutter_bootstrap` | Worker chưa phục vụ đúng thư mục build |
+| `GET /orders` trả 200 chứ không phải 404 | thiếu `not_found_handling: single-page-application`, F5 giữa chừng sẽ vỡ |
+| preflight `OPTIONS` từ origin đó trả 200 | origin chưa có trong `APP_CORS_ALLOWED_ORIGINS`, app mở được nhưng không gọi được API |
