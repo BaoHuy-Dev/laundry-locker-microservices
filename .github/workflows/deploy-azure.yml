@@ -1,0 +1,111 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: laundry-locker-microservices-azure
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build and test services
+        run: mvn -B clean verify
+
+      # Gói chỉ mang thứ VM thật sự cần: docker-compose.yml, các Dockerfile,
+      # scripts/ và */target/*.jar (Dockerfile chỉ COPY jar, không build từ nguồn).
+      #
+      # Lưu ý về kích thước: gói vẫn ~860 MB vì 12 fat jar chiếm ~960 MB trước nén
+      # (auth-service và notification-service mỗi cái >130 MB do firebase-admin).
+      # Các exclude dưới đây chỉ cắt ~8 MB — phần còn lại là jar, không bỏ được.
+      # Muốn giảm thật sự thì phải dùng Spring Boot layered jar + cache tầng
+      # Docker, hoặc build image trong CI rồi push lên registry (ACR).
+      - name: Package deploy artifact
+        run: |
+          tar \
+            --exclude='./.git' \
+            --exclude='./docs' \
+            --exclude='*/target/classes' \
+            --exclude='*/target/test-classes' \
+            --exclude='*/target/generated-sources' \
+            --exclude='*/target/generated-test-sources' \
+            --exclude='*/target/maven-status' \
+            --exclude='*/target/maven-archiver' \
+            --exclude='*/target/surefire-reports' \
+            --exclude='*/target/*.jar.original' \
+            -czf /tmp/laundry-locker-microservices.tar.gz .
+          sha256sum /tmp/laundry-locker-microservices.tar.gz \
+            > /tmp/laundry-locker-microservices.tar.gz.sha256
+          ls -lh /tmp/laundry-locker-microservices.tar.gz
+
+      - name: Upload deploy artifact checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: laundry-locker-microservices-deploy-checksum
+          path: /tmp/laundry-locker-microservices.tar.gz.sha256
+          retention-days: 14
+
+      - name: Attest deploy artifact provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            /tmp/laundry-locker-microservices.tar.gz
+            /tmp/laundry-locker-microservices.tar.gz.sha256
+
+      - name: Configure SSH
+        env:
+          AZURE_VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+        run: |
+          test -n "$AZURE_VM_HOST"
+          test -n "$AZURE_VM_SSH_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AZURE_VM_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$AZURE_VM_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload artifact
+        env:
+          AZURE_VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
+          AZURE_VM_PORT: ${{ secrets.AZURE_VM_PORT }}
+        run: |
+          test -n "$AZURE_VM_HOST"
+          test -n "$AZURE_VM_USER"
+          PORT="${AZURE_VM_PORT:-22}"
+          scp -P "$PORT" -i ~/.ssh/deploy_key \
+            /tmp/laundry-locker-microservices.tar.gz \
+            /tmp/laundry-locker-microservices.tar.gz.sha256 \
+            "$AZURE_VM_USER@$AZURE_VM_HOST:/tmp/"
+
+      - name: Deploy on Azure VM
+        env:
+          AZURE_VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
+          AZURE_VM_PORT: ${{ secrets.AZURE_VM_PORT }}
+        run: |
+          PORT="${AZURE_VM_PORT:-22}"
+          ssh -p "$PORT" -i ~/.ssh/deploy_key "$AZURE_VM_USER@$AZURE_VM_HOST" \
+            'bash -s' < scripts/deploy-from-artifact.sh
