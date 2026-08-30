@@ -6,8 +6,13 @@ on:
       - main
       - develop
     paths-ignore:
-      - 'infra/azure/DEPLOY-LOG.md'   # tránh vòng lặp: bước ghi nhật ký tự commit file này
+      # Sửa tài liệu không cần build lại và deploy lại — một lần chạy đầy đủ mất
+      # khoảng 20 phút và thay cả bản đang chạy trên VM.
+      - '**.md'                       # gồm luôn infra/azure/DEPLOY-LOG.md mà bước ghi
+                                      # nhật ký tự commit — chốt chống vòng lặp thứ nhất
       - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
