@@ -462,53 +462,89 @@ Gateway ở host `8080`, chỉ Nginx gọi tới.
 
 ### Biến `.env` còn trống
 
-`MAIL_USERNAME`, `MAIL_PASSWORD`, `VNPAY_*`, `MOMO_*`
+`VNPAY_*`, `MOMO_*` — hai cổng thanh toán thật. Thiếu chúng thì luồng ví nội bộ và
+tiền mặt vẫn chạy đủ; chỉ VNPay/MoMo là không gọi được.
+
+`SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` **đã điền** và OTP gửi được thật.
+Tên biến phải có tiền tố `SPRING_` — `docker-compose.yml` đọc đúng tên đó, đặt
+`MAIL_USERNAME` không có tác dụng.
 
 ---
 
 ## 13 — Việc bạn cần làm tiếp
 
-### ① Gmail app password — để gửi OTP *(bắt buộc nếu muốn đăng ký/quên mật khẩu chạy)*
+Cập nhật 30/08/2026, sau khi cả bốn PR đã merge và pipeline chạy thật một vòng.
+Ba việc ở bản trước (Gmail app password, push code bật auto-deploy, trỏ web/mobile
+về API mới) **đã xong**, không còn phải làm.
 
-Vào https://myaccount.google.com/apppasswords (phải bật 2FA trước), tạo một app password 16
-ký tự, rồi:
+### ① Hai secret Cloudflare cho repo mobile — *việc duy nhất đang chặn*
+
+Repo `smart-laundry-locker-mobile` chưa có secret nào, nên workflow build xong bản
+web rồi **bỏ qua** bước deploy (có chủ ý — xem mục 17). Thêm vào là bước deploy tự
+bật, không phải sửa file nào.
+
+Hai giá trị này **giống hệt** hai secret đang dùng ở repo `laundry-locker-frontend`.
+Secret trên GitHub chỉ ghi được chứ không đọc lại được, kể cả với quyền admin — nên
+phải lấy lại từ Cloudflare:
+
+| Secret | Lấy ở đâu |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | dash.cloudflare.com → chọn tài khoản → **Workers & Pages** → cột phải, mục *Account ID* → Copy |
+| `CLOUDFLARE_API_TOKEN` | dash.cloudflare.com → góc phải → **My Profile** → **API Tokens** → *Create Token* → mẫu **Edit Cloudflare Workers** → chọn đúng account → Continue → Create. Token chỉ hiện **một lần** |
+
+Nếu token cũ còn lưu ở đâu đó thì dùng lại được, khỏi tạo mới.
+
+Điền bằng dòng lệnh, giá trị không bị lưu vào lịch sử shell:
 
 ```bash
-ssh -i ~/.ssh/laundry_azure_rsa azureuser@20.24.196.177
-sudo nano /opt/laundry-locker-microservices/.env
-#   MAIL_USERNAME=email-cua-ban@gmail.com
-#   MAIL_PASSWORD=<16 ký tự, không có dấu cách>
-cd /opt/laundry-locker-microservices && docker compose up -d auth-service
+gh secret set CLOUDFLARE_ACCOUNT_ID --repo BaoHuy-Dev/smart-laundry-locker-mobile
+gh secret set CLOUDFLARE_API_TOKEN  --repo BaoHuy-Dev/smart-laundry-locker-mobile
+# mỗi lệnh sẽ hỏi giá trị — dán vào rồi Enter
 ```
 
-> Tôi **không** dùng lại mật khẩu trong `env.txt` cũ vì đã khuyến nghị bạn rotate nó — file
-> đó nằm plaintext ngoài mọi repo.
+Hoặc qua giao diện: repo → **Settings** → **Secrets and variables** → **Actions** →
+*New repository secret*.
 
-### ② Bật auto-deploy — cần push code lên GitHub
+Xong thì chạy lại workflow, không cần commit gì:
 
-Hiện toàn bộ công việc đang ở nhánh local `chore/cleanup-unused-assets-and-deps`:
-**2 commit + 23 file sửa + thư mục `infra/` + `deploy-azure.yml`** — chưa push.
+```bash
+gh workflow run deploy-web.yml --repo BaoHuy-Dev/smart-laundry-locker-mobile --ref develop
+```
 
-Workflow chỉ chạy khi file `deploy-azure.yml` có trên GitHub. Sau khi merge vào `develop`,
-mỗi lần push sẽ tự build → đẩy lên VM → deploy → rollback nếu hỏng.
+### ② Gắn domain `app.locker-drone.tech` vào Worker
 
-4 secret bạn đã thêm rồi (`AZURE_VM_HOST/USER/SSH_KEY/PORT`) nên chỉ còn thiếu code.
+Chỉ làm được **sau** khi ① xong và Worker `laundry-locker-mobile-web` đã tồn tại.
 
-### ③ Web admin và mobile — trỏ về API mới
+dash.cloudflare.com → **Workers & Pages** → `laundry-locker-mobile-web` → tab
+**Settings** → **Domains & Routes** → *Add* → **Custom domain** → nhập
+`app.locker-drone.tech`. Cloudflare tự tạo bản ghi DNS và cấp chứng chỉ.
 
-- **Web admin:** `fe/.env` đang là `http://localhost:18080`. Đổi thành
-  `https://api.locker-drone.tech` **trước khi** `npm run build && npx wrangler deploy`,
-  nếu không bản production sẽ gọi localhost.
-- **Mobile:** sửa `.env` rồi **bắt buộc** chạy
-  `dart run build_runner build --delete-conflicting-outputs` (envied nướng giá trị vào
-  `env_config.g.dart`), sau đó `flutter clean && flutter build apk --release`.
+Origin này đã nằm sẵn trong `APP_CORS_ALLOWED_ORIGINS` của gateway nên gọi API được
+ngay. Nếu bạn dùng địa chỉ `*.workers.dev` thay vì domain riêng thì phải thêm origin
+đó vào `.env` trên VM rồi `docker compose up -d api-gateway`, nếu không trình duyệt
+sẽ chặn mọi lời gọi API.
 
-### ④ Tuỳ chọn — giảm kích thước gói deploy
+### ③ Bật Dependency graph để check `dependency-review` hết đỏ
 
-Tarball hiện **864 MB** vì đóng gói cả `*/target/` trong khi Dockerfile chỉ cần
-`target/*.jar`. Mỗi lần deploy đẩy chừng đó qua mạng.
+Check này đỏ với thông báo *"Dependency review is not supported on this repository"* —
+là thiếu cài đặt chứ không phải lỗi code. Tôi thử bật qua API nhưng không được, đây
+là công tắc trong giao diện:
 
-### ⑤ Quản lý chi phí
+repo `laundry-locker-microservices` → **Settings** → **Advanced Security**
+(hoặc *Code security and analysis*) → **Dependency graph** → *Enable*.
+
+Check này chỉ chạy trên pull request, không ảnh hưởng gì tới deploy.
+
+### ④ Quyết định về ngưỡng của `container-scan`
+
+Xem mục 17 — cần bạn chọn hướng, không nên để tôi tự quyết.
+
+### ⑤ Hai cổng thanh toán thật *(khi nào cần demo VNPay/MoMo)*
+
+Điền `VNPAY_*` và `MOMO_*` vào `/opt/laundry-locker-microservices/.env` trên VM rồi
+`docker compose up -d payment-service`.
+
+### ⑥ Quản lý chi phí
 
 ```bash
 az vm deallocate -g laundry-locker-rg -n laundry-locker-vm   # ngừng tính tiền compute
@@ -516,7 +552,52 @@ az vm start      -g laundry-locker-rg -n laundry-locker-vm   # bật lại, IP g
 ```
 
 Ước tính ~40 USD/tháng (VM ~30 + đĩa ~5 + IP ~3). Credit sinh viên 100 USD ≈ 2,5 tháng.
-Nên đặt **budget alert** ở mức 50 USD trong *Cost Management*.
+Gói Azure for Students không cho tạo budget alert, nhưng `spendingLimit: On` đang bật
+— hết credit là dịch vụ dừng chứ không phát sinh hoá đơn.
+
+### ⑦ Tuỳ chọn — giảm kích thước gói deploy
+
+Tarball hiện ~962 MB. Đã đo: 962 trong 971 MB là các fat jar mà Dockerfile thật sự
+cần, nên cắt `*/target/` không giúp được bao nhiêu. Muốn nhỏ hơn thật thì phải đổi
+cách đóng gói (build ảnh trong CI rồi push registry), là việc lớn hơn hẳn.
+
+---
+
+## 14 — Vận hành hằng ngày
+
+```bash
+ssh -i ~/.ssh/laundry_azure_rsa azureuser@20.24.196.177
+cd /opt/laundry-locker-microservices
+
+docker compose ps                      # 13 container
+docker compose logs -f api-gateway
+docker compose restart order-service
+docker compose up -d --build           # deploy tay
+
+# Nối DB từ máy bạn — qua SSH tunnel, không mở port
+ssh -i ~/.ssh/laundry_azure_rsa -L 15432:127.0.0.1:15432 -N azureuser@20.24.196.177
+#   rồi trỏ DBeaver/psql vào localhost:15432, user postgres
+
+# Sao lưu
+ssh -i ~/.ssh/laundry_azure_rsa azureuser@20.24.196.177 \
+  'docker exec ll-ms-postgres pg_dumpall -U postgres' > backup-$(date +%Y%m%d).sql
+
+# Quay lại bản deploy trước
+cd /opt && sudo rm -rf laundry-locker-microservices \
+  && sudo mv laundry-locker-microservices.previous laundry-locker-microservices \
+  && cd laundry-locker-microservices && docker compose up -d --build
+```
+
+### Sự cố thường gặp
+
+| Triệu chứng | Xử lý |
+|---|---|
+| `502 Bad Gateway` | `docker compose ps` — gateway phải map `0.0.0.0:8080`. Thiếu thì thêm `API_GATEWAY_PORT=8080` vào `.env` |
+| Web admin trắng | `fe/.env` còn localhost lúc build → sửa, build lại, deploy lại |
+| Lỗi CORS | Thêm domain vào `APP_CORS_ALLOWED_ORIGINS` rồi `docker compose up -d api-gateway` |
+| Mobile gọi URL cũ | Chưa chạy `build_runner` sau khi đổi `.env` |
+| Login trả 500 ngay sau deploy | Feign cold-start — thử lại sau ~30 giây |
+| Deploy timeout | `docker compose logs discovery-server` xem service nào không đăng ký được |
 
 ---
 
@@ -589,38 +670,136 @@ Bản deploy: Cloudflare Worker `laundry-locker-mobile-web`, cấu hình trong `
 
 ---
 
-## 14 — Vận hành hằng ngày
+## 17 — Ngày merge: bốn lỗi đã lộ ra và cách xử lý
+
+Ghi lại ngày 30/08/2026, lúc merge bốn PR và cho pipeline chạy thật lần đầu. Ba lỗi
+đầu là lỗi trong chính phần tự động hoá tôi viết ở mục 15 — chúng chỉ lộ ra khi chạy
+thật, không cách nào thấy được lúc viết.
+
+### 17.1 — `paths` và `paths-ignore` không được đứng cạnh nhau
+
+**Triệu chứng.** Merge PR #52 xong, workflow frontend kết thúc **failure** với **0 job**
+và không có log nào để đọc. Không có bước nào đỏ vì không bước nào từng chạy.
+
+**Nguyên nhân.** GitHub Actions không cho một event khai báo đồng thời `paths` và
+`paths-ignore`; workflow bị từ chối ngay lúc khởi động. Tôi thêm `paths-ignore` để
+chống vòng lặp khi job ghi nhật ký tự commit, mà quên rằng `paths` đã có sẵn ở đó.
+
+**Xử lý.** Bỏ `paths-ignore`. Hoá ra còn **thừa**: `DEPLOY-LOG.md` nằm ở gốc repo nên
+vốn đã không khớp `paths` (`fe/**`, `landingPage/**`, workflow). Chốt chống vòng lặp
+thứ hai là `[skip ci]` vẫn còn nguyên. Backend và mobile chỉ dùng `paths-ignore` một
+mình nên không dính.
+
+> **Cách nhận ra.** Run failure mà **0 job** thì gần như luôn là lỗi cú pháp hoặc lỗi
+> cấu hình trigger, không phải lỗi code. Đừng mất công đọc log — không có log.
+
+### 17.2 — Một dấu `\` làm hỏng bước ghi nhật ký của mobile
+
+**Triệu chứng.** Bước có `if: always()` nên sẽ chạy và đỏ **kể cả khi deploy thành công**.
+
+**Nguyên nhân.** Dòng dựng bản ghi viết `cut -c1-7\)`. Dấu `\` khiến `$( )` không đóng
+đúng chỗ; bash báo `syntax error near unexpected token '('`.
+
+**Xử lý.** Bỏ dấu `\`. Sau đó kiểm cả ba workflow bằng cách rút từng khối `run:` ra
+file rồi chạy `bash -n` — cả ba đều sạch. Đáng làm thành thói quen trước khi push
+workflow, vì lỗi cú pháp bash trong YAML không có gì bắt được lúc viết:
 
 ```bash
-ssh -i ~/.ssh/laundry_azure_rsa azureuser@20.24.196.177
-cd /opt/laundry-locker-microservices
+python - <<'EOF'
+import yaml, io, re, subprocess, tempfile, os, shutil
 
-docker compose ps                      # 13 container
-docker compose logs -f api-gateway
-docker compose restart order-service
-docker compose up -d --build           # deploy tay
+# Tren Windows, 'bash' goi tu Python thuong tro vao WSL chu khong phai Git Bash.
+BASH = shutil.which('bash') or r'C:\Program Files\Git\usr\bin\bash.exe'
+if 'System32' in BASH or 'WindowsApps' in BASH:
+    BASH = r'C:\Program Files\Git\usr\bin\bash.exe'
 
-# Nối DB từ máy bạn — qua SSH tunnel, không mở port
-ssh -i ~/.ssh/laundry_azure_rsa -L 15432:127.0.0.1:15432 -N azureuser@20.24.196.177
-#   rồi trỏ DBeaver/psql vào localhost:15432, user postgres
-
-# Sao lưu
-ssh -i ~/.ssh/laundry_azure_rsa azureuser@20.24.196.177 \
-  'docker exec ll-ms-postgres pg_dumpall -U postgres' > backup-$(date +%Y%m%d).sql
-
-# Quay lại bản deploy trước
-cd /opt && sudo rm -rf laundry-locker-microservices \
-  && sudo mv laundry-locker-microservices.previous laundry-locker-microservices \
-  && cd laundry-locker-microservices && docker compose up -d --build
+d = yaml.safe_load(io.open('.github/workflows/deploy.yml', encoding='utf-8'))
+for job in d['jobs'].values():
+    for st in job.get('steps', []):
+        if not st.get('run'): continue
+        body = re.sub(r'\$\{\{[^}]*\}\}', 'XX', st['run'])   # thay ${{ }} bằng chuỗi giả
+        f = tempfile.NamedTemporaryFile('w', suffix='.sh', delete=False,
+                                        encoding='utf-8', newline='\n')
+        f.write(body); f.close()
+        r = subprocess.run([BASH, '-n', f.name], capture_output=True, text=True)
+        os.unlink(f.name)
+        print(st.get('name'), 'ok' if r.returncode == 0 else 'LỖI: ' + r.stderr.strip())
+EOF
 ```
 
-### Sự cố thường gặp
+### 17.3 — Thiếu secret thì bỏ qua, đừng đỏ
 
-| Triệu chứng | Xử lý |
-|---|---|
-| `502 Bad Gateway` | `docker compose ps` — gateway phải map `0.0.0.0:8080`. Thiếu thì thêm `API_GATEWAY_PORT=8080` vào `.env` |
-| Web admin trắng | `fe/.env` còn localhost lúc build → sửa, build lại, deploy lại |
-| Lỗi CORS | Thêm domain vào `APP_CORS_ALLOWED_ORIGINS` rồi `docker compose up -d api-gateway` |
-| Mobile gọi URL cũ | Chưa chạy `build_runner` sau khi đổi `.env` |
-| Login trả 500 ngay sau deploy | Feign cold-start — thử lại sau ~30 giây |
-| Deploy timeout | `docker compose logs discovery-server` xem service nào không đăng ký được |
+Repo mobile chưa có secret Cloudflare nên bước deploy chắc chắn hỏng, kéo cả run đỏ
+dù test và build web đều tốt — một run đỏ không nói lên điều gì thì chẳng ai đọc nữa.
+
+Workflow nay kiểm tra trước rồi bỏ qua **riêng** bước deploy. Trang tóm tắt và
+`DEPLOY-LOG.md` ghi rõ *"build xong, CHƯA deploy — thiếu secret Cloudflare"* để không
+nhầm với deploy thật. Thêm secret vào là bước deploy tự bật.
+
+Secret không dùng được trực tiếp trong `if:` của step, phải ánh xạ qua output trước:
+
+```yaml
+- name: Có đủ secret Cloudflare chưa?
+  id: co_secret
+  env:
+    TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  run: |
+    if [ -n "$TOKEN" ]; then echo 'du=true'  >> "$GITHUB_OUTPUT"
+    else                     echo 'du=false' >> "$GITHUB_OUTPUT"; fi
+
+- name: Deploy lên Cloudflare
+  if: steps.co_secret.outputs.du == 'true'
+```
+
+### 17.4 — Hai CVE mức CRITICAL trong ảnh container
+
+Workflow `backend-security` đỏ ở cả 10 service **từ 26/07**, không liên quan gì tới
+đợt dọn dẹp. Trivy chặn vì hai thư viện, cả hai đều vào qua đường transitive nên không
+service nào khai báo trực tiếp:
+
+| Thư viện | CVE | Đang dùng | Đã ghim | Từ đâu vào |
+|---|---|---|---|---|
+| `org.bouncycastle:bcprov-jdk18on` | CVE-2025-14813 | 1.80 | **1.80.2** | `spring-cloud-context` |
+| `org.apache.tomcat.embed:*` | CVE-2026-41293 | 10.1.54 | **10.1.55** | Spring Boot 3.5.14 |
+
+Cả hai ghim ở `dependencyManagement` / property của POM gốc. Property `tomcat.version`
+nâng cùng lúc cả ba artifact `embed-core`, `embed-el`, `embed-websocket` — đúng con số
+*"CRITICAL: 3"* Trivy đếm ở mỗi service dùng MVC (api-gateway chạy WebFlux/Netty nên
+vốn không dính).
+
+Chọn bản vá nhỏ nhất trong các bản đã sửa CVE, cùng dòng với bản Spring đang dựa vào,
+để hạn chế rủi ro hồi quy. `mvn -B clean verify` SUCCESS cả 13 module, và đã kiểm tra
+lại trong container đang chạy trên VM:
+
+```bash
+docker exec ll-ms-user-service sh -lc \
+  'unzip -l /app/app.jar | grep -E "bcprov|tomcat-embed"'
+#   BOOT-INF/lib/tomcat-embed-core-10.1.55.jar
+#   BOOT-INF/lib/tomcat-embed-websocket-10.1.55.jar
+#   BOOT-INF/lib/tomcat-embed-el-10.1.55.jar
+#   BOOT-INF/lib/bcprov-jdk18on-1.80.2.jar
+```
+
+**Kết quả:** CRITICAL từ 3 mỗi service xuống **0 trên toàn bộ 11 service**.
+
+**Nhưng `container-scan` vẫn đỏ, và đây là chỗ cần bạn quyết.** Workflow đặt
+`severity: HIGH,CRITICAL` với `exit-code: 1`, trong khi mỗi ảnh còn 14–28 lỗi mức HIGH:
+
+| Ảnh | HIGH còn lại | | Ảnh | HIGH còn lại |
+|---|---|---|---|---|
+| `notification-service` | 28 | | `iot`/`locker`/`order`/`payment` | 17 |
+| `auth-service` | 25 | | `loyalty`/`store`/`user` | 14 |
+| `api-gateway` | 24 | | `discovery-server` | 10 |
+| | | | *(mọi ảnh)* tầng OS nền | 3 |
+
+Ba hướng, tôi không tự chọn thay bạn:
+
+1. **Hạ ngưỡng xuống `CRITICAL`.** Check xanh ngay, vẫn chặn được lỗi nghiêm trọng
+   nhất. Nhanh nhất, nhưng bỏ qua khá nhiều thứ.
+2. **Giữ ngưỡng, xử lý dần số HIGH.** Đúng đắn nhất nhưng là việc dài: phần lớn là
+   transitive, nâng lên có thể vỡ tương thích, phải build và test lại từng bước.
+3. **Giữ ngưỡng nhưng bỏ `exit-code: 1`.** Kết quả vẫn hiện ở tab Security để theo dõi
+   mà không chặn PR. Dung hoà, nhưng dễ thành không ai nhìn nữa.
+
+Ba lỗi HIGH ở tầng OS (`libcrypto3`, CVE-2026-14456) đến từ ảnh nền, chỉ hết khi ảnh
+nền ra bản mới — không sửa được từ phía POM.
