@@ -44,6 +44,16 @@
         <!-- Ghim vá CVE-2026-41293 (CRITICAL). Spring Boot 3.5.14 mang tomcat 10.1.54;
              ghi đè property này nâng cả embed-core, embed-el và embed-websocket. -->
         <tomcat.version>10.1.55</tomcat.version>
+        <!-- Vá các CVE mức HIGH mà Trivy chặn. Tất cả đều là bản vá CÙNG DÒNG với
+             bản Spring Boot 3.5.14 mang theo, nên chỉ là nâng patch chứ không đổi
+             minor. Ghim ở đây thay vì từng service vì mọi thư viện dưới đây đều vào
+             qua đường transitive, không service nào khai báo trực tiếp. -->
+        <netty.version>4.1.136.Final</netty.version>              <!-- 4.1.132: 12 CVE, gồm netty-codec/-http/-http2/-dns, handler, resolver-dns -->
+        <jackson-bom.version>2.21.4</jackson-bom.version>         <!-- 2.21.2: 3 CVE ở jackson-core và jackson-databind -->
+        <spring-framework.version>6.2.19</spring-framework.version> <!-- 6.2.18: 3 CVE ở spring-expression, -webmvc, -webflux -->
+        <spring-data-bom.version>2025.0.12</spring-data-bom.version> <!-- release train của spring-data-commons 3.5.12 -->
+        <postgresql.version>42.7.12</postgresql.version>          <!-- 42.7.10: 3 CVE -->
+        <micrometer.version>1.15.12</micrometer.version>          <!-- 1.15.11: 1 CVE -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
