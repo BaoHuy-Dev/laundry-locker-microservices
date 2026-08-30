@@ -41,6 +41,9 @@
         <!-- Ghim vá CVE-2025-14813 (CRITICAL). spring-cloud-context kéo bcprov 1.80
              về theo đường transitive; 1.80.2 là bản vá cùng dòng. -->
         <bouncycastle.version>1.80.2</bouncycastle.version>
+        <!-- Ghim vá CVE-2026-41293 (CRITICAL). Spring Boot 3.5.14 mang tomcat 10.1.54;
+             ghi đè property này nâng cả embed-core, embed-el và embed-websocket. -->
+        <tomcat.version>10.1.55</tomcat.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
