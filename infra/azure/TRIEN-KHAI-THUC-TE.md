@@ -26,8 +26,13 @@ thực tế**: có cả những chỗ đã vấp và cách xử lý.
 | ✅ | Build + deploy 12 service | xong |
 | ✅ | Seed dữ liệu đầy đủ 36 bảng | xong |
 | ✅ | 4 secret `AZURE_VM_*` trên GitHub | xong (bạn làm) |
-| ⬜ | Gmail app password (để gửi OTP) | **cần bạn** |
-| ⬜ | Push nhánh + PR để bật auto-deploy | **cần bạn quyết** |
+| ✅ | Gmail app password — OTP gửi được | xong |
+| ✅ | Push nhánh + mở PR ở cả 4 repo | xong |
+| ✅ | CI/CD: push nhánh chính là tự deploy cả 3 phần | xong |
+| ✅ | Mọi lần deploy tự ghi vào `DEPLOY-LOG.md` | xong |
+| ✅ | App mobile xem được trên trình duyệt (Flutter Web) | xong |
+| ⬜ | Thêm 2 secret Cloudflare vào repo mobile | **cần bạn** |
+| ⬜ | Merge các PR để pipeline chạy lần đầu | **cần bạn** |
 
 ---
 
@@ -512,6 +517,75 @@ az vm start      -g laundry-locker-rg -n laundry-locker-vm   # bật lại, IP g
 
 Ước tính ~40 USD/tháng (VM ~30 + đĩa ~5 + IP ~3). Credit sinh viên 100 USD ≈ 2,5 tháng.
 Nên đặt **budget alert** ở mức 50 USD trong *Cost Management*.
+
+---
+
+## 15 — Tự động hoá: push là mọi thứ tự cập nhật
+
+Từ 30/08/2026, **push vào nhánh chính là toàn bộ hệ thống tự cập nhật**. Không còn bước tay nào.
+
+| Repo | Workflow | Kích hoạt | Làm gì |
+|---|---|---|---|
+| `laundry-locker-microservices` | `deploy-azure.yml` | push `main`/`develop` | `mvn clean verify` → đóng gói → SCP lên VM → `docker compose up -d --build` → chờ Eureka đủ 10 service → **nghiệm thu qua domain** |
+| `laundry-locker-frontend` | `deploy.yml` | push `main` | build + deploy web admin và landing page lên Cloudflare Worker |
+| `smart-laundry-locker-mobile` | `deploy-web.yml` | push `main`/`develop` | `flutter test` → `flutter build web` → deploy lên Cloudflare Worker |
+
+### Nghiệm thu tự động, không chỉ "container đã Up"
+
+Sau khi deploy, workflow backend gọi đúng đường mà client đi (domain → TLS → Nginx → gateway):
+
+| Kiểm tra | Mong đợi |
+|---|---|
+| `/actuator/health` | 200 |
+| `/api/lockers` (public) | 200 |
+| `/api/admin/users` không token | 401 |
+| `/user-service/api/admin/users` (đường vòng) | 404 |
+
+Một mục sai là job đỏ — và deploy script trên VM đã tự rollback về bản `.previous` trước đó.
+
+### Mọi lần deploy đều được ghi lại
+
+Hai nơi, đều tự động:
+
+1. **Trang Actions của từng run** — bảng tóm tắt: commit, người đẩy, kết quả nghiệm thu, và
+   khi thất bại thì liệt kê nguyên nhân thường gặp kèm lệnh chẩn đoán.
+2. **File trong repo** — `infra/azure/DEPLOY-LOG.md` (backend), `DEPLOY-LOG.md` (frontend và
+   mobile web). Bản ghi mới nhất nằm trên cùng, có link tới commit và tới run. Đây là chỗ để
+   theo dõi lịch sử mà không cần mở tab Actions.
+
+Workflow tự commit file nhật ký với `[skip ci]`, và chính file đó nằm trong `paths-ignore`,
+nên không có vòng lặp.
+
+---
+
+## 16 — Xem app mobile trên trình duyệt
+
+`smart-laundry-locker-mobile` giờ build được cho web. Giao diện **giống hệt** bản Android vì
+Flutter dùng renderer **CanvasKit** — nó tự vẽ toàn bộ widget lên canvas thay vì dịch sang
+HTML/CSS, nên không có chuyện "gần giống".
+
+```bash
+# xem ngay tại máy, không cần máy ảo
+cd smart-laundry-locker-mobile
+flutter build web --release
+cd build/web && python -m http.server 8899
+# mở http://localhost:8899
+```
+
+Bản deploy: Cloudflare Worker `laundry-locker-mobile-web`, cấu hình trong `wrangler.jsonc`.
+
+**Ba điều cần biết:**
+
+- **CORS.** Trình duyệt chặn mọi lời gọi API từ origin không nằm trong
+  `APP_CORS_ALLOWED_ORIGINS` của gateway. Đã thêm `https://app.locker-drone.tech`. Nếu bạn
+  dùng địa chỉ `*.workers.dev` thì phải thêm origin đó vào `.env` trên VM rồi
+  `docker compose up -d api-gateway`.
+- **Tính năng cần phần cứng** không chạy trên web: quét QR bằng camera, vân tay
+  (`local_auth`), thông báo đẩy nền. Chúng dùng plugin không có bản web nên sẽ báo lỗi khi
+  gọi — phần còn lại của app hoạt động bình thường.
+- **`dart:io`.** 13 file trong `lib/` có import nó, nhưng không file nào đi tới được từ
+  `main.dart` nên build web sạch. Nếu sau này thêm màn hình mới dùng `File`, build web sẽ vỡ —
+  dùng `XFile`/`Uint8List` thay thế.
 
 ---
 
