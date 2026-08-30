@@ -36,8 +36,9 @@ thực tế**: có cả những chỗ đã vấp và cách xử lý.
 | ✅ | Vá 2 CVE mức CRITICAL trong ảnh container | xong |
 | ✅ | 2 secret Cloudflare + Worker `laundry-locker-mobile-web` | xong |
 | ✅ | `https://app.locker-drone.tech` — bản web của app mobile | xong |
-| ⬜ | Bật Dependency graph cho repo backend | **cần bạn** |
-| ⬜ | Chọn ngưỡng cho `container-scan` | **cần bạn quyết** |
+| ✅ | Bật Dependency graph — `dependency-review` chuyển sang pass | xong (bạn làm) |
+| ✅ | Vá CVE HIGH: lỗi tầng jar mỗi ảnh từ 14–28 xuống 0–3 | xong |
+| ⬜ | 3 thư viện còn lại phải nhảy minor (amqp-client, httpcore5, grpc) | **cần bạn quyết** |
 
 ---
 
@@ -500,20 +501,52 @@ Từ giờ push vào `develop`/`main` của repo mobile là bản web tự cập
 > token cũ, và cập nhật lại secret `CLOUDFLARE_API_TOKEN` ở **cả hai** repo mobile và
 > frontend nếu dùng chung. Account ID không phải bí mật, không cần đổi.
 
-### ① Bật Dependency graph để check `dependency-review` hết đỏ
+### ✔ Đã xong — Dependency graph và phần lớn CVE mức HIGH
 
-Check này đỏ với thông báo *"Dependency review is not supported on this repository"* —
-là thiếu cài đặt chứ không phải lỗi code. Tôi thử bật qua API nhưng không được, đây
-là công tắc trong giao diện:
+**Dependency graph** đã bật. Check `dependency-review` chuyển từ đỏ sang **pass**, và
+SBOM của repo đọc được qua API với 51 gói.
 
-repo `laundry-locker-microservices` → **Settings** → **Advanced Security**
-(hoặc *Code security and analysis*) → **Dependency graph** → *Enable*.
+**CVE mức HIGH** đã vá phần lớn. Sau khi đo lại thì chúng không rải rác như tưởng ban
+đầu mà dồn vào vài họ thư viện, nên chỉ cần tám property ở POM gốc — xem mục 17.7.
+Kết quả trên mỗi ảnh:
 
-Check này chỉ chạy trên pull request, không ảnh hưởng gì tới deploy.
+| | Trước | Sau |
+|---|---|---|
+| Lỗi tầng jar | 14–28 | **0–3** |
+| Lỗi tầng OS (ảnh nền) | 3 | 3 |
+| Cặp (thư viện, CVE) sửa được | 23 | **6** |
 
-### ② Quyết định về ngưỡng của `container-scan`
+### ① Ba thư viện còn lại — cần bạn quyết vì phải nhảy minor
 
-Xem mục 17.4 — cần bạn chọn hướng, không nên để tôi tự quyết.
+Sáu lỗi còn lại nằm ở ba thư viện, và khác với đợt vừa rồi, không có bản vá nào cùng
+dòng — đều phải nhảy minor nên rủi ro hồi quy cao hơn hẳn:
+
+| Thư viện | Đang dùng | Bản vá | CVE |
+|---|---|---|---|
+| `com.rabbitmq:amqp-client` | 5.25.0 | 5.33.0 | 3 |
+| `org.apache.httpcomponents.core5:httpcore5` (+`-h2`) | 5.3.6 | 5.4.3 | 2 |
+| `io.grpc:grpc-netty-shaded` | 1.69.0 | 1.75.0 | 1 |
+
+`amqp-client` là thứ đáng cân nhắc nhất: nó là đường truyền của toàn bộ domain event
+giữa các service. Nhảy 8 bản minor thì phải kiểm kỹ hơn là chỉ chạy unit test.
+
+`grpc-netty-shaded` vào qua Firebase Admin SDK, không do Spring Boot quản lý version,
+nên phải khai báo thẳng trong `dependencyManagement`.
+
+Còn `libcrypto3` (CVE-2026-14456) nằm ở tầng OS của ảnh nền Alpine — không sửa được
+từ POM, chỉ hết khi ảnh nền ra bản mới.
+
+### ② Hoặc hạ ngưỡng của `container-scan`
+
+Nếu chưa muốn động vào ba thư viện trên, sửa `.github/workflows/backend-security.yml`:
+
+```yaml
+severity: CRITICAL        # thay cho HIGH,CRITICAL
+```
+
+Check xanh ngay vì CRITICAL đã về 0. Đánh đổi: bỏ qua sáu lỗi HIGH nói trên. Cách dung
+hoà là giữ ngưỡng nhưng bỏ `exit-code: "1"` — kết quả vẫn hiện ở tab Security để theo
+dõi mà không chặn PR.
 
 ### ③ Hai cổng thanh toán thật *(khi nào cần demo VNPay/MoMo)*
 
@@ -835,3 +868,42 @@ Nghiệm thu nên gồm cả ba mục, vì mỗi mục hỏng theo một kiểu 
 | `GET /` trả 200 và có `flutter_bootstrap` | Worker chưa phục vụ đúng thư mục build |
 | `GET /orders` trả 200 chứ không phải 404 | thiếu `not_found_handling: single-page-application`, F5 giữa chừng sẽ vỡ |
 | preflight `OPTIONS` từ origin đó trả 200 | origin chưa có trong `APP_CORS_ALLOWED_ORIGINS`, app mở được nhưng không gọi được API |
+
+### 17.7 — Đọc số liệu quét trước khi kết luận là khó
+
+Ban đầu tôi nhìn cột *Total* của Trivy — 14 đến 28 lỗi HIGH mỗi ảnh — rồi kết luận việc
+xử lý là "dài và dễ vỡ tương thích". **Sai.** Con số đó đếm theo lượt xuất hiện chứ
+không theo thư viện. Khi gom lại thì 23 lỗi sửa được chỉ nằm ở vài họ, và mọi bản vá
+đều **cùng dòng** với bản Spring Boot đang dùng:
+
+| Property | Từ | Lên | CVE dọn được |
+|---|---|---|---|
+| `netty.version` | 4.1.132.Final | 4.1.136.Final | 12 |
+| `jackson-bom.version` | 2.21.2 | 2.21.4 | 3 |
+| `spring-framework.version` | 6.2.18 | 6.2.19 | 3 |
+| `postgresql.version` | 42.7.10 | 42.7.12 | 3 |
+| `spring-data-bom.version` | 2025.0.11 | 2025.0.12 | 1 |
+| `micrometer.version` | 1.15.11 | 1.15.12 | 1 |
+
+Tám dòng POM, hai vòng build. Kết quả: lỗi tầng jar mỗi ảnh từ 14–28 xuống **0–3**.
+
+**Ba điều rút ra.**
+
+**Gom theo thư viện trước khi ước lượng công sức.** Trivy in tên thư viện ở dòng đầu mỗi
+nhóm rồi để trống các dòng sau, nên đếm thô sẽ ra bức tranh sai lệch — theo cả hai
+hướng. Bộ đếm đầu tiên của tôi bỏ qua các dòng trống đó và chỉ thấy 2 thư viện; bộ đếm
+sửa lại phải mang tên thư viện **và** mức độ xuống các dòng dưới.
+
+**Tra tên property của Spring Boot, đừng đoán.** Chúng không trùng tên artifact:
+`spring-data-bom.version` nhận `2025.0.12` (tên release train) chứ không phải `3.5.12`
+của `spring-data-commons`. Đọc thẳng từ BOM:
+
+```bash
+BOM=~/.m2/repository/org/springframework/boot/spring-boot-dependencies/3.5.14/spring-boot-dependencies-3.5.14.pom
+grep -oE "<(netty|jackson-bom|spring-framework|postgresql|spring-data-bom|micrometer)[.]version>[^<]*<" "$BOM"
+```
+
+**Quét lại sau khi vá là bắt buộc, không phải cho yên tâm.** Vòng quét thứ hai cho thấy
+bản ghim đã ăn đúng — netty 4.1.135 và postgresql 42.7.11 nằm trong ảnh — nhưng vẫn còn
+CVE mới hơn cần thêm một nấc patch nữa, lên 4.1.136 và 42.7.12. Dừng sau vòng một thì
+đã tưởng là xong.
