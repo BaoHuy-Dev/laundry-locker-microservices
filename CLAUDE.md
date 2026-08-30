@@ -106,10 +106,16 @@ JWT — they trust the `X-User-Id`, `X-User-Email`, `X-User-Roles`, `X-Correlati
 
 Role-path mapping:
 
+Canonical role set: `CUSTOMER` · `ADMIN` (web console) · `TECHNICIAN` (locker upkeep + IoT) ·
+`MAINTENANCE` (drone team). `MANAGER` and `STAFF` were retired — do not reintroduce them.
+
 - `/api/admin/**` → `ADMIN` only
-- `/api/manage/**` → `MANAGER` or `ADMIN`
-- `/api/maintenance/**` → `MAINTENANCE` or `ADMIN`
+- `/api/maintenance/drone**` → `MAINTENANCE` or `ADMIN` (drone team surface)
+- `/api/maintenance/**` → `MAINTENANCE`, `TECHNICIAN` or `ADMIN`
+- `/api/technician/**` → `TECHNICIAN` or `ADMIN`
 - `/internal/**` → blocked externally (403)
+- `/{service-id}/**` → 404. The discovery locator is disabled; this shape used to bypass
+  both the `/internal` block and the RBAC above.
 
 ## Database & Migrations
 
@@ -224,7 +230,7 @@ Current investment priority: healthcheck + deploy runbook, Postgres backups, Rab
 | `baohuy2k12k4@gmail.com`             | ADMIN       |
 | `nqbhuy2004nt@gmail.com`             | CUSTOMER    |
 | `se180211nguyenquocbaohuy@gmail.com` | MAINTENANCE |
-| `huynqbse180211@fpt.edu.vn`          | MANAGER     |
+| `huynqbse180211@fpt.edu.vn`          | TECHNICIAN  |
 
 ## RabbitMQ Events
 
