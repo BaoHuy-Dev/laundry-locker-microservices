@@ -999,6 +999,59 @@ select count(*) from user_profiles;            -- gio chay duoc
 Trong DBeaver: mở connection → tab **PostgreSQL** → bật **Show all databases** để nhảy
 qua lại giữa chín database mà không phải tạo chín connection.
 
+### DataGrip — không cần mở tunnel bằng tay
+
+DataGrip có SSH tunnel tích hợp, nên **bỏ qua bước `ssh -N` ở trên**: nó tự mở tunnel mỗi
+lần kết nối và tự đóng khi ngắt. Đừng chạy cả hai, thừa.
+
+**Bước 1 — tạo data source.** `File` → `New` → `Data Source` → `PostgreSQL`. Nếu góc dưới
+báo thiếu driver thì bấm **Download**.
+
+**Bước 2 — tab `SSH/SSL`, cấu hình tunnel TRƯỚC.** Tích **Use SSH tunnel**, bấm `...` cạnh
+ô chọn, rồi `+` để thêm cấu hình mới:
+
+| Trường | Giá trị |
+|---|---|
+| Host | `20.24.196.177` |
+| Port | `22` |
+| User name | `azureuser` |
+| Authentication type | **Key pair (OpenSSH or PuTTY)** |
+| Private key file | `C:\Users\<tên bạn>\.ssh\laundry_azure_rsa` |
+| Passphrase | để trống — khoá này cố ý không đặt passphrase để CI dùng được |
+
+Bấm **Test Connection** ngay trong hộp thoại này trước. Xanh rồi mới sang bước sau — như
+vậy khi lỗi thì biết ngay là lỗi SSH hay lỗi database.
+
+**Bước 3 — tab `General`.** Chỗ này hay sai nhất:
+
+| Trường | Giá trị |
+|---|---|
+| Host | `127.0.0.1` — **không** phải `20.24.196.177` |
+| Port | `15432` |
+| Authentication | User & Password |
+| User | `postgres` |
+| Password | `postgres` · Save: **Forever** |
+| Database | `user_db` (hoặc DB nào bạn cần) |
+
+> **Vì sao Host là `127.0.0.1` chứ không phải IP của VM?** Địa chỉ ở tab `General` được
+> hiểu là **nhìn từ phía máy chủ SSH**, tức từ trong VM. Postgres bind loopback của VM nên
+> từ góc nhìn đó nó chính là `127.0.0.1`. Điền IP công khai vào đây sẽ timeout, vì cổng
+> 15432 không mở ra ngoài.
+
+**Bước 4 — bật `Show all databases`.** Vẫn ở tab `General`, phần **Options** bên dưới.
+Không bật thì chỉ thấy đúng một database và phải tạo chín connection riêng.
+
+**Bước 5 — tab `Schemas`, bước dễ bị bỏ qua nhất.** DataGrip mặc định chỉ nạp một phần
+schema. Bảng của dự án nằm trong `<service>_schema` chứ không phải `public`, nên **không
+tích ở đây thì cây bên trái hiện database mà không có bảng nào** — rất dễ tưởng database
+rỗng. Tích các schema cần dùng, hoặc tích `All schemas` cho gọn.
+
+**Bước 6 — đặt tên cho rõ.** Local và Azure **trùng nhau cả host lẫn port**
+(`localhost:15432`), khác mỗi chỗ có tunnel hay không. Đặt tên kiểu
+`AZURE — laundry (PROD)` để không gõ nhầm `DELETE` vào production khi tưởng đang ở local.
+
+Sau đó `Test Connection` → **OK**.
+
 ### Không có psql trên máy? Dùng Docker
 
 ```bash
