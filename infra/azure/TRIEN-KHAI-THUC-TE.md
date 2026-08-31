@@ -907,3 +907,148 @@ grep -oE "<(netty|jackson-bom|spring-framework|postgresql|spring-data-bom|microm
 bản ghim đã ăn đúng — netty 4.1.135 và postgresql 42.7.11 nằm trong ảnh — nhưng vẫn còn
 CVE mới hơn cần thêm một nấc patch nữa, lên 4.1.136 và 42.7.12. Dừng sau vòng một thì
 đã tưởng là xong.
+
+---
+
+## 18 — Nối vào database đã deploy
+
+### Vì sao phải qua SSH tunnel
+
+Postgres **không** mở ra Internet, và đó là chủ ý. Hai lớp chặn:
+
+```bash
+docker port ll-ms-postgres
+#   5432/tcp -> 127.0.0.1:15432      <- chi nghe tren loopback CUA VM
+sudo ufw status
+#   OpenSSH ALLOW / Nginx Full ALLOW  <- NSG + ufw chi mo 22, 80, 443
+```
+
+Container chỉ bind vào loopback của VM, nên kể cả mở thêm port ở NSG cũng không tới
+được. Đường duy nhất là mượn cổng 22: SSH tunnel chuyển cổng 15432 trên máy bạn thành
+cổng 15432 trên VM.
+
+### Mở tunnel
+
+Mở một cửa sổ terminal **riêng** và để nguyên đó — tunnel sống chừng nào lệnh này còn
+chạy:
+
+```bash
+ssh -i ~/.ssh/laundry_azure_rsa -N -L 15432:127.0.0.1:15432 azureuser@20.24.196.177
+```
+
+`-N` là "đừng mở shell, chỉ chuyển cổng". Thêm `-o ExitOnForwardFailure=yes` để lệnh
+báo lỗi ngay nếu cổng 15432 trên máy bạn đã bị chiếm, thay vì kết nối im lặng rồi bạn
+tưởng tunnel đang chạy.
+
+Kiểm tunnel đã lên:
+
+```bash
+netstat -ano | grep 15432        # phai thay LISTENING tren 127.0.0.1:15432
+```
+
+### Thông tin kết nối
+
+| | |
+|---|---|
+| Host | `localhost` (hoặc `127.0.0.1`) |
+| Port | `15432` |
+| User | `postgres` |
+| Mật khẩu | `postgres` |
+| Database | chọn một trong chín, xem bảng dưới |
+
+> **Mật khẩu đang là mặc định.** Nó nằm cứng trong `docker-compose.yml`. Chỉ an toàn nhờ
+> hai lớp chặn ở trên chứ bản thân nó không bảo vệ gì. Muốn đổi thì phải sửa cả
+> `POSTGRES_PASSWORD` lẫn `SPRING_DATASOURCE_PASSWORD` của **cả chín** service rồi dựng
+> lại — và đổi mật khẩu của Postgres đã có dữ liệu cần thêm `ALTER USER`, vì biến
+> `POSTGRES_PASSWORD` chỉ có tác dụng lúc khởi tạo volume lần đầu.
+
+### Chín database — mỗi service một cái
+
+Kiến trúc là database-per-service: **không** có database chung, và không service nào
+được đọc bảng của service khác.
+
+| Database | Schema | Số bảng | Có gì đáng xem |
+|---|---|---|---|
+| `auth_db` | `auth_schema` | 5 | `auth_accounts` — tài khoản đăng nhập |
+| `user_db` | `user_schema` | 2 | `user_profiles` — 13 bản ghi |
+| `order_db` | `order_schema` | 10 | `orders` — 24 bản ghi |
+| `locker_db` | `locker_schema` | 10 | `lockers` 4 · `locker_boxes` 37 |
+| `payment_db` | `payment_schema` | 5 | `payments` — 29 bản ghi |
+| `notification_db` | `notification_schema` | 3 | `notifications` — 88 bản ghi |
+| `iot_db` | `iot_schema` | 5 | thiết bị và trạng thái |
+| `store_db` | `store_schema` | 2 | cửa hàng |
+| `loyalty_db` | `loyalty_schema` | 3 | điểm thưởng |
+
+### Chỗ dễ vấp nhất: bảng KHÔNG nằm trong `public`
+
+Mỗi service dùng schema riêng. Mở DBeaver rồi bung `public` ra sẽ thấy **trống rỗng**
+và tưởng database rỗng. Bảng nằm trong `<service>_schema`:
+
+```sql
+select count(*) from users;                    -- LOI: relation does not exist
+select count(*) from user_schema.user_profiles;  -- dung
+```
+
+Cách gọn hơn là đặt `search_path` một lần cho cả phiên:
+
+```sql
+set search_path to user_schema, public;
+select count(*) from user_profiles;            -- gio chay duoc
+```
+
+Trong DBeaver: mở connection → tab **PostgreSQL** → bật **Show all databases** để nhảy
+qua lại giữa chín database mà không phải tạo chín connection.
+
+### Không có psql trên máy? Dùng Docker
+
+```bash
+docker run --rm -it -e PGPASSWORD=postgres postgres:16-alpine \
+  psql -h host.docker.internal -p 15432 -U postgres -d user_db
+```
+
+Phải là `host.docker.internal` chứ không phải `localhost`: bên trong container thì
+`localhost` là chính container đó, không phải máy bạn — nơi tunnel đang lắng nghe.
+
+Vài lệnh psql hay dùng:
+
+```
+\l                              liệt kê database
+\dn                             liệt kê schema
+\dt user_schema.*               liệt kê bảng trong một schema
+\d  user_schema.user_profiles    xem cột của một bảng
+```
+
+### Kiểm tra nhanh là đã nối đúng nơi
+
+```bash
+docker run --rm -e PGPASSWORD=postgres postgres:16-alpine \
+  psql -h host.docker.internal -p 15432 -U postgres -d auth_db \
+  -c "select id, email, status from auth_schema.auth_accounts order by id limit 4"
+```
+
+Phải ra đúng bốn tài khoản demo: `baohuy2k12k4@gmail.com`, `nqbhuy2004nt@gmail.com`,
+`se180211nguyenquocbaohuy@gmail.com`, `huynqbse180211@fpt.edu.vn`.
+
+### Đây là dữ liệu production
+
+Không có môi trường staging. Ba điều nên giữ:
+
+- **Sửa schema thì qua Flyway, đừng gõ tay.** JPA chạy `ddl-auto: validate`, nên một cột
+  thêm bằng tay mà không có file migration tương ứng sẽ làm service không khởi động được
+  ở lần deploy sau. Thêm `V<N>__<mo_ta>.sql` vào `src/main/resources/db/migration`.
+- **Sao lưu trước khi đụng dữ liệu.** Một lệnh, chạy từ máy bạn:
+  ```bash
+  ssh -i ~/.ssh/laundry_azure_rsa azureuser@20.24.196.177 \
+    'docker exec ll-ms-postgres pg_dumpall -U postgres' > backup-$(date +%Y%m%d).sql
+  ```
+- **Đóng tunnel khi xong.** Ctrl+C ở cửa sổ đang chạy `ssh -N`. Để mở là cổng 15432 trên
+  máy bạn vẫn nối thẳng vào database production.
+
+### Khi tunnel không lên
+
+| Triệu chứng | Nguyên nhân |
+|---|---|
+| `bind: Address already in use` | cổng 15432 trên máy bạn đã bị chiếm — đổi cổng trái: `-L 15433:127.0.0.1:15432` |
+| `Permission denied (publickey)` | sai khoá; phải là `~/.ssh/laundry_azure_rsa`, không phải khoá cá nhân |
+| Tunnel lên nhưng client báo `Connection refused` | container postgres không chạy — `ssh ... 'docker ps | grep postgres'` |
+| Client treo rồi timeout | tunnel đã chết mà terminal chưa báo; kiểm bằng `netstat -ano | grep 15432` |
